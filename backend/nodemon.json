@@ -1,0 +1,14 @@
+{
+  "watch": ["."],
+  "ext": "js,json",
+  "delay": 1500,
+  "ignore": [
+    "node_modules/**",
+    "uploads/**",
+    "*.log",
+    "*.test.js",
+    "*.e2e.js",
+    "seeds/**",
+    "backend-dev.log"
+  ]
+}

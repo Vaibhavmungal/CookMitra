@@ -1,0 +1,354 @@
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+.navbar-mobile-actions { display: none; gap: 0.5rem; }
+.mobile-bell { display: none; }
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .footer-top-grid { grid-template-columns: 1fr 1fr; }
+  .bf-grid { grid-template-columns: 1fr; }
+  .bf-grid-side { position: static; }
+  .cook-profile-grid { grid-template-columns: 1fr; }
+  .cook-profile-right-col { position: static; }
+  .cook-profile-right-col .bk-card { box-shadow: var(--shadow-md); }
+  .lead-grid { grid-template-columns: 1fr; gap: 1.6rem; }
+}
+
+@media (max-width: 900px) {
+  .hero-v2-inner { grid-template-columns: 1fr; gap: 2rem; }
+  .hero-v2-stats { gap: 1.4rem; }
+  .hero-v2-stat-sep { display: none; }
+  .login-split { grid-template-columns: 1fr; }
+  .login-showcase { display: none; }
+  .login-mobile-brand { display: flex; }
+  .login-card { box-shadow: var(--shadow-sm); border: 1px solid var(--border-subtle); }
+  .hero-v2-float-live { left: -6px; }
+  .hero-v2-float-rating { right: -4px; }
+}
+
+/* Mobile nav switch — at 1150px and below the full nav (brand + location
+   pill + links + user chip, ~1100px when logged in) no longer fits, so the
+   hamburger drawer takes over instead of overflowing the page. */
+@media (max-width: 1150px) {
+  .navbar-inner { height: 62px; padding: 0 1rem; }
+  .navbar-nav { display: none; }
+  .navbar-mobile-actions { display: flex; align-items: center; }
+  .mobile-toggle-btn { display: inline-flex; }
+  .mobile-bell { display: inline-flex; }
+  .mobile-menu .nav-link { font-size: 0.95rem; }
+}
+
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  .main-content { padding-top: 0; }
+  .hero-v2-inner { padding: 3rem 1.1rem 2rem; }
+  .hero-v2-cook-wrap { width: min(430px, 94%); margin: 0.75rem 0 1.4rem; }
+  .hero-v2-float { font-size: 0.76rem; padding: 0.4rem 0.7rem; }
+  .hero-v2-stats { padding: 1.1rem 1rem; }
+  .hero-v2-stat-num { font-size: 1.35rem; }
+  .home-band { padding: 3rem 1rem; }
+  .services-section { padding: 3rem 1rem; }
+  .lead-section { padding: 3rem 1rem; }
+  .cta-banner { padding: 2.4rem 1.2rem; margin-top: 2.5rem; }
+  .section-header { margin-bottom: 1.8rem; }
+  .dashboard-container, .cooks-page-container, .cook-profile-page-container, .ondemand-page, .booking-flow-page, .auth-wrapper { padding-left: 1rem; padding-right: 1rem; }
+  .page-header-banner { padding: 1.8rem 1.2rem; }
+  .ondemand-hero { padding: 1.6rem 1.1rem; }
+  .ondemand-hero .section-title { font-size: 1.5rem; }
+  .ondemand-form-card { padding: 1.3rem 1.1rem; }
+  .ondemand-steps { gap: 0.6rem; margin-bottom: 1.1rem; }
+  .ondemand-step { font-size: 0.8rem; }
+  .ondemand-section-title { font-size: 1.05rem; margin: 1.4rem 0 0.6rem; }
+  .match-card-top { gap: 0.6rem; }
+  .match-avatar { width: 44px; height: 44px; min-width: 44px; min-height: 44px; font-size: 0.9rem; }
+  .cook-avatar-img { width: 52px; height: 52px; min-width: 52px; min-height: 52px; font-size: 1.15rem; }
+  .match-rate { font-size: 0.95rem; }
+  .slot-list { gap: 0.45rem; }
+  .slot-list .slot-chip { font-size: 0.78rem; padding: 0.42rem 0.7rem; }
+  .cooks-filter-bar { padding: 0.9rem 1rem; }
+  .booking-item-card { padding: 1rem; }
+  .bf-wait-head { flex-direction: column; align-items: center; text-align: center; }
+  .bf-wait-copy { width: 100%; }
+  .bf-card { padding: 1.5rem 1.2rem; }
+  .bf-methods { grid-template-columns: 1fr; }
+  .bf-ring-wrap:not(.small) { width: 112px; height: 112px; }
+  .footer-top-grid { grid-template-columns: 1fr; gap: 1.8rem; }
+  .footer-bottom-bar { flex-direction: column; text-align: center; }
+  .form-row { grid-template-columns: 1fr; }
+  .service-pick-grid { grid-template-columns: 1fr 1fr; }
+  .profile-card-block { padding: 1.2rem; }
+  .hero-v2-title { font-size: clamp(1.7rem, 7.5vw, 2.4rem); }
+
+  /* Tighter stat cards on phones */
+  .dashboard-stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; }
+  .stat-icon-wrapper { width: 42px; height: 42px; }
+
+  /* Booking flow + payments */
+  .bf-grid-side .bf-amount-box { padding: 1.1rem; }
+  .toast-container { left: 1rem; right: 1rem; max-width: none; }
+  
+  /* Booking metadata grid on mobile */
+  .booking-metadata-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+  
+  /* Cook profile hero on mobile */
+  .cook-profile-hero { flex-direction: column; text-align: center; padding: 1.5rem 1rem; }
+  .cook-profile-avatar-large { width: 80px; height: 80px; min-width: 80px; min-height: 80px; font-size: 1.8rem; }
+  .cook-modern-avatar-wrap { width: 72px; height: 72px; min-width: 72px; min-height: 72px; }
+  .cook-modern-avatar-fallback { font-size: 1.6rem; }
+  .cook-profile-hero-content h1 { font-size: 1.4rem; }
+  
+  /* Services grid on mobile */
+  .services-grid-modern { grid-template-columns: 1fr; }
+  
+  /* Testimonials grid on mobile */
+  .testimonials-grid { grid-template-columns: 1fr; }
+  
+  /* Dashboard header on mobile */
+  .dashboard-header-row { flex-direction: column; align-items: flex-start; }
+  .dashboard-header-row h1 { font-size: 1.4rem; }
+  
+  /* Tabs navigation on mobile */
+  .tabs-navigation-bar { padding: 0.25rem; }
+  .tab-btn { padding: 0.4rem 0.75rem; font-size: 0.82rem; }
+  
+  /* Cooks filter bar on mobile */
+  .cooks-filter-bar { flex-direction: column; align-items: stretch; }
+  .cooks-filter-bar .input-with-icon { flex: 1 1 auto; }
+  .cooks-filter-bar input[type="date"] { max-width: none; }
+  
+  /* Cook card on mobile */
+  .cook-card-modern { padding: 1.2rem; }
+  .cook-card-bottom { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  
+  /* Booking actions row on mobile */
+  .booking-actions-row { flex-direction: column; }
+  .booking-actions-row .btn { width: 100%; }
+  
+  /* User avatar in navbar mobile */
+  .user-avatar-sm { width: 28px; height: 28px; font-size: 0.75rem; }
+  
+  /* Empty state card on mobile */
+  .empty-state-card { padding: 1.5rem 1rem; }
+  
+  /* Phone input group on mobile */
+  .phone-input-group { flex-direction: column; }
+  .phone-prefix { padding: 0.5rem; text-align: center; }
+}
+
+/* Small mobile devices */
+@media (max-width: 400px) {
+  .dashboard-stats-grid { grid-template-columns: 1fr 1fr; }
+  .service-pick-grid { grid-template-columns: 1fr; }
+  .hero-v2-actions { flex-direction: column; width: 100%; }
+  .hero-v2-actions .btn { width: 100%; }
+  .bf-steps { flex-direction: column; align-items: stretch; }
+  .bf-step { justify-content: center; }
+  .ondemand-page .service-pick-grid { grid-template-columns: 1fr; }
+  .ondemand-page .match-card-top { flex-direction: column; align-items: flex-start; }
+  .ondemand-page .match-rate { align-self: flex-start; }
+}
+
+/* Table responsiveness - horizontal scroll for admin tables */
+@media (max-width: 768px) {
+  table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  
+  /* Admin dashboard tables */
+  .admin-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  
+  /* Mobile menu improvements */
+  .mobile-menu { max-height: calc(100vh - 62px); overflow-y: auto; }
+  
+  /* Booking form on mobile */
+  .bk { max-width: 100%; }
+  .bk-head { padding: 1rem 1.1rem; }
+  .bk-head-text h3 { font-size: 1rem; }
+  .bk-head-total-amount { font-size: 1.2rem; }
+  .bk-card { padding: 0.85rem 0.95rem; }
+  .bk-service-grid { grid-template-columns: 1fr 1fr; }
+  .bk-addr-grid { grid-template-columns: 1fr; }
+  .bk-date-chip { min-width: 56px; padding: 0.45rem 0.6rem; }
+  .bk-date-num { font-size: 1.05rem; }
+  .bk-submit { min-height: 46px; font-size: 0.92rem; }
+  
+  /* Review form on mobile */
+  .review-form-container { padding: 1rem; }
+  
+  /* Navbar mobile actions */
+  .navbar-mobile-actions { gap: 0.4rem; }
+  .navbar-mobile-actions .btn-sm { padding: 0.35rem 0.65rem; font-size: 0.78rem; }
+}
+
+/* Ensure mobile menu is visible when open */
+.mobile-menu.open {
+  display: flex;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Fix for very small screens */
+@media (max-width: 360px) {
+  .navbar-brand { font-size: 1rem; }
+  .brand-icon-box { width: 32px; height: 32px; }
+  .brand-icon-box svg { width: 16px; height: 16px; }
+  .mobile-toggle-btn { width: 36px; height: 36px; }
+  .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+}
+
+/* Home registration form responsive */
+@media (max-width: 900px) {
+  .home-registration-form .role-segmented-control {
+    flex-direction: row;
+  }
+}
+
+/* ==========================================================================
+   Cook surfaces — dedicated responsive pass (listing, profile, dashboard,
+   on-demand, setup, tracking, dossier, modals). Mobile-friendly tap
+   targets, no horizontal overflow, graceful single-column collapse.
+   ========================================================================== */
+
+/* Large tablet: hero actions breathe, setup keeps two columns */
+@media (max-width: 1024px) {
+  .cook-modern-hero-actions { width: 100%; }
+  .cook-modern-hero-actions .cook-glass-btn,
+  .cook-modern-hero-actions .avail-toggle { flex: 1 1 200px; }
+}
+
+/* Small tablet */
+@media (max-width: 768px) {
+  /* Cook dashboard hero stacks neatly */
+  .cook-modern-hero { padding: 1.4rem 1.15rem; }
+  .cook-modern-hero-inner { align-items: flex-start; }
+  .cook-modern-hero-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .cook-modern-hero-actions .cook-glass-btn,
+  .cook-modern-hero-actions .avail-toggle { width: 100%; }
+
+  /* Tracking map shorter so content stays visible */
+  .track-map-frame { height: 300px; }
+
+  /* Dossier table scrolls inside its card (global table rule excluded) */
+  .dossier-table-card table { display: table; white-space: normal; }
+  .dossier-table-card th,
+  .dossier-table-card td { white-space: nowrap; }
+
+  /* Modals use the full width comfortably */
+  .add-cook-modal { padding: 1.6rem 1.25rem; }
+}
+
+/* Phones */
+@media (max-width: 640px) {
+  .home-registration-form {
+    padding: 1.25rem;
+  }
+  
+  .home-registration-form .role-segment-btn {
+    padding: 0.5rem 0.4rem;
+  }
+  
+  .home-registration-form .role-segment-btn span:nth-child(2) {
+    font-size: 0.78rem;
+  }
+  
+  .home-registration-form .role-hint {
+    font-size: 0.65rem;
+  }
+  
+  .home-registration-form .form-control {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.65rem;
+  }
+
+  /* ---- Cook listing ---- */
+  .cooks-page-container { padding-bottom: 2.25rem; }
+  .cooks-filter-bar { flex-direction: column; align-items: stretch; }
+  .cooks-filter-bar .input-with-icon { flex: 1 1 auto; }
+  .cooks-filter-bar input[type="date"] { max-width: none; }
+  .cooks-filter-bar .btn { width: 100%; }
+  .cooks-grid-modern { gap: 1rem; }
+  .cook-card-modern { padding: 1.2rem; }
+  .cook-meta-info h3 { white-space: normal; }
+  .cook-card-bottom { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+  .cook-card-bottom .btn { width: 100%; min-height: 46px; }
+
+  /* ---- Public cook profile ---- */
+  .cook-profile-hero { flex-direction: column; text-align: center; align-items: center; }
+  .cook-profile-badges, .cook-profile-meta, .cook-profile-rate { justify-content: center; }
+  .cook-services-grid { grid-template-columns: 1fr; }
+
+  /* ---- Cook dashboard hero ---- */
+  .cook-modern-hero-actions { grid-template-columns: 1fr; }
+  .cook-modern-hero-copy h1 { font-size: 1.3rem; }
+  .cook-next-job { align-items: flex-start; }
+  .cook-actions-primary { flex-direction: column; align-items: stretch; }
+  .cook-actions-primary .btn { width: 100%; }
+  .cook-more-body { padding-left: 0.9rem; }
+
+  /* ---- On-demand ---- */
+  .ondemand-page .service-pick-grid { grid-template-columns: 1fr; }
+  .slot-list .slot-chip { flex: 1 1 100%; justify-content: center; text-align: center; }
+  .match-card-top { flex-wrap: wrap; }
+  .match-id h3 { white-space: normal; }
+  .maps-link-group { flex-direction: column; }
+  .maps-link-group .btn { width: 100%; min-height: 44px; }
+
+  /* ---- Setup / forms ---- */
+  .cook-setup-page { padding-left: 1rem; padding-right: 1rem; }
+  .cook-form-grid-2,
+  .modal-form-grid-2,
+  .cook-service-toggles { grid-template-columns: 1fr; }
+  .cook-doc-grid { grid-template-columns: 1fr; }
+  .cook-doc-grid .btn { width: 100%; }
+  .bk-service-grid { grid-template-columns: 1fr 1fr; }
+  .bk-addr-grid { grid-template-columns: 1fr; }
+  .bk-pin-btn { width: 100%; justify-content: center; }
+  .bk-foot-total { font-size: 1rem; }
+  /* Prevent iOS auto-zoom on form fields */
+  .ondemand-form-card .form-control,
+  .cook-setup-page .form-control,
+  .add-cook-modal .form-control,
+  .bk-addr-input,
+  .bk-notes,
+  .bk-dur-custom { font-size: 16px; }
+
+  /* ---- Tracking ---- */
+  .track-map-frame { height: 260px; }
+  .track-banner { align-items: flex-start; }
+
+  /* ---- Dossier ---- */
+  .dossier-table-card th,
+  .dossier-table-card td { padding: 0.75rem; }
+
+  /* ---- Modals ---- */
+  .add-cook-modal { max-height: 92vh; border-radius: 20px; }
+
+  /* ---- Safety net: collapse any legacy inline multi-column grids ---- */
+  /* inside cook flows so nothing overflows on phones. Scoped + mobile-only. */
+  .dashboard-container.cook-modern [style*="grid-template-columns"],
+  .cook-setup-page [style*="grid-template-columns"],
+  .add-cook-modal [style*="grid-template-columns"],
+  .cook-profile-page-container [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 400px) {
+  .cook-modern-avatar-wrap { width: 64px; height: 64px; min-width: 64px; min-height: 64px; }
+  .match-avatar { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .match-rate { font-size: 0.9rem; }
+  .cook-setup-head h1 { font-size: 1.45rem; }
+  .ondemand-hero .section-title { font-size: 1.4rem; }
+  .bk-head { border-radius: 12px; padding: 0.9rem 1rem; }
+  .bk-card { border-radius: 12px; padding: 0.75rem 0.85rem; }
+  .bk-date-chip { min-width: 50px; padding: 0.4rem 0.5rem; }
+  .bk-date-num { font-size: 0.95rem; }
+  .bk-service-card { padding: 0.55rem 0.2rem; }
+  .bk-service-label { font-size: 0.66rem; }
+  .bk-service-desc { font-size: 0.56rem; }
+}

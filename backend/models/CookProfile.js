@@ -1,0 +1,104 @@
+const mongoose = require("mongoose");
+
+const cookProfileSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true,
+    },
+    bio: {
+      type: String,
+      default: "",
+    },
+    experienceYears: {
+      type: Number,
+      default: 0,
+    },
+    specialties: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    serviceTypes: [
+      {
+        type: String,
+        enum: ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"],
+      },
+    ],
+    rate: {
+      type: Number,
+      required: [true, "Rate is required"],
+    },
+    serviceArea: {
+      type: String,
+      default: "",
+    },
+    // Cook's home / contact address (visible to admin).
+    address: {
+      type: String,
+      default: "",
+    },
+    // Verification documents shared by the cook (e.g. Aadhaar, FSSAI
+    // certificate). Stored as label + link; visible to admin.
+    documents: [
+      {
+        label: { type: String, default: "", trim: true },
+        url: { type: String, default: "", trim: true },
+      },
+    ],
+    // Dedicated ID verification uploads (file URLs under /uploads).
+    // Aadhaar + PAN required, profile photo optional.
+    aadharCardUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    panCardUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    photoUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    // Cook-level on/off switch. When "unavailable" the cook is hidden from all
+    // booking until they toggle back to "available" OR the next day begins
+    // (unavailableDate records the local day they set it, used for the auto
+    // reset — see resolveCookAvailability in cookController).
+    availabilityStatus: {
+      type: String,
+      enum: ["available", "unavailable"],
+      default: "available",
+    },
+    unavailableDate: {
+      type: String,
+      default: "",
+    },
+    rating: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
+    },
+    liveLocation: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+      // GPS fix radius in metres reported by the browser (null when unknown).
+      accuracy: { type: Number, min: 0, max: 100000 },
+      updatedAt: { type: Date },
+    },
+  },
+  { timestamps: true }
+);
+
+cookProfileSchema.index({ approvalStatus: 1, serviceArea: 1 });
+
+module.exports = mongoose.model("CookProfile", cookProfileSchema);

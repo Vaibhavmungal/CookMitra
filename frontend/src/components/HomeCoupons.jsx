@@ -1,0 +1,114 @@
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import API from "../api/axios";
+import { Copy, Check, BadgePercent, Sparkles, ArrowRight } from "lucide-react";
+
+// "Festive Offers" section on the home page — lists every currently usable
+// coupon from GET /api/coupons/active (admin-managed via the dashboard).
+// Renders nothing when the backend is unreachable or there are no live offers,
+// so the home page stays clean instead of showing an empty section.
+const HomeCoupons = () => {
+  const [coupons, setCoupons] = useState([]);
+  const [copiedCode, setCopiedCode] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    API.get("/coupons/active")
+      .then((res) => {
+        if (alive && Array.isArray(res?.data)) {
+          setCoupons(res.data.filter((c) => c && c.code));
+        }
+      })
+      .catch(() => {
+        /* backend down — hide the section entirely */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!coupons.length) return null;
+
+  const copyCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      /* clipboard blocked — still show feedback */
+    }
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode((c) => (c === code ? null : c)), 1800);
+  };
+
+  const fmtDate = (d) => {
+    const date = new Date(d);
+    return Number.isNaN(date.getTime())
+      ? null
+      : date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  };
+
+  return (
+    <section className="home-coupons home-band band-abyss" id="offers">
+      <div className="section-header">
+        <span className="section-eyebrow">🪔 Ganesh Utsav Specials</span>
+        <h2 className="section-title">Festive Offers For You</h2>
+        <p className="section-description">
+          Apply a coupon while paying for your booking — up to 20% off, fresh
+          from Bappa's kitchen.
+        </p>
+      </div>
+
+      <div className="coupon-grid">
+        {coupons.map((c, i) => (
+          <article
+            key={c.code}
+            className={`coupon-card${i === 0 ? " coupon-card-top" : ""}`}
+            style={{ "--d": `${0.06 * i}s` }}
+          >
+            {i === 0 && (
+              <span className="coupon-best">
+                <Sparkles size={13} /> Best Offer
+              </span>
+            )}
+            <div className="coupon-off">
+              <BadgePercent size={24} />
+              <span>{c.percent}% OFF</span>
+            </div>
+            <div className="coupon-body">
+              <h3 className="coupon-code">{c.code}</h3>
+              {c.description && <p className="coupon-desc">{c.description}</p>}
+              <ul className="coupon-meta">
+                {c.maxDiscount ? <li>Up to ₹{c.maxDiscount} off</li> : null}
+                {c.minOrder ? <li>Min order ₹{c.minOrder}</li> : null}
+                {c.validTo ? <li>Valid till {fmtDate(c.validTo)}</li> : null}
+              </ul>
+            </div>
+            <button
+              type="button"
+              className="coupon-copy"
+              onClick={() => copyCode(c.code)}
+              aria-label={`Copy coupon code ${c.code}`}
+            >
+              {copiedCode === c.code ? (
+                <>
+                  <Check size={15} /> Copied!
+                </>
+              ) : (
+                <>
+                  <Copy size={15} /> Copy Code
+                </>
+              )}
+            </button>
+          </article>
+        ))}
+      </div>
+
+      <div className="coupon-cta">
+        <Link to="/cook-on-demand" className="btn btn-lg hero-v2-btn-primary">
+          Book a Festive Cook <ArrowRight size={18} />
+        </Link>
+      </div>
+    </section>
+  );
+};
+
+export default HomeCoupons;

@@ -1,0 +1,152 @@
+/* ==========================================================================
+   Booking flow — payment page (methods, amount panel, processing)
+   ========================================================================== */
+
+.bf-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.75fr;
+  gap: 1.5rem;
+  margin-top: 1.4rem;
+  align-items: start;
+}
+.bf-grid-main { display: flex; flex-direction: column; }
+.bf-grid-side { position: sticky; top: 84px; display: flex; flex-direction: column; gap: 0.7rem; }
+.bf-section-title { font-size: 0.98rem; font-weight: 750; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500); margin: 1.3rem 0 0.8rem; }
+
+.bf-address {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  color: var(--slate-600);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Payment methods */
+.bf-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.bf-method {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.95rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--slate-200);
+  background: #fff;
+  color: var(--slate-800);
+  text-align: left;
+  transition: all 0.15s ease;
+}
+.bf-method:hover { border-color: var(--slate-300); }
+.bf-method.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: var(--shadow-brand);
+  color: var(--primary-700);
+}
+.bf-method-name { font-weight: 750; font-size: 0.95rem; }
+.bf-method-desc { font-size: 0.76rem; color: var(--slate-500); }
+.bf-method-tag {
+  position: absolute;
+  top: -0.5rem;
+  right: 0.8rem;
+  background: var(--accent-emerald);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 0.16rem 0.55rem;
+  border-radius: 99px;
+  letter-spacing: 0.03em;
+}
+
+/* Amount panel */
+.bf-amount-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  background:
+    radial-gradient(500px 220px at 50% -40%, rgba(255, 190, 80, 0.25), transparent 70%),
+    linear-gradient(155deg, #241006 0%, #471c0a 100%);
+  border-radius: var(--radius-lg);
+  padding: 1.3rem 1rem;
+  color: #fff;
+}
+.bf-amount-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255, 255, 255, 0.72); }
+.bf-amount { font-size: 2rem; font-weight: 800; color: #ffd24d; letter-spacing: -0.02em; }
+.bf-amount-note { font-size: 0.76rem; color: rgba(255, 255, 255, 0.75); text-align: center; }
+.bf-pay-btn { width: 100%; padding: 0.9rem; font-size: 1rem; }
+.bf-consent {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--slate-500);
+  line-height: 1.5;
+}
+.bf-secure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: var(--slate-500);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.bf-low-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--accent-rose-light);
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+  border-radius: 12px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+/* Processing overlay + card pan */
+.bf-processing {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: #fff;
+  font-weight: 700;
+}
+.bf-pan {
+  width: 280px;
+  height: 168px;
+  border-radius: 16px;
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2)),
+    linear-gradient(135deg, #ffb020, #e8590c);
+  padding: 1.1rem;
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+.bf-pan-handle {
+  display: block;
+  width: 90px;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.55);
+  margin-left: auto;
+  margin-top: 0.4rem;
+}
+.bf-pay-card { margin-top: 2rem; }
+
+/* Error / expired state copy */
+.bf-sorry-icon { color: var(--accent-rose); }

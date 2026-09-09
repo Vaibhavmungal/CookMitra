@@ -1,0 +1,882 @@
+/* ==========================================================================
+   Cook dashboard hero, availability, on-demand page, setup, tracking,
+   admin dossier, doc uploads + add-cook modal. Responsive + user-friendly.
+   ========================================================================== */
+
+/* Cook dashboard hero */
+.cook-modern-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(720px 300px at 88% -10%, rgba(255, 190, 80, 0.26), transparent 60%),
+    linear-gradient(150deg, #241006 0%, #4a1c0a 55%, #7a2d0c 100%);
+  color: #fff;
+  box-shadow: var(--shadow-lg);
+  padding: 1.7rem 1.5rem;
+  animation: riseIn 0.3s ease;
+}
+/* Soft festive glow deco — pure decoration, never intercepts clicks */
+.cook-modern-hero::after {
+  content: "";
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  right: -110px;
+  top: -130px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 176, 32, 0.28), transparent 65%);
+  pointer-events: none;
+}
+.cook-modern-hero-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+/* Fixed-size wrapper so the photo, the initial fallback and the
+   verified dot all share one consistent circle. */
+.cook-modern-avatar-wrap {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  min-width: 88px;
+  min-height: 88px;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+}
+.cook-modern-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-brand);
+  display: block;
+  background: rgba(255, 255, 255, 0.15);
+}
+.cook-modern-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-brand);
+  overflow: hidden;
+}
+/* Verified dot sits on the dark hero — ring tinted to match the banner */
+.cook-modern-avatar-wrap .verified-dot {
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  right: 0;
+  bottom: 0;
+  border-color: #3d1606;
+}
+/* Scoped to the text column only (was matching every inner div) */
+.cook-modern-hero-copy { flex: 1; min-width: 240px; }
+.cook-modern-hero-copy h1 { color: #fff; font-size: 1.5rem; margin: 0 0 0.3rem; }
+.cook-modern-hero-copy p { color: rgba(255, 255, 255, 0.8); margin: 0; }
+.cook-modern-hero-badges { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.cook-modern-hero-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+
+.cook-glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 0.55rem 0.95rem;
+  min-height: 44px;
+  border-radius: 11px;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cook-glass-btn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; transform: translateY(-1px); }
+.cook-glass-btn:focus-visible { outline: 3px solid rgba(255, 255, 255, 0.6); outline-offset: 2px; }
+.cook-glass-btn.solid { background: var(--primary-gradient); border-color: transparent; box-shadow: var(--shadow-brand); }
+
+/* Cook on/off availability toggle (hero action button) */
+.avail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 0.55rem 0.95rem;
+  min-height: 44px;
+  border-radius: 11px;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+.avail-toggle:hover { background: rgba(255, 255, 255, 0.22); color: #fff; transform: translateY(-1px); }
+.avail-toggle:focus-visible { outline: 3px solid rgba(255, 255, 255, 0.6); outline-offset: 2px; }
+.avail-toggle.on { background: var(--accent-emerald); border-color: transparent; box-shadow: var(--shadow-md); }
+.avail-toggle.off { background: var(--accent-rose); border-color: transparent; box-shadow: var(--shadow-md); }
+.avail-toggle:disabled { opacity: 0.7; cursor: default; transform: none; }
+.avail-toggle-auto {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  padding-left: 0.35rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.cook-modern-stats { margin-top: 1rem; }
+/* Cook stat cards are buttons jumping to filtered bookings views */
+.cook-modern-stats .dashboard-stat-card {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  position: relative;
+}
+.cook-modern-stats .dashboard-stat-card:focus-visible {
+  outline: 3px solid var(--primary-glow);
+  outline-offset: 2px;
+}
+.cook-modern-tabs { background: #fff; }
+/* Tabs with icons: keep icon + label aligned */
+.cook-modern-tabs .tab-btn,
+.tabs-navigation-bar .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.cook-customer-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--slate-200);
+  color: var(--slate-700);
+  font-weight: 800;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Primary decision row vs quieter day-of tools on cook booking cards */
+.cook-actions-primary { margin-top: 0.9rem; }
+.cook-actions-primary .btn { min-height: 46px; padding: 0.6rem 1.25rem; font-size: 0.95rem; }
+.cook-actions-secondary { margin-top: 0.5rem; }
+.cook-actions-secondary .btn { font-size: 0.8rem; }
+
+/* "More info" expander keeps secondary booking details one tap away */
+.cook-more {
+  border: 1px dashed var(--slate-200);
+  border-radius: var(--radius-sm);
+  background: var(--slate-50);
+  margin-top: 0.75rem;
+}
+.cook-more summary {
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--slate-600);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: var(--radius-sm);
+}
+.cook-more summary::-webkit-details-marker { display: none; }
+.cook-more summary::before {
+  content: "+";
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--slate-200);
+  color: var(--slate-600);
+  font-size: 0.85rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cook-more[open] summary::before { content: "–"; background: var(--primary-light); color: var(--primary); }
+.cook-more summary:hover { color: var(--primary); }
+.cook-more summary:focus-visible { outline: 3px solid var(--primary-glow); outline-offset: 2px; }
+.cook-more-body {
+  padding: 0 0.9rem 0.8rem 2.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--slate-600);
+}
+
+/* Next-job highlight strip */
+.cook-next-job {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Book a Cook page
+   ========================================================================== */
+
+.ondemand-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+  animation: riseIn 0.3s ease;
+}
+
+/* Hero banner */
+.ondemand-hero {
+  padding: 2.2rem 1.7rem;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(720px 300px at 88% 0%, rgba(255, 164, 54, 0.18), transparent 60%),
+    linear-gradient(150deg, #fff 0%, #fff7ef 100%);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+.ondemand-hero .section-title { font-size: 1.85rem; margin-top: 0.35rem; }
+.ondemand-hero .section-description { color: var(--slate-600); max-width: 60ch; }
+
+/* Step indicator */
+.ondemand-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  row-gap: 0.55rem;
+  margin: 1.2rem 0 1.4rem;
+}
+.ondemand-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--slate-400);
+}
+.ondemand-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--slate-100);
+  color: var(--slate-500);
+  font-size: 0.78rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ondemand-step.active { color: var(--primary); }
+.ondemand-step.active .ondemand-step-dot {
+  background: var(--primary-gradient);
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+}
+.ondemand-step.done { color: var(--accent-emerald); }
+.ondemand-step.done .ondemand-step-dot { background: var(--accent-emerald); color: #fff; }
+
+/* Form card */
+.ondemand-form-card {
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: 1.9rem 1.7rem;
+}
+.ondemand-form-card h3 { margin-bottom: 0.2rem; }
+.ondemand-form-sub {
+  color: var(--slate-500);
+  font-size: 0.85rem;
+  margin: 0.2rem 0 1rem;
+}
+.ondemand-form-card .form-control { min-height: 46px; }
+
+/* Consistent spacing inside the form card */
+.ondemand-form-card > .form-row + .form-row,
+.ondemand-form-card > .form-group + .form-group,
+.ondemand-form-card > .form-row + .form-group,
+.ondemand-form-card > .form-group + .form-row {
+  margin-top: 0.85rem;
+}
+.ondemand-form-card > .form-row {
+  margin-top: 0.85rem;
+}
+.ondemand-form-card > .form-row:first-of-type {
+  margin-top: 1.2rem;
+}
+.ondemand-section-title {
+  font-size: 1.15rem;
+  font-weight: 750;
+  margin: 1.8rem 0 0.75rem;
+  color: var(--slate-800);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Location detection box */
+.ondemand-locate-box {
+  border: 1.5px dashed var(--slate-300);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  background: var(--slate-50);
+}
+.ondemand-locate-box .form-group { min-width: 0; }
+.loc-msg {
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius-sm);
+}
+.loc-msg.warn {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+/* Step 2 — back button + results */
+.ondemand-back-row {
+  margin-bottom: 0.75rem;
+}
+
+/* Best-match results on on-demand */
+.match-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.9rem 0 0.5rem;
+}
+.match-count-title {
+  font-weight: 750;
+  color: var(--slate-800);
+  font-size: 1.1rem;
+}
+/* Match cook card */
+.match-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.1rem 1.2rem;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.match-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: #ffd3a8;
+}
+.match-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.match-avatar {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-brand);
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  border: 2px solid #fff;
+  outline: 1px solid var(--slate-200);
+}
+.match-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.match-id {
+  flex: 1;
+  min-width: 0;
+}
+.match-id h3 {
+  font-size: 1.02rem;
+  margin: 0 0 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-meta {
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+.match-rate {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: var(--primary-light);
+  border-radius: 99px;
+  padding: 0.3rem 0.75rem;
+}
+
+/* Specialty tags on match card */
+.match-card .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* Bookable slot chips — comfortable tap targets */
+.slot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.slot-list .slot-chip {
+  width: auto;
+  cursor: pointer;
+  font-size: 0.84rem;
+  padding: 0.5rem 0.9rem;
+  min-height: 44px;
+}
+.slot-list .slot-chip:focus-visible {
+  outline: 3px solid var(--primary-glow);
+  outline-offset: 2px;
+}
+.slot-list .slot-chip:disabled { opacity: 0.65; cursor: wait; }
+
+/* Slot payment info note */
+.slot-pay-note {
+  font-size: 0.82rem;
+  color: var(--slate-500);
+  background: var(--slate-50);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.8rem;
+  margin: 0;
+}
+
+/* No results state */
+.ondemand-page .no-data {
+  border: 1.5px dashed var(--slate-300);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  padding: 1.6rem 1rem;
+  text-align: center;
+  color: var(--slate-500);
+  font-weight: 600;
+}
+.ondemand-page .no-data p { margin: 0; }
+
+/* Booking submit button area spacing */
+.ondemand-form-card > .btn-block:last-of-type {
+  margin-top: 1.4rem;
+}
+
+/* Phone info banner inside form */
+.ondemand-form-card > div:has(.loc-msg) + .form-row,
+.ondemand-form-card > .error-message + div {
+  margin-top: 0;
+}
+
+/* ==========================================================================
+   Cook Setup (create / manage profile) page
+   ========================================================================== */
+
+.cook-setup-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+  animation: riseIn 0.3s ease;
+}
+.cook-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.cook-setup-head h1 { font-size: 1.85rem; margin: 0; }
+.cook-setup-head svg { color: var(--primary); flex-shrink: 0; }
+/* Two-up rows that gracefully collapse on phones (replaces inline grids) */
+.cook-form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.cook-doc-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr auto;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  align-items: center;
+}
+/* Service toggle tiles */
+.cook-service-toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.cook-service-toggle {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--slate-200);
+  background: #fff;
+  color: var(--slate-700);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  text-align: left;
+  min-height: 52px;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.cook-service-toggle:hover { border-color: var(--slate-300); transform: translateY(-1px); }
+.cook-service-toggle:focus-visible { outline: 3px solid var(--primary-glow); outline-offset: 2px; }
+.cook-service-toggle.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+/* ==========================================================================
+   Doc uploads (Aadhaar / PAN / photo) — shared by setup + dashboard
+   ========================================================================== */
+
+.cook-doc-box {
+  border: 1.5px dashed var(--slate-300);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--slate-50);
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+.cook-doc-box:last-of-type { margin-bottom: 0; }
+.cook-doc-box:hover { border-color: var(--primary); background: #fff; }
+.cook-doc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.cook-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.cook-doc-link { color: var(--primary); font-weight: 600; font-size: 0.88rem; }
+.cook-doc-photo {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--slate-200);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Live tracking page (cook + customer share dashboard chrome)
+   ========================================================================== */
+
+.track-map-frame {
+  width: 100%;
+  height: 380px;
+  border: 0;
+  border-radius: 12px;
+  display: block;
+  background: var(--slate-100);
+}
+.track-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+.track-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Admin cook dossier
+   ========================================================================== */
+
+.dossier-table-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-sm);
+  -webkit-overflow-scrolling: touch;
+}
+.dossier-table-card table { min-width: 560px; }
+.dossier-table-card th,
+.dossier-table-card td { padding: 1rem; white-space: nowrap; }
+.dossier-table-card tbody tr { border-bottom: 1px solid var(--slate-100); }
+.dossier-table-card tbody tr:last-child { border-bottom: none; }
+.dossier-table-card tbody tr:hover { background: var(--slate-50); }
+
+/* ==========================================================================
+   Admin verification-document viewer (thumbs + lightbox)
+   ========================================================================== */
+
+.admin-doc-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: stretch;
+  margin: 0.5rem 0;
+}
+.admin-doc-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem;
+  background: var(--slate-50);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: zoom-in;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-width: 108px;
+  max-width: 140px;
+}
+.admin-doc-thumb:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.admin-doc-thumb img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--slate-200);
+  display: block;
+  background: #fff;
+}
+.admin-doc-pdf {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+.admin-doc-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--slate-600);
+  text-align: center;
+}
+.admin-doc-missing {
+  font-size: 0.85rem;
+  color: var(--slate-400);
+  align-self: center;
+}
+.admin-doc-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 10, 5, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: riseIn 0.18s ease;
+}
+.admin-doc-lightbox-inner {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 860px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin-doc-lightbox-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.admin-doc-lightbox-inner > img {
+  width: 100%;
+  max-height: calc(90vh - 65px);
+  object-fit: contain;
+  background: #111;
+  display: block;
+}
+.admin-doc-lightbox-inner > iframe {
+  width: 100%;
+  height: calc(90vh - 65px);
+  min-height: 420px;
+  border: 0;
+  background: #fff;
+}
+@media (max-width: 640px) {
+  .admin-doc-thumb { min-width: 96px; }
+  .admin-doc-lightbox { padding: 0.6rem; }
+}
+
+/* ==========================================================================
+   Add-cook (admin) modal + shared modal form rows
+   ========================================================================== */
+
+.modal-form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.add-cook-modal .form-control { min-height: 46px; }
+.add-cook-modal .service-pick-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+/* ==========================================================================
+   Recent-reviews teaser on the cook profile tab + tab count pill
+   ========================================================================== */
+
+.tab-count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--primary-light);
+  color: var(--primary-700);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.tab-btn.active .tab-count-pill { background: rgba(255, 255, 255, 0.25); color: #fff; }
+
+.cook-recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.cook-recent-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.cook-recent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--slate-50);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.cook-recent-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.92rem;
+}
+.cook-recent-stars { display: inline-flex; align-items: center; gap: 2px; }
+.cook-recent-comment {
+  margin: 0.3rem 0 0;
+  font-size: 0.88rem;
+  color: var(--slate-700);
+  font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cook-recent-nocomment { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--slate-400); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cook-modern-hero,
+  .ondemand-page,
+  .cook-setup-page { animation: none; }
+  .cook-glass-btn,
+  .avail-toggle,
+  .match-card,
+  .slot-list .slot-chip,
+  .cook-service-toggle { transition: none; }
+  .cook-glass-btn:hover,
+  .avail-toggle:hover,
+  .match-card:hover,
+  .cook-service-toggle:hover { transform: none; }
+}

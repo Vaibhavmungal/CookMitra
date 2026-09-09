@@ -1,0 +1,729 @@
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useFetch } from "../hooks/useFetch";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { formatCurrency } from "../utils/constants";
+import heroImg from "../assets/hero.png";
+import FestiveOfferBillboard from "../components/FestiveOfferBillboard";
+import DishCarousel from "../components/DishCarousel";
+import HomeCoupons from "../components/HomeCoupons";
+import {
+  ArrowRight,
+  BadgeIndianRupee,
+  CalendarClock,
+  ChefHat,
+  Users,
+  GraduationCap,
+  HandHelping,
+  Star,
+  CheckCircle2,
+  CalendarCheck,
+  Compass,
+  UserCheck,
+  Award,
+  Mail,
+  Lock,
+  User,
+  Phone,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+
+// Animated number that counts up when scrolled into view.
+const CountUp = ({ to, decimals = 0, suffix = "", duration = 1400 }) => {
+  const [val, setVal] = useState(0);
+  const ref = useRef(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !("IntersectionObserver" in window)) {
+      setVal(to);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !started.current) {
+            started.current = true;
+            const t0 = performance.now();
+            const tick = (t) => {
+              const p = Math.min(1, (t - t0) / duration);
+              const eased = 1 - Math.pow(1 - p, 3);
+              setVal(to * eased);
+              if (p < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+            io.disconnect();
+          }
+        });
+      },
+      { threshold: 0.4 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [to, duration]);
+
+  return (
+    <span ref={ref}>
+      {val.toFixed(decimals)}
+      {suffix}
+    </span>
+  );
+};
+
+const TICKER_DISHES = [
+  "Modak",
+  "Puran Poli",
+  "Chakli",
+  "Karanji",
+  "Masala Dosa",
+  "Samosa",
+  "Gulab Jamun",
+  "Ladoo",
+  "Shankarpali",
+  "Sabudana Khichdi",
+];
+
+const Home = () => {
+  const { user } = useAuth();
+  const { register } = useAuth();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
+
+  // Registration form state
+  const [regForm, setRegForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+    role: "customer",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [regError, setRegError] = useState("");
+  const [regLoading, setRegLoading] = useState(false);
+
+  const handleRegChange = (e) => {
+    setRegForm({ ...regForm, [e.target.name]: e.target.value });
+  };
+
+  const setRole = (role) => {
+    setRegForm((prev) => ({ ...prev, role }));
+  };
+
+  const handleRegSubmit = async (e) => {
+    e.preventDefault();
+    if (regForm.password !== regForm.confirmPassword) {
+      setRegError("Passwords do not match");
+      return;
+    }
+    if (regForm.password.length < 6) {
+      setRegError("Password must be at least 6 characters long");
+      return;
+    }
+
+    setRegLoading(true);
+    setRegError("");
+
+    try {
+      const { confirmPassword, ...data } = regForm;
+      await register(data);
+      showToast("Registration successful! Please login to continue.", "success");
+      navigate("/login");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Registration failed. Please try again.";
+      setRegError(msg);
+      showToast(msg, "error");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  // Scroll-reveal for page sections (adds .visible as they enter view).
+  useEffect(() => {
+    if (!("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.08 }
+    );
+    const sections = document.querySelectorAll(".home-container section");
+    sections.forEach((el) => {
+      el.classList.add("reveal");
+      io.observe(el);
+    });
+    return () => io.disconnect();
+  }, []);
+
+  const services = [
+    {
+      id: "cook_for_me",
+      title: "Cook for Me",
+      description: "Host effortlessly while a skilled chef prepares authentic festival meals right in your home kitchen.",
+      icon: <ChefHat size={22} />,
+      bg: "var(--primary-light)",
+      color: "var(--primary)",
+      perks: ["Full meal prep & plating", "Traditional authentic spices", "Kitchen left clean & tidy"],
+    },
+    {
+      id: "cook_with_me",
+      title: "Cook With Me",
+      description: "Team up with an experienced home chef to knead, fry, shape, and cook festive snacks together.",
+      icon: <Users size={22} />,
+      bg: "var(--accent-emerald-light)",
+      color: "#059669",
+      perks: ["Hands-on partnership", "Great for family bonding", "Share traditional recipes"],
+    },
+    {
+      id: "teach_me",
+      title: "Teach Me",
+      description: "Master intricate culinary techniques like one-string sugar syrup, chakli spiral shaping, and modak pleating.",
+      icon: <GraduationCap size={22} />,
+      bg: "var(--accent-blue-light)",
+      color: "#2563eb",
+      perks: ["Step-by-step guidance", "Troubleshooting tips", "Heritage secret ratios"],
+    },
+    {
+      id: "preparation_help",
+      title: "Preparation Help",
+      description: "Get reliable helping hands for labor-intensive tasks like grating coconut, chopping, kneading, and deep-frying.",
+      icon: <HandHelping size={22} />,
+      bg: "var(--accent-purple-light)",
+      color: "#7c3aed",
+      perks: ["Saves hours of prep time", "Ideal for large gatherings", "Focused prep assistance"],
+    },
+  ];
+
+  const testimonials = [
+    {
+      name: "Ananya Deshpande",
+      role: "Host, Diwali Celebration in Pune",
+      quote: "Priya ji made the crunchiest Chaklis and melt-in-mouth Karanjis for our Diwali party. Our guests could not stop praising the taste!",
+      rating: 5,
+      avatar: "AD",
+    },
+    {
+      name: "Vikram Kulkarni",
+      role: "Ganesh Festival in Mumbai",
+      quote: "Booking a cook for Modaks was the best decision we made. We learned the traditional pleating technique and enjoyed fresh steamed Ukadiche Modak.",
+      rating: 5,
+      avatar: "VK",
+    },
+    {
+      name: "Rohit & Meera Sen",
+      role: "Navratri Feast Host",
+      quote: "Finding an experienced fasting food specialist in minutes was magical. The Sabudana Khichdi and fruit salads were extraordinary!",
+      rating: 5,
+      avatar: "RS",
+    },
+  ];
+
+  return (
+    <div className="home-container">
+      {/* Festive offer billboard — strip + entry popup, first home visit only */}
+      <FestiveOfferBillboard />
+      {/* Sweets & festive dishes carousel, right below the navbar */}
+      <DishCarousel />
+      {/* Hero Section */}
+      <section className="hero-v2">
+        <div className="hero-v2-glow hero-v2-glow-1" aria-hidden="true" />
+        <div className="hero-v2-glow hero-v2-glow-2" aria-hidden="true" />
+        <div className="hero-v2-glow hero-v2-glow-3" aria-hidden="true" />
+
+        {/* Festive toran garland */}
+        <div className="hero-toran" aria-hidden="true">
+          {["🌼", "🏵️", "🌿", "🌼", "🏵️", "🌿", "🌼", "🏵️", "🌿", "🌼", "🏵️", "🌿", "🌼", "🏵️", "🌿", "🌼"].map((f, i) => (
+            <span key={i} className="hero-toran-flower" style={{ animationDelay: `${(i % 8) * 0.25}s` }}>
+              {f}
+            </span>
+          ))}
+        </div>
+
+        <div className="hero-v2-inner">
+          <div className="hero-v2-left">
+            <p className="hero-devotional hero-enter" style={{ "--d": "0.1s" }}>
+              ॥ गणपती बाप्पा मोरया ॥
+            </p>
+            <h1 className="hero-v2-title hero-enter" style={{ "--d": "0.15s" }}>
+              Festive Feasts, <span className="hero-v2-accent">Cooked Fresh</span> in Your Kitchen
+            </h1>
+            <p className="hero-v2-sub hero-enter" style={{ "--d": "0.25s" }}>
+              Welcome Bappa home with ukadiche modak, puran poli, chakli & more —
+              cooked fresh in your kitchen by verified home cooks. Live tracking,
+              secure UPI payments, and real-time alerts.
+            </p>
+
+            <div className="hero-v2-actions hero-enter" style={{ "--d": "0.35s" }}>
+              {user?.role === "admin" ? (
+                <Link to="/admin" className="btn btn-lg hero-v2-btn-primary">
+                  Go to Admin Dashboard <ArrowRight size={18} />
+                </Link>
+              ) : user?.role === "cook" ? (
+                <Link to="/dashboard/cook-bookings" className="btn btn-lg hero-v2-btn-primary">
+                  Go to Cook Dashboard <ArrowRight size={18} />
+                </Link>
+              ) : (
+                <>
+                  <Link to="/cook-on-demand" className="btn btn-lg hero-v2-btn-primary">
+                    <ChefHat size={18} /> Book a Cook <ArrowRight size={18} />
+                  </Link>
+                  <a href="#services" className="btn btn-lg hero-v2-btn-ghost">
+                    Explore Services ↓
+                  </a>
+                </>
+              )}
+            </div>
+
+            {/* Single social-proof row: avatars + rating + happy families */}
+            <div className="hero-v2-proof hero-enter" style={{ "--d": "0.45s" }}>
+              <div className="hero-v2-avatars">
+                <span>AD</span><span>VK</span><span>RS</span>
+                <span className="hero-v2-avatars-more">+2k</span>
+              </div>
+              <div className="hero-v2-rating">
+                <div className="hero-v2-stars">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14} fill="#fbbf24" color="#fbbf24" />
+                  ))}
+                </div>
+                <span className="hero-v2-rating-num">4.9</span>
+              </div>
+              <span className="hero-v2-proof-text">
+                Loved by <strong>2,400+ families</strong>
+              </span>
+            </div>
+
+            <div className="hero-v2-perks hero-enter" style={{ "--d": "0.55s" }}>
+              {["100% Verified Cooks", "Live Tracking", "Secure UPI"].map((p) => (
+                <span key={p}>
+                  <CheckCircle2 size={14} /> {p}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="hero-v2-right hero-enter" style={{ "--d": "0.3s" }}>
+            <div className="hero-v2-cook-wrap">
+              <img
+                src={heroImg}
+                alt="Festive Indian feast with traditional dishes and sweets"
+                className="hero-v2-cook-img"
+                loading="eager"
+              />
+            </div>
+            <div className="hero-diyas" aria-hidden="true">
+              <span>🪔</span>
+              <span className="hero-diya-big">🪔</span>
+              <span>🪔</span>
+            </div>
+
+            <div className="hero-v2-float hero-v2-float-rating">
+              <div className="hero-v2-float-stars">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} size={12} fill="#fbbf24" color="#fbbf24" />
+                ))}
+              </div>
+              <span className="hero-v2-float-num">4.9</span>
+              <span className="hero-v2-float-label">2,400+ reviews</span>
+            </div>
+
+            <div className="hero-v2-float hero-v2-float-live">
+              <span className="hero-v2-float-live-dot" />
+              <div>
+                <div className="hero-v2-float-live-title">Live Tracking</div>
+                <div className="hero-v2-float-live-sub">Arriving in ~12 min</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="hero-v2-stats">
+          <div className="hero-v2-stat">
+            <div className="hero-v2-stat-num"><CountUp to={50} suffix="+" /></div>
+            <div className="hero-v2-stat-label">Heritage Recipes</div>
+          </div>
+          <div className="hero-v2-stat-sep" />
+          <div className="hero-v2-stat">
+            <div className="hero-v2-stat-num"><CountUp to={100} suffix="+" /></div>
+            <div className="hero-v2-stat-label">Verified Cooks</div>
+          </div>
+          <div className="hero-v2-stat-sep" />
+          <div className="hero-v2-stat">
+            <div className="hero-v2-stat-num"><CountUp to={4.9} decimals={1} suffix=" ★" /></div>
+            <div className="hero-v2-stat-label">Average Rating</div>
+          </div>
+          <div className="hero-v2-stat-sep" />
+          <div className="hero-v2-stat">
+            <div className="hero-v2-stat-num"><CountUp to={10} suffix="+" /></div>
+            <div className="hero-v2-stat-label">Cities Served</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Scrolling dishes ticker */}
+      <div className="dish-marquee" aria-hidden="true">
+        <div className="dish-marquee-track">
+          {[0, 1].map((half) => (
+            <div key={half} style={{ display: "flex" }} aria-hidden={half === 1}>
+              {TICKER_DISHES.map((dish) => (
+                <span key={dish} className="mq-item">
+                  {dish} <i>•</i>
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Live festive offers — admin-managed coupons from /api/coupons/active */}
+      <HomeCoupons />
+
+      {/* User Registration — guests only; logged-in customers,
+          cooks and admins already have accounts */}
+      {!user && (
+        <section className="lead-section">
+          <div className="lead-grid">
+            <div className="lead-copy">
+              <span className="section-eyebrow">Join Cook Mitra</span>
+              <h2 className="section-title" style={{ textAlign: "left" }}>
+                Create Your Account
+              </h2>
+              <p className="section-description" style={{ textAlign: "left", margin: "0 0 1.5rem" }}>
+                Sign up to book verified festive cooks, manage your reservations,
+                and bring authentic festival flavors to your home.
+              </p>
+              <ul className="lead-benefits">
+                <li><CheckCircle2 size={16} /> Book verified cooks in your area</li>
+                <li><CheckCircle2 size={16} /> Manage bookings and track live</li>
+                <li><CheckCircle2 size={16} /> Rate and review your experience</li>
+              </ul>
+            </div>
+            <div className="lead-form-card home-registration-form">
+              <div className="auth-header" style={{ marginBottom: "1rem" }}>
+                <h3 style={{ fontSize: "1.2rem", marginBottom: "0.25rem" }}>Create an Account</h3>
+                <p style={{ fontSize: "0.85rem", color: "var(--slate-500)", margin: 0 }}>Join India's festive culinary community</p>
+              </div>
+
+              {/* Role Selector */}
+              <div className="role-segmented-control" style={{ marginBottom: "1rem" }}>
+                <button
+                  type="button"
+                  className={`role-segment-btn ${regForm.role === "customer" ? "active" : ""}`}
+                  onClick={() => setRole("customer")}
+                >
+                  <CalendarCheck size={16} />
+                  <span>Book a Cook</span>
+                  <span className="role-hint">For households</span>
+                </button>
+                <button
+                  type="button"
+                  className={`role-segment-btn ${regForm.role === "cook" ? "active" : ""}`}
+                  onClick={() => setRole("cook")}
+                >
+                  <ChefHat size={16} />
+                  <span>Join as Cook</span>
+                  <span className="role-hint">Offer services</span>
+                </button>
+              </div>
+
+              {regError && (
+                <div className="error-alert-banner" style={{ padding: "0.5rem 0.75rem", fontSize: "0.82rem", marginBottom: "0.75rem" }}>
+                  {regError}
+                </div>
+              )}
+
+              <form onSubmit={handleRegSubmit}>
+                <div className="booking-form-group">
+                  <label>Full Name</label>
+                  <div className="input-with-icon">
+                    <User size={16} className="input-icon-prefix" />
+                    <input
+                      type="text"
+                      name="name"
+                      className="form-control"
+                      placeholder="e.g. Priya Sharma"
+                      value={regForm.name}
+                      onChange={handleRegChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="booking-form-group">
+                  <label>Email Address</label>
+                  <div className="input-with-icon">
+                    <Mail size={16} className="input-icon-prefix" />
+                    <input
+                      type="email"
+                      name="email"
+                      className="form-control"
+                      placeholder="name@example.com"
+                      value={regForm.email}
+                      onChange={handleRegChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="booking-form-group">
+                  <label>Phone Number</label>
+                  <div className="input-with-icon">
+                    <Phone size={16} className="input-icon-prefix" />
+                    <input
+                      type="tel"
+                      name="phone"
+                      className="form-control"
+                      placeholder="e.g. 9876543210"
+                      value={regForm.phone}
+                      onChange={handleRegChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="booking-form-group">
+                  <label>Password</label>
+                  <div className="input-with-icon password-input-wrapper">
+                    <Lock size={16} className="input-icon-prefix" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      className="form-control"
+                      placeholder="At least 6 characters"
+                      value={regForm.password}
+                      onChange={handleRegChange}
+                      required
+                      minLength={6}
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle-btn"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label="Toggle password view"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="booking-form-group">
+                  <label>Confirm Password</label>
+                  <div className="input-with-icon">
+                    <Lock size={16} className="input-icon-prefix" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="confirmPassword"
+                      className="form-control"
+                      placeholder="Confirm your password"
+                      value={regForm.confirmPassword}
+                      onChange={handleRegChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-block btn-lg"
+                  disabled={regLoading}
+                >
+                  {regLoading ? "Creating Account..." : "Create Account"}
+                </button>
+              </form>
+
+              <div className="auth-footer-prompt" style={{ marginTop: "0.75rem", fontSize: "0.85rem" }}>
+                Already have an account? <Link to="/login">Sign in</Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* How It Works Section */}
+      <section className="home-band band-slate">
+        <div className="section-header">
+          <span className="section-eyebrow">Simple & Transparent</span>
+          <h2 className="section-title">How Cook Mitra Works</h2>
+          <p className="section-description">
+            Bring the joy of authentic festive cooking to your home in four simple steps.
+          </p>
+        </div>
+
+        <div className="how-it-works-grid">
+          <div className="how-card">
+            <div className="how-card-header">
+              <div className="how-icon-box">
+                <Compass size={26} />
+              </div>
+              <span className="how-step-badge">01</span>
+            </div>
+            <h3>1. Share Requirements</h3>
+            <p>Pick a service, date, dishes and location — tell us what you need for your gathering.</p>
+          </div>
+
+          <div className="how-card">
+            <div className="how-card-header">
+              <div className="how-icon-box">
+                <UserCheck size={26} />
+              </div>
+              <span className="how-step-badge">02</span>
+            </div>
+            <h3>2. Pick Cook & Slot</h3>
+            <p>See verified cooks free on your date with their open time slots — tap one to send your booking request.</p>
+          </div>
+
+          <div className="how-card">
+            <div className="how-card-header">
+              <div className="how-icon-box">
+                <CalendarCheck size={26} />
+              </div>
+              <span className="how-step-badge">03</span>
+            </div>
+            <h3>3. Pick Date & Slot</h3>
+            <p>Select your desired service type, choose an available date and time slot, and confirm your request.</p>
+          </div>
+
+          <div className="how-card">
+            <div className="how-card-header">
+              <div className="how-icon-box">
+                <Award size={26} />
+              </div>
+              <span className="how-step-badge">04</span>
+            </div>
+            <h3>4. Savor & Review</h3>
+            <p>Enjoy delicious authentic flavors with your family, then share your review and experience with the community.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Services Showcase */}
+      <section className="services-section" id="services">
+        <div className="section-header">
+          <span className="section-eyebrow">Tailored For Your Occasion</span>
+          <h2 className="section-title">Flexible Cooking Services</h2>
+          <p className="section-description">
+            Whether you need hands-off catering or a private masterclass, our verified cooks adapt to your preferences.
+          </p>
+        </div>
+
+        <div className="services-grid-modern">
+          {services.map((svc) => (
+            <div key={svc.id} className="service-card-modern">
+              <div
+                className="service-icon-wrapper"
+                style={{ background: svc.bg, color: svc.color }}
+              >
+                {svc.icon}
+              </div>
+              <h3>{svc.title}</h3>
+              <p>{svc.description}</p>
+              <ul className="service-card-perks">
+                {svc.perks.map((perk, i) => (
+                  <li key={i}>
+                    <CheckCircle2 size={16} style={{ color: svc.color }} /> {perk}
+                  </li>
+                ))}
+              </ul>
+              {user?.role !== "admin" && user?.role !== "cook" && (
+                <Link
+                  to={`/cook-on-demand?serviceType=${svc.id}`}
+                  className="btn btn-outline"
+                  style={{ width: "100%", justifyContent: "space-between" }}
+                >
+                  <span>Book Now</span>
+                  <ArrowRight size={16} />
+                </Link>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Customer Testimonials */}
+      <section className="testimonials-section home-band band-abyss">
+        <div className="section-header">
+          <span className="section-eyebrow">Customer Stories</span>
+          <h2 className="section-title">Loved by Festival Hosts</h2>
+          <p className="section-description">
+            Read how Cook Mitra brought authentic celebrations into modern homes.
+          </p>
+        </div>
+
+        <div className="testimonials-grid">
+          {testimonials.map((t, idx) => (
+            <div key={idx} className="testimonial-card">
+              <div>
+                <div className="testimonial-stars">
+                  {[...Array(t.rating)].map((_, i) => (
+                    <Star key={i} size={18} fill="#f59e0b" />
+                  ))}
+                </div>
+                <p className="testimonial-quote">"{t.quote}"</p>
+              </div>
+              <div className="testimonial-author">
+                <div className="testimonial-avatar">{t.avatar}</div>
+                <div className="testimonial-info">
+                  <h4>{t.name}</h4>
+                  <p>{t.role}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Call to Action Banner — invite home chefs to earn. Shown to guests
+          and customers; hidden for cooks/admins who already have those roles.
+          Deep-links to /register?role=cook so the Register page preselects
+          the "Join as Cook" tab instead of defaulting to customer. */}
+      {user?.role !== "cook" && user?.role !== "admin" && (
+        <section className="cta-banner cta-cook">
+          <div className="cta-cook-glow cta-cook-glow-1" aria-hidden="true" />
+          <div className="cta-cook-glow cta-cook-glow-2" aria-hidden="true" />
+          <span className="cta-cook-badge">
+            <ChefHat size={14} /> For Home Chefs · Earn Festive Income
+          </span>
+          <h2>Are You a Skilled Home Cook?</h2>
+          <p>
+            Earn during festive seasons by sharing your traditional culinary recipes and cooking skills with families in your city.
+          </p>
+          <ul className="cta-cook-perks">
+            <li>
+              <BadgeIndianRupee size={16} /> Earn per booking
+            </li>
+            <li>
+              <CalendarClock size={16} /> Flexible slots
+            </li>
+            <li>
+              <ShieldCheck size={16} /> Verified profile
+            </li>
+          </ul>
+          <div className="cta-cook-actions">
+            <Link to="/register?role=cook" className="btn btn-lg cta-cook-btn-primary">
+              <ChefHat size={18} /> {user ? "Join as a Cook" : "Register as a Cook"} <ArrowRight size={18} />
+            </Link>
+            {!user && (
+              <Link to="/login" className="cta-cook-signin">
+                Already a cook? Sign in
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+};
+
+export default Home;
+
+
+

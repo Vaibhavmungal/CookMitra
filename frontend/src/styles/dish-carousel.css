@@ -1,0 +1,137 @@
+/* ==========================================================================
+   Dish carousel — sweets & festive dishes strip below the navbar
+   ========================================================================== */
+
+.dish-carousel {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.4rem 1.5rem 0.4rem;
+}
+
+.dish-carousel-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.dish-carousel-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  color: var(--slate-900);
+}
+
+.dish-carousel-nav { display: flex; gap: 0.5rem; }
+
+.dish-carousel-arrow {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--slate-200);
+  background: #fff;
+  color: var(--slate-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.dish-carousel-arrow:hover {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.dish-carousel-track {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding: 0.25rem 0.1rem 0.5rem;
+}
+.dish-carousel-track::-webkit-scrollbar { display: none; }
+
+.dish-card {
+  flex: 0 0 auto;
+  width: 190px;
+  scroll-snap-align: start;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.dish-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+.dish-card-imgwrap {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffedd5, #fed7aa);
+}
+.dish-card-imgwrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.dish-card-tag {
+  position: absolute;
+  left: 0.55rem;
+  bottom: 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  border-radius: 99px;
+  padding: 0.18rem 0.6rem;
+}
+.dish-card-name {
+  display: block;
+  padding: 0.55rem 0.75rem 0.7rem;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--slate-800);
+}
+
+.dish-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0 0.2rem;
+}
+.dish-carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  border: none;
+  background: var(--slate-200);
+  cursor: pointer;
+  padding: 0;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.dish-carousel-dot.active { width: 26px; background: var(--primary); }
+
+.dish-carousel-cta {
+  display: flex;
+  justify-content: center;
+  padding: 0.7rem 0 0.4rem;
+}
+
+@media (max-width: 640px) {
+  .dish-carousel { padding: 1.1rem 1rem 0.3rem; }
+  .dish-carousel-title { font-size: 1.15rem; }
+  .dish-card { width: 152px; }
+  .dish-carousel-arrow { width: 34px; height: 34px; }
+}

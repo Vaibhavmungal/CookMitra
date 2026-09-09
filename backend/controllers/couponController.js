@@ -1,0 +1,128 @@
+const Coupon = require("../models/Coupon");
+const { normalizeCode, rejectionReason, computeDiscount } = require("../utils/coupons");
+
+// POST /api/coupons/validate — preview a coupon against an order amount.
+// Auth required (per-user limits need the user). Never mutates usage.
+exports.validateCoupon = async (req, res, next) => {
+  try {
+    const { code, amount } = req.body;
+    const coupon = await Coupon.findOne({ code: normalizeCode(code) });
+    const reason = rejectionReason(coupon, {
+      amount,
+      userId: req.user?.id,
+    });
+    if (reason) {
+      return res.status(400).json({ message: reason });
+    }
+    const fullFee = Math.round(Number(amount));
+    const discount = computeDiscount(coupon, fullFee);
+    if (discount <= 0) {
+      return res.status(400).json({ message: "This coupon gives no discount on this order." });
+    }
+    res.json({
+      code: coupon.code,
+      percent: coupon.percent,
+      maxDiscount: coupon.maxDiscount,
+      discount,
+      fullFee,
+      payable: fullFee - discount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/coupons/active — public list of currently usable offers
+// (codes are promos meant to be shared; per-user state is checked at apply).
+exports.listActiveCoupons = async (req, res, next) => {
+  try {
+    const now = new Date();
+    const coupons = await Coupon.find({
+      active: true,
+      $and: [
+        { $or: [{ validFrom: null }, { validFrom: { $lte: now } }] },
+        { $or: [{ validTo: null }, { validTo: { $gte: now } }] },
+        {
+          $or: [
+            { usageLimit: null },
+            { $expr: { $lt: ["$usedCount", "$usageLimit"] } },
+          ],
+        },
+      ],
+    })
+      .select("code description percent maxDiscount minOrder validTo")
+      .sort({ percent: -1 });
+    res.json(coupons);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/coupons — admin: every coupon with usage stats.
+exports.listCoupons = async (req, res, next) => {
+  try {
+    const coupons = await Coupon.find().sort({ createdAt: -1 });
+    res.json(coupons);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/coupons — admin: create a coupon.
+exports.createCoupon = async (req, res, next) => {
+  try {
+    const coupon = await Coupon.create({
+      ...req.body,
+      code: normalizeCode(req.body.code),
+      createdBy: req.user.id,
+    });
+    res.status(201).json(coupon);
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(400).json({ message: "A coupon with this code already exists" });
+    }
+    next(error);
+  }
+};
+
+// PATCH /api/coupons/:id — admin: edit a coupon (incl. active toggle).
+// usedCount/usedBy history is append-only: edits can never rewrite it.
+exports.updateCoupon = async (req, res, next) => {
+  try {
+    const { usedCount, usedBy, createdBy, code, ...editable } = req.body;
+    if (code !== undefined) editable.code = normalizeCode(code);
+    const coupon = await Coupon.findByIdAndUpdate(req.params.id, editable, {
+      new: true,
+      runValidators: true,
+    });
+    if (!coupon) {
+      return res.status(404).json({ message: "Coupon not found" });
+    }
+    res.json(coupon);
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(400).json({ message: "A coupon with this code already exists" });
+    }
+    next(error);
+  }
+};
+
+// DELETE /api/coupons/:id — admin: delete a coupon that was never used.
+// Used coupons are history (bookings reference them), so deactivate instead.
+exports.deleteCoupon = async (req, res, next) => {
+  try {
+    const coupon = await Coupon.findById(req.params.id);
+    if (!coupon) {
+      return res.status(404).json({ message: "Coupon not found" });
+    }
+    if (Number(coupon.usedCount) > 0) {
+      return res.status(400).json({
+        message: `Cannot delete ${coupon.code} — it has ${coupon.usedCount} redemption(s). Deactivate it instead.`,
+      });
+    }
+    await coupon.deleteOne();
+    res.json({ message: `Coupon ${coupon.code} deleted`, id: coupon._id });
+  } catch (error) {
+    next(error);
+  }
+};

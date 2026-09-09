@@ -1,0 +1,28 @@
+/* ==========================================================================
+   Cook Mitra — global stylesheet.
+   Imports the modular design system (see /src/styles).
+   ========================================================================== */
+
+@import "./styles/base.css";
+@import "./styles/navbar.css";
+@import "./styles/buttons.css";
+@import "./styles/forms.css";
+@import "./styles/pickers.css";
+@import "./styles/feedback.css";
+@import "./styles/home-hero.css";
+@import "./styles/home-hero-right.css";
+@import "./styles/home-sections.css";
+@import "./styles/home-sections-2.css";
+@import "./styles/auth.css";
+@import "./styles/cooks.css";
+@import "./styles/dashboards.css";
+@import "./styles/booking-flow.css";
+@import "./styles/booking-pay.css";
+@import "./styles/cook-pages.css";
+@import "./styles/cook-components.css";
+@import "./styles/misc.css";
+@import "./styles/coupons-admin.css";
+@import "./styles/festive-offer.css";
+@import "./styles/dish-carousel.css";
+@import "./styles/home-coupons.css";
+@import "./styles/responsive.css";

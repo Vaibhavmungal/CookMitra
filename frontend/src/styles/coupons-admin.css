@@ -1,0 +1,33 @@
+/* ==========================================================================
+   Admin — Coupon management (Coupons tab) + coupon modal helpers
+   ========================================================================== */
+.coupon-code-chip {
+  display: inline-block;
+  font-family: var(--font-mono, monospace);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  color: var(--slate-800);
+  border-radius: 8px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.92rem;
+}
+.coupon-desc {
+  font-size: 0.82rem;
+  color: var(--slate-500);
+  margin-top: 0.3rem;
+  max-width: 280px;
+  line-height: 1.4;
+}
+.coupon-pct { font-weight: 800; color: var(--amber-700, #b45309); font-size: 1rem; }
+.coupon-sub { font-size: 0.8rem; color: var(--slate-500); margin-top: 0.2rem; }
+.coupon-active-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--slate-700);
+  margin-bottom: 0.25rem;
+}

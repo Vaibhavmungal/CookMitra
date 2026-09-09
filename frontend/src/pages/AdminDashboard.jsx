@@ -1,0 +1,571 @@
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import API from "../api/axios";
+import { useFetch } from "../hooks/useFetch";
+import { useToast } from "../context/ToastContext";
+import { formatCurrency, formatDate } from "../utils/constants";
+import AddCookModal from "../components/AddCookModal";
+import AdminDocViewer from "../components/AdminDocViewer";
+import CouponManagement from "../components/CouponManagement";
+import {
+  ShieldAlert,
+  Users,
+  Calendar,
+  ChefHat,
+  Check,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Search,
+  Filter,
+  MessageCircle,
+  Tag,
+  Trash2,
+  Plus,
+  Ban,
+  ShieldCheck,
+} from "lucide-react";
+
+const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState("cooks");
+
+  return (
+    <div className="dashboard-container">
+      <div className="dashboard-header-row">
+        <div>
+          <span className="badge badge-festive" style={{ marginBottom: "0.5rem" }}>
+            <ShieldAlert size={14} /> System Administration
+          </span>
+          <h1>Admin Control Panel</h1>
+          <p style={{ color: "var(--slate-600)", margin: 0 }}>
+            Oversee cook verification, monitor marketplace bookings, and audit user accounts.
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs-navigation-bar">
+        <button
+          className={`tab-btn ${activeTab === "cooks" ? "active" : ""}`}
+          onClick={() => setActiveTab("cooks")}
+        >
+          <ChefHat size={17} /> Cook Approvals
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "bookings" ? "active" : ""}`}
+          onClick={() => setActiveTab("bookings")}
+        >
+          <Calendar size={17} /> Platform Bookings
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "users" ? "active" : ""}`}
+          onClick={() => setActiveTab("users")}
+        >
+          <Users size={17} /> User Directory
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "leads" ? "active" : ""}`}
+          onClick={() => setActiveTab("leads")}
+        >
+          <MessageCircle size={17} /> WhatsApp Enquiries
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "coupons" ? "active" : ""}`}
+          onClick={() => setActiveTab("coupons")}
+        >
+          <Tag size={17} /> Coupons
+        </button>
+      </div>
+
+      {activeTab === "cooks" && <CookManagement />}
+      {activeTab === "bookings" && <BookingManagement />}
+      {activeTab === "users" && <UserManagement />}
+      {activeTab === "leads" && <LeadManagement />}
+      {activeTab === "coupons" && <CouponManagement />}
+    </div>
+  );
+};
+
+const CookManagement = () => {
+  const { data: cooks, loading, refetch } = useFetch("/cooks");
+  const { showToast } = useToast();
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showAddCook, setShowAddCook] = useState(false);
+
+  const handleApproval = async (cookId, status) => {
+    try {
+      await API.patch(`/cooks/${cookId}/approval`, { status });
+      showToast(`Cook profile marked as ${status}!`, "success");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Action failed", "error");
+    }
+  };
+
+  const filteredCooks = cooks
+    ? cooks.filter((c) => (filterStatus === "all" ? true : c.approvalStatus === filterStatus))
+    : [];
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        <h2 style={{ fontSize: "1.4rem" }}>Cook Profile Verifications</h2>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowAddCook(true)}
+          >
+            <Plus size={16} /> Add Cook
+          </button>
+          {["all", "pending", "approved", "rejected"].map((st) => (
+            <button
+              key={st}
+              onClick={() => setFilterStatus(st)}
+              className={`btn btn-sm ${filterStatus === st ? "btn-primary" : "btn-secondary"}`}
+              style={{ textTransform: "capitalize" }}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <AddCookModal
+        open={showAddCook}
+        onClose={() => setShowAddCook(false)}
+        onCreated={() => {
+          refetch();
+          setShowAddCook(false);
+        }}
+      />
+
+      {loading ? (
+        <div className="loading-spinner-wrapper">
+          <div className="spinner"></div>
+          <p>Loading cooks...</p>
+        </div>
+      ) : filteredCooks.length > 0 ? (
+        <div className="bookings-list-modern">
+          {filteredCooks.map((cook) => (
+            <div key={cook._id} className="booking-item-card">
+              <div className="booking-item-top">
+                <div>
+                  <h3 style={{ margin: 0 }}>{cook.user?.name || "Cook Applicant"}</h3>
+                  <span style={{ fontSize: "0.85rem", color: "var(--slate-500)" }}>
+                    Email: {cook.user?.email} • Area: {cook.serviceArea}
+                  </span>
+                </div>
+                <span
+                  className={`badge ${
+                    cook.approvalStatus === "approved"
+                      ? "badge-emerald"
+                      : cook.approvalStatus === "rejected"
+                      ? "badge-rose"
+                      : "badge-amber"
+                  }`}
+                >
+                  {cook.approvalStatus?.toUpperCase()}
+                </span>
+              </div>
+
+              <div className="booking-metadata-grid">
+                <div className="meta-field">
+                  <label>Experience</label>
+                  <span>{cook.experienceYears} Years</span>
+                </div>
+                <div className="meta-field">
+                  <label>Session Rate</label>
+                  <span style={{ color: "var(--primary)", fontWeight: 700 }}>
+                    {formatCurrency(cook.rate)}/hr
+                  </span>
+                </div>
+                <div className="meta-field">
+                  <label>Specialties</label>
+                  <span>{cook.specialties?.join(", ") || "General"}</span>
+                </div>
+              </div>
+
+              {cook.bio && (
+                <p style={{ fontSize: "0.9rem", color: "var(--slate-600)", margin: "0.5rem 0" }}>
+                  {cook.bio}
+                </p>
+              )}
+
+              {/* ID verification uploads — click a thumb to preview */}
+              <AdminDocViewer
+                docs={[
+                  { label: "Aadhaar Card", url: cook.aadharCardUrl },
+                  { label: "PAN Card", url: cook.panCardUrl },
+                  { label: "Profile Photo", url: cook.photoUrl },
+                  ...(cook.documents || []).map((d) => ({
+                    label: d.label || "Document",
+                    url: d.url,
+                  })),
+                ]}
+              />
+
+              {cook.approvalStatus === "pending" && (
+                <div className="booking-actions-row">
+                  <button
+                    className="btn btn-success btn-sm"
+                    onClick={() => handleApproval(cook._id, "approved")}
+                  >
+                    <Check size={16} /> Approve Cook
+                  </button>
+                  <button
+                    className="btn btn-danger-outline btn-sm"
+                    onClick={() => handleApproval(cook._id, "rejected")}
+                  >
+                    <X size={16} /> Reject Application
+                  </button>
+                </div>
+              )}
+              <div className="booking-actions-row">
+                <Link to={`/admin/cooks/${cook._id}`} className="btn btn-outline btn-sm">
+                  View Full Profile & Earnings
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ color: "var(--slate-500)" }}>No cooks found matching this status.</p>
+      )}
+    </div>
+  );
+};
+
+const BookingManagement = () => {
+  const { data: bookings, loading, refetch } = useFetch("/bookings");
+  const { showToast } = useToast();
+
+  const handleAction = async (bookingId, action) => {
+    // Same guardrails as the cook dashboard: confirm before changing the slot.
+    if (
+      action === "accept" &&
+      !window.confirm(
+        "Accept this request on behalf of the cook? The slot will be BOOKED and the customer will have 5 minutes to pay."
+      )
+    )
+      return;
+    if (
+      action === "reject" &&
+      !window.confirm(
+        "Decline this request on behalf of the cook? The customer will be notified and the slot stays open."
+      )
+    )
+      return;
+    try {
+      await API.patch(`/bookings/${bookingId}/${action}`);
+      showToast(
+        action === "accept"
+          ? "Request accepted on behalf of the cook — the cook has been notified!"
+          : "Request declined on behalf of the cook — the cook has been notified!",
+        action === "accept" ? "success" : "info"
+      );
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Action failed", "error");
+    }
+  };
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "1.4rem", marginBottom: "1.5rem" }}>All Platform Bookings</h2>
+      {loading ? (
+        <div className="loading-spinner-wrapper">
+          <div className="spinner"></div>
+          <p>Loading bookings...</p>
+        </div>
+      ) : bookings && bookings.length > 0 ? (
+        <div className="bookings-list-modern">
+          {bookings.map((booking) => (
+            <div key={booking._id} className="booking-item-card">
+              <div className="booking-item-top">
+                <div>
+                  <h3 style={{ margin: 0 }}>Customer: {booking.customer?.name}</h3>
+                  <span style={{ fontSize: "0.85rem", color: "var(--slate-500)" }}>
+                    Cook: {booking.cook?.name || "Assigned Cook"} • Service: {booking.serviceType?.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <span className="badge badge-festive">{booking.status?.toUpperCase()}</span>
+              </div>
+
+              <div className="booking-metadata-grid">
+                <div className="meta-field">
+                  <label>Date</label>
+                  <span>{formatDate(booking.date)}</span>
+                </div>
+                <div className="meta-field">
+                  <label>Time</label>
+                  <span>{booking.startTime} - {booking.endTime}</span>
+                </div>
+                <div className="meta-field">
+                  <label>Amount</label>
+                  <span style={{ color: "var(--primary)", fontWeight: 700 }}>
+                    {formatCurrency(booking.amount)}
+                  </span>
+                </div>
+                <div className="meta-field">
+                  <label>Customer Rating</label>
+                  <span>
+                    {booking.review ? (
+                      <>★ {booking.review.rating}/5{booking.review.comment ? ` — ${booking.review.comment}` : ""}</>
+                    ) : booking.status === "completed" ? (
+                      "Not rated yet"
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {(booking.status === "requested") && (
+                <div className="booking-actions-row">
+                  <button
+                    className="btn btn-success btn-sm"
+                    onClick={() => handleAction(booking._id, "accept")}
+                  >
+                    <Check size={16} /> Admin Accept
+                  </button>
+                  <button
+                    className="btn btn-danger-outline btn-sm"
+                    onClick={() => handleAction(booking._id, "reject")}
+                  >
+                    <X size={16} /> Admin Reject
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ color: "var(--slate-500)" }}>No bookings in database.</p>
+      )}
+    </div>
+  );
+};
+
+const UserManagement = () => {
+  const { data: users, loading, refetch } = useFetch("/auth/users");
+  const { showToast } = useToast();
+
+  const handleStatus = async (user, status) => {
+    const blocking = status === "suspended";
+    if (
+      blocking &&
+      !window.confirm(
+        `Block ${user.name}'s account? They will be logged out and unable to sign in until unblocked.`
+      )
+    )
+      return;
+    if (
+      !blocking &&
+      !window.confirm(`Unblock ${user.name}'s account? They will be able to sign in again.`)
+    )
+      return;
+    try {
+      await API.patch(`/auth/users/${user._id}/status`, { status });
+      showToast(
+        blocking
+          ? `${user.name}'s account has been blocked.`
+          : `${user.name}'s account has been unblocked.`,
+        "success"
+      );
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Action failed", "error");
+    }
+  };
+
+  const handleDelete = async (user) => {
+    if (
+      !window.confirm(
+        `Permanently delete ${user.name}'s account? This also removes their ${
+          user.role === "cook" ? "cook profile, availability slots, " : ""
+        }bookings, reviews and notifications. This cannot be undone.`
+      )
+    )
+      return;
+    try {
+      await API.delete(`/auth/users/${user._id}`);
+      showToast(`${user.name}'s account has been permanently deleted.`, "success");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Delete failed", "error");
+    }
+  };
+
+  const statusBadge = (status) =>
+    status === "suspended" ? (
+      <span className="badge badge-rose">Blocked</span>
+    ) : (
+      <span className="badge badge-emerald">{status || "Active"}</span>
+    );
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "1.4rem", marginBottom: "1.5rem" }}>Registered Accounts</h2>
+      {loading ? (
+        <div className="loading-spinner-wrapper">
+          <div className="spinner"></div>
+          <p>Loading users...</p>
+        </div>
+      ) : users && users.length > 0 ? (
+        <div style={{ background: "white", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.95rem" }}>
+            <thead style={{ background: "var(--slate-50)", borderBottom: "1px solid var(--slate-200)" }}>
+              <tr>
+                <th style={{ padding: "1rem" }}>User Name</th>
+                <th style={{ padding: "1rem" }}>Email</th>
+                <th style={{ padding: "1rem" }}>Role</th>
+                <th style={{ padding: "1rem" }}>Status</th>
+                <th style={{ padding: "1rem" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u._id} style={{ borderBottom: "1px solid var(--slate-100)" }}>
+                  <td style={{ padding: "1rem", fontWeight: 700 }}>{u.name}</td>
+                  <td style={{ padding: "1rem", color: "var(--slate-600)" }}>{u.email}</td>
+                  <td style={{ padding: "1rem" }}>
+                    <span className="badge badge-festive" style={{ textTransform: "capitalize" }}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td style={{ padding: "1rem" }}>{statusBadge(u.status)}</td>
+                  <td style={{ padding: "1rem" }}>
+                    {u.role === "admin" ? (
+                      <span style={{ color: "var(--slate-400)", fontSize: "0.85rem" }}>Protected</span>
+                    ) : (
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        {u.status === "suspended" ? (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            onClick={() => handleStatus(u, "active")}
+                          >
+                            <ShieldCheck size={15} /> Unblock
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            onClick={() => handleStatus(u, "suspended")}
+                          >
+                            <Ban size={15} /> Block
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-danger-outline btn-sm"
+                          onClick={() => handleDelete(u)}
+                        >
+                          <Trash2 size={15} /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p style={{ color: "var(--slate-500)" }}>No users found.</p>
+      )}
+    </div>
+  );
+};
+
+const LeadManagement = () => {
+  const { data: leads, loading, refetch } = useFetch("/leads");
+  const { showToast } = useToast();
+
+  const handleStatus = async (id, status) => {
+    try {
+      await API.patch(`/leads/${id}`, { status });
+      showToast(`Enquiry marked as ${status}`, "success");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Update failed", "error");
+    }
+  };
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "1.4rem", marginBottom: "1.5rem" }}>WhatsApp Enquiries</h2>
+      {loading ? (
+        <div className="loading-spinner-wrapper">
+          <div className="spinner"></div>
+          <p>Loading enquiries...</p>
+        </div>
+      ) : leads && leads.length > 0 ? (
+        <div style={{ background: "white", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.95rem" }}>
+            <thead style={{ background: "var(--slate-50)", borderBottom: "1px solid var(--slate-200)" }}>
+              <tr>
+                <th style={{ padding: "1rem" }}>Name</th>
+                <th style={{ padding: "1rem" }}>WhatsApp</th>
+                <th style={{ padding: "1rem" }}>Location</th>
+                <th style={{ padding: "1rem" }}>Status</th>
+                <th style={{ padding: "1rem" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((lead) => (
+                <tr key={lead._id} style={{ borderBottom: "1px solid var(--slate-100)" }}>
+                  <td style={{ padding: "1rem", fontWeight: 700 }}>{lead.name}</td>
+                  <td style={{ padding: "1rem" }}>
+                    <a
+                      href={`https://wa.me/91${lead.whatsapp}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "#16a34a", fontWeight: 600 }}
+                    >
+                      +91 {lead.whatsapp}
+                    </a>
+                  </td>
+                  <td style={{ padding: "1rem", color: "var(--slate-600)" }}>
+                    {lead.location}
+                    {lead.coords?.lat != null && lead.coords?.lng != null && (
+                      <>
+                        <br />
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${lead.coords.lat},${lead.coords.lng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "#1D4ED8", fontWeight: 600, fontSize: "0.85rem" }}
+                        >
+                          Open pinned location in Maps
+                        </a>
+                      </>
+                    )}
+                  </td>
+                  <td style={{ padding: "1rem" }}>
+                    <span className="badge badge-festive" style={{ textTransform: "capitalize" }}>
+                      {lead.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: "1rem" }}>
+                    <select
+                      value={lead.status}
+                      onChange={(e) => handleStatus(lead._id, e.target.value)}
+                      style={{ padding: "0.4rem", borderRadius: "6px" }}
+                    >
+                      <option value="new">New</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="converted">Converted</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p style={{ color: "var(--slate-500)" }}>No enquiries yet.</p>
+      )}
+    </div>
+  );
+};
+
+export default AdminDashboard;

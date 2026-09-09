@@ -1,0 +1,780 @@
+/* ==========================================================================
+   Cooks — listing page + public cook profile + booking widget
+   Warm festive-orange × deep slate. Responsive, attractive, user-friendly.
+   ========================================================================== */
+
+.cooks-page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+  animation: riseIn 0.3s ease;
+}
+
+/* Spacing for the results meta row + availability hint on this page */
+.cooks-page-container .results-meta-bar { margin: 1rem 0 0.35rem; }
+.cooks-page-container .field-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Filter toolbar */
+.cooks-filter-bar {
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin: 1.6rem 0 0.5rem;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.cooks-filter-bar:focus-within {
+  border-color: #ffd3a8;
+  box-shadow: var(--shadow-md);
+}
+.cooks-filter-bar .input-with-icon { flex: 1 1 240px; min-width: 0; }
+.cooks-filter-bar input[type="date"] { max-width: 180px; }
+.cooks-filter-bar .form-control { min-height: 46px; }
+.cooks-filter-bar .btn {
+  background: var(--slate-100);
+  color: var(--slate-600);
+  font-size: 0.85rem;
+  min-height: 46px;
+  flex-shrink: 0;
+}
+.cooks-filter-bar .btn:hover { background: var(--primary-light); color: var(--primary); }
+.cooks-filter-bar .btn:focus-visible {
+  outline: 3px solid var(--primary-glow);
+  outline-offset: 2px;
+}
+
+/* Grid + cards */
+.cooks-grid-modern {
+  display: grid;
+  /* min() keeps a single column fitting on 320–360px phones */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 1.4rem;
+  margin-top: 1.4rem;
+}
+.cook-card-modern {
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.1rem;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  animation: riseIn 0.35s ease backwards;
+}
+/* Subtle festive top accent that appears on hover */
+.cook-card-modern::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--primary-gradient);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.cook-card-modern:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: #ffd3a8;
+}
+.cook-card-modern:hover::before { opacity: 1; }
+.cook-card-modern:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-glow), var(--shadow-md);
+}
+/* Stagger cards slightly for a lively listing feel */
+.cooks-grid-modern .cook-card-modern:nth-child(2) { animation-delay: 0.04s; }
+.cooks-grid-modern .cook-card-modern:nth-child(3) { animation-delay: 0.08s; }
+.cooks-grid-modern .cook-card-modern:nth-child(n+4) { animation-delay: 0.12s; }
+
+.cook-card-header { display: flex; align-items: center; gap: 1rem; }
+.cook-avatar-badge { position: relative; flex-shrink: 0; }
+.cook-avatar-img {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-size: 1.3rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-brand);
+  overflow: hidden;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+  border: 2px solid #fff;
+  outline: 1px solid var(--slate-200);
+}
+.cook-avatar-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.cook-meta-info { min-width: 0; flex: 1; }
+.cook-meta-info h3 {
+  font-size: 1.12rem;
+  margin: 0 0 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cook-location-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--slate-500);
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+}
+.cook-rating-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  font-weight: 700;
+  color: var(--slate-700);
+}
+
+/* Clamp the bio so cards stay even and scannable */
+.cook-bio-preview {
+  color: var(--slate-600);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0.9rem 0 0;
+}
+.cook-specialties-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+.cook-specialties-wrap .badge {
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.cook-specialties-wrap .badge:hover { transform: translateY(-1px); }
+
+.cook-card-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px dashed var(--slate-200);
+  padding-top: 1rem;
+  margin-top: auto;
+}
+.cook-rate-display { display: flex; flex-direction: column; line-height: 1.2; }
+.rate-amount { font-size: 1.35rem; font-weight: 800; color: var(--slate-900); }
+.rate-unit { font-size: 0.76rem; color: var(--slate-500); }
+.cook-card-bottom .btn { flex-shrink: 0; }
+
+/* Public cook profile */
+.cook-profile-page-container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 3rem;
+  animation: riseIn 0.3s ease;
+}
+.cook-profile-hero {
+  background:
+    radial-gradient(760px 260px at 96% 0%, rgba(255, 190, 80, 0.18), transparent 60%),
+    linear-gradient(150deg, #fff, #fff7ef);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: 1.8rem;
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  position: relative;
+  overflow: hidden;
+}
+.cook-profile-avatar-large {
+  width: 104px;
+  height: 104px;
+  min-width: 104px;
+  min-height: 104px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-size: 2.4rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-brand);
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  border: 3px solid #fff;
+  outline: 1px solid var(--slate-200);
+}
+.cook-profile-avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.cook-profile-hero-content { flex: 1; min-width: 0; }
+.cook-profile-hero-content h1 { font-size: 1.7rem; color: var(--slate-900); }
+/* Badge + meta rows inside the hero (replaces fragile inline flex) */
+.cook-profile-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+.cook-profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  color: var(--slate-600);
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.cook-profile-rate {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.cook-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 1.75rem;
+  align-items: start;
+  margin-top: 1.5rem;
+}
+.cook-profile-left-col { display: flex; flex-direction: column; gap: 1.25rem; min-width: 0; }
+.cook-profile-right-col { position: sticky; top: 84px; min-width: 0; }
+.cook-profile-left-col .profile-card-block h2 { margin-bottom: 0.7rem; }
+
+/* Services grid on the public profile (responsive, replaces inline grid) */
+.cook-services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 1rem;
+}
+.cook-service-tile {
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+.cook-service-tile:hover {
+  border-color: #ffd3a8;
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+.cook-service-tile-head {
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.cook-service-tile p { font-size: 0.85rem; color: var(--slate-600); margin: 0; }
+
+/* Review cards on the public profile */
+.cook-review-card {
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+  border: 1px solid var(--border-subtle);
+  transition: box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.cook-review-card:hover { border-color: var(--slate-200); box-shadow: var(--shadow-sm); }
+.cook-review-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Booking Form — Modern (bk-* namespace)
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Outer wrapper ── */
+.bk {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* ── Gradient header ── */
+.bk-head {
+  background: var(--primary-gradient);
+  border-radius: 16px;
+  padding: 1.3rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #fff;
+}
+.bk-head-text h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+}
+.bk-head-text p {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  margin: 0.15rem 0 0;
+}
+.bk-head-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+.bk-head-total-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.75;
+}
+.bk-head-total-amount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* ── Card (each section) ── */
+.bk-card {
+  background: #fff;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.bk-card-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.bk-card-label svg { color: var(--primary); }
+
+/* ── Service type cards grid ── */
+.bk-service-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.bk-service-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.7rem 0.3rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.bk-service-card:hover {
+  border-color: var(--slate-300);
+  background: var(--slate-50);
+}
+.bk-service-card.active {
+  border-color: var(--primary);
+  background: var(--primary-light, #fff0e1);
+  color: var(--primary-700);
+}
+.bk-service-card svg { color: var(--slate-400); transition: color 0.15s; }
+.bk-service-card.active svg { color: var(--primary); }
+.bk-service-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+}
+.bk-service-desc {
+  font-size: 0.62rem;
+  color: var(--slate-400);
+  text-align: center;
+  line-height: 1.2;
+}
+.bk-service-card.active .bk-service-desc { color: var(--primary-700); opacity: 0.7; }
+
+/* ── Date carousel (horizontal scroll) ── */
+.bk-date-row {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0.1rem 0;
+}
+.bk-date-row::-webkit-scrollbar { display: none; }
+.bk-date-chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.55rem 0.75rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 62px;
+}
+.bk-date-chip:hover { border-color: var(--slate-300); }
+.bk-date-chip.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.bk-date-chip.today { border-color: var(--primary); }
+.bk-date-chip.today:not(.active) .bk-date-num { color: var(--primary); }
+.bk-date-day {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+}
+.bk-date-chip.active .bk-date-day { opacity: 0.85; }
+.bk-date-num {
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.bk-date-month {
+  font-size: 0.6rem;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+/* ── Duration chips ── */
+.bk-duration-row {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.bk-dur-chip {
+  padding: 0.4rem 0.7rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.bk-dur-chip:hover { border-color: var(--slate-300); background: var(--slate-50); }
+.bk-dur-chip.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+.bk-dur-custom {
+  width: 64px;
+  padding: 0.35rem 0.5rem;
+  border: 1.5px dashed var(--slate-300);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--slate-600);
+  background: var(--slate-50);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.bk-dur-custom:focus { border-color: var(--primary); border-style: solid; }
+.bk-dur-custom::placeholder { color: var(--slate-400); font-weight: 500; }
+.bk-dur-end {
+  font-size: 0.78rem;
+  color: var(--slate-500);
+}
+.bk-dur-end strong { color: var(--slate-700); }
+
+/* ── Status pill ── */
+.bk-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  width: fit-content;
+}
+.bk-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.bk-status--info { background: var(--slate-100); color: var(--slate-500); }
+.bk-status--success { background: #d1fae5; color: #065f46; }
+.bk-status--warning { background: #fef3c7; color: #92400e; }
+.bk-status--error { background: #fee2e2; color: #991b1b; }
+
+/* ── Start hour selector ── */
+.bk-hour-select {
+  display: flex;
+  gap: 0.3rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0.1rem 0;
+}
+.bk-hour-select::-webkit-scrollbar { display: none; }
+.bk-hour-btn {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  padding: 0.5rem 0.6rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  min-width: 44px;
+}
+.bk-hour-btn:hover { border-color: var(--slate-300); background: var(--slate-50); }
+.bk-hour-btn.active {
+  border-color: var(--primary);
+  background: var(--primary-gradient);
+  color: #fff;
+}
+.bk-hour-btn.active:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ── Address inputs ── */
+.bk-saved-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--slate-50);
+  border-radius: 10px;
+  color: var(--slate-500);
+}
+.bk-saved-select {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  outline: none;
+  cursor: pointer;
+}
+.bk-addr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.bk-addr-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--slate-800);
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.bk-addr-input::placeholder { color: var(--slate-400); font-weight: 500; }
+.bk-addr-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow, rgba(232, 89, 12, 0.15));
+}
+
+/* ── GPS pin bar ── */
+.bk-pin-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.bk-pin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.7rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.bk-pin-btn:hover { border-color: var(--slate-300); background: var(--slate-50); }
+.bk-pin-btn svg { color: var(--slate-400); }
+.bk-pin-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--slate-500);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+}
+.bk-pin-icon:hover { border-color: var(--slate-300); background: var(--slate-50); }
+.bk-pin-msg {
+  font-size: 0.72rem;
+  color: var(--slate-400);
+  margin: 0.15rem 0 0;
+  line-height: 1.35;
+}
+
+/* ── Notes textarea ── */
+.bk-notes {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--slate-800);
+  background: #fff;
+  outline: none;
+  resize: none;
+  min-height: 72px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.bk-notes::placeholder { color: var(--slate-400); }
+.bk-notes:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow, rgba(232, 89, 12, 0.15));
+}
+
+/* ── Error ── */
+.bk-error {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  color: #991b1b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.6rem 0.85rem;
+}
+
+/* ── Footer ── */
+.bk-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.25rem 0 0.5rem;
+}
+.bk-foot-estimate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--slate-500);
+  padding: 0.5rem 0;
+}
+.bk-foot-total {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--primary-700);
+}
+.bk-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 1.5rem;
+  border: none;
+  border-radius: 14px;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.bk-submit:hover { opacity: 0.92; }
+.bk-submit:active { transform: scale(0.985); }
+.bk-submit:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.bk-submit-loading { display: flex; align-items: center; gap: 0.4rem; }
+.bk-foot-note {
+  color: var(--slate-400);
+  font-size: 0.72rem;
+  text-align: center;
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .cooks-page-container,
+  .cook-profile-page-container,
+  .cook-card-modern { animation: none; }
+  .cook-card-modern,
+  .cook-card-modern::before,
+  .cook-specialties-wrap .badge,
+  .cooks-filter-bar,
+  .cook-service-tile { transition: none; }
+  .cook-card-modern:hover,
+  .cook-service-tile:hover { transform: none; }
+}

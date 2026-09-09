@@ -1,0 +1,115 @@
+const express = require("express");
+const router = express.Router();
+const { body } = require("express-validator");
+const validate = require("../middleware/validate");
+const { auth, authorize } = require("../middleware/auth");
+const {
+  register,
+  login,
+  googleAuth,
+  getMe,
+  updateProfile,
+  getAllUsers,
+  adminSetUserStatus,
+  adminDeleteUser,
+  adminAddCook,
+} = require("../controllers/authController");
+
+router.post(
+  "/register",
+  [
+    body("name").trim().notEmpty().withMessage("Name is required"),
+    body("email").isEmail().withMessage("Valid email is required"),
+    body("phone").trim().notEmpty().withMessage("Phone is required"),
+    body("password")
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
+    body("role")
+      .optional()
+      .isIn(["customer", "cook"])
+      .withMessage("Role must be customer or cook"),
+  ],
+  validate,
+  register
+);
+
+router.post(
+  "/login",
+  [
+    body("email").isEmail().withMessage("Valid email is required"),
+    body("password").notEmpty().withMessage("Password is required"),
+  ],
+  validate,
+  login
+);
+
+router.post(
+  "/google",
+  [
+    body("idToken").notEmpty().withMessage("Google ID token is required"),
+    body("role")
+      .optional()
+      .isIn(["customer", "cook"])
+      .withMessage("Role must be customer or cook"),
+  ],
+  validate,
+  googleAuth
+);
+
+router.get("/me", auth, getMe);
+router.put(
+  "/me",
+  auth,
+  [
+    body("name")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 80 })
+      .withMessage("Name must be between 2 and 80 characters"),
+    body("phone")
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage("Phone is required"),
+    body("address").optional().trim(),
+  ],
+  validate,
+  updateProfile
+);
+router.get("/users", auth, authorize("admin"), getAllUsers);
+
+// Admin: create a cook account (+ approved profile) directly.
+router.post(
+  "/cooks",
+  auth,
+  authorize("admin"),
+  [
+    body("name").trim().notEmpty().withMessage("Name is required"),
+    body("email").isEmail().withMessage("Valid email is required"),
+    body("phone").trim().notEmpty().withMessage("Phone is required"),
+    body("password")
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
+    body("rate").optional().isNumeric().withMessage("Rate must be a number"),
+    body("serviceTypes").optional().isArray().withMessage("serviceTypes must be an array"),
+  ],
+  validate,
+  adminAddCook
+);
+
+// Admin account management: block/unblock and delete customer/cook accounts.
+router.patch(
+  "/users/:id/status",
+  auth,
+  authorize("admin"),
+  [
+    body("status")
+      .isIn(["active", "suspended"])
+      .withMessage("Status must be either active or suspended"),
+  ],
+  validate,
+  adminSetUserStatus
+);
+router.delete("/users/:id", auth, authorize("admin"), adminDeleteUser);
+
+module.exports = router;

@@ -1,0 +1,205 @@
+/* ==========================================================================
+   Forms — pickers, segmented controls, custom checkbox, geo helpers
+   ========================================================================== */
+
+/* Segmented role control (register) */
+.role-segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  background: var(--slate-100);
+  padding: 0.3rem;
+  border-radius: 13px;
+}
+.role-segment-btn {
+  border: none;
+  background: transparent;
+  padding: 0.6rem 0.5rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--slate-600);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+.role-segment-btn.active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Service-type picker (booking widget) */
+.service-pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.service-pick-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 12px;
+  background: #fff;
+  font-weight: 650;
+  font-size: 0.88rem;
+  color: var(--slate-700);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+.service-pick-card:hover { border-color: var(--slate-300); }
+.service-pick-icon {
+  color: var(--slate-400);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.service-pick-card strong {
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+.service-pick-card span:last-child:not(.service-pick-icon):not(.service-pick-check) {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--slate-500);
+  line-height: 1.35;
+  margin-top: -0.15rem;
+}
+.service-pick-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-700);
+}
+.service-pick-card.selected .service-pick-icon { color: var(--primary); }
+.service-pick-check {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.service-pick-card.selected .service-pick-check { color: var(--primary); }
+
+/* Time-slot chips — ONLY available slots are rendered (booked / held /
+   unavailable windows never appear, so they cannot be picked). */
+.slot-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 0.85rem;
+  border-radius: 99px;
+  border: 1.5px solid var(--slate-200);
+  background: #fff;
+  color: var(--slate-700);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 44px;
+}
+.slot-chip:hover { border-color: var(--primary); color: var(--primary-700); background: var(--primary-light); }
+.slot-chip:focus-visible { outline: 3px solid var(--primary-glow); outline-offset: 2px; }
+/* Clearly-visible selected state: solid brand fill + white text + check icon
+   (rendered by the component) + ring + lift, unmistakable at a glance. */
+.slot-chip.selected {
+  border-color: var(--primary);
+  border-width: 2px;
+  background: var(--primary-gradient);
+  color: #fff;
+  box-shadow: var(--shadow-brand), 0 0 0 3px var(--primary-glow);
+  transform: translateY(-1px);
+}
+.slot-chip.selected:hover { color: #fff; background: var(--primary-gradient); border-color: var(--primary); }
+
+.slots-chips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 0.55rem; }
+
+/* Step-2 time-slot picker (Book-a-Cook flow): one card per distinct slot
+   with the free-cook count. Wraps to a grid; selected uses .selected above. */
+.slot-list-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+  margin: 0.9rem 0 0.4rem;
+}
+.slot-chip-pick { flex-wrap: wrap; row-gap: 0.15rem; border-radius: 14px; padding: 0.7rem 0.8rem; }
+.slot-chip-count {
+  flex-basis: 100%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.8;
+}
+.slot-chip.selected .slot-chip-count { opacity: 0.95; }
+/* Step-3 single book button: full-width tap target */
+.slot-chip-book { width: 100%; border-radius: 14px; }
+
+/* Custom checkbox (login remember) */
+.login-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--slate-600);
+  user-select: none;
+}
+.login-remember input { position: absolute; opacity: 0; pointer-events: none; }
+.login-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--slate-300);
+  background: #fff;
+  transition: all 0.15s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+.login-checkbox::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 3px;
+  background: var(--primary-gradient);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.15s ease;
+}
+.login-remember input:checked + .login-checkbox { border-color: var(--primary); }
+.login-remember input:checked + .login-checkbox::after { opacity: 1; transform: scale(1); }
+.login-remember input:focus-visible + .login-checkbox { outline: 3px solid var(--primary-glow); }
+
+.login-label-row { display: flex; align-items: center; justify-content: space-between; }
+.login-label-row label { font-weight: 700; font-size: 0.85rem; color: var(--slate-700); }
+.login-link-btn { border: none; background: none; color: var(--primary); font-size: 0.82rem; font-weight: 600; padding: 0; }
+.login-link-btn:hover { text-decoration: underline; }
+
+/* Geo/location helper */
+.detect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 11px;
+  border: 1.5px dashed var(--slate-300);
+  background: var(--slate-50);
+  color: var(--slate-600);
+  font-weight: 650;
+  font-size: 0.86rem;
+  transition: all 0.15s ease;
+}
+.detect-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+/* Maps link input group (copy link) */
+.maps-link-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.maps-link-group .form-control {
+  flex: 1;
+  min-width: 0;
+  padding-right: 0.9rem;
+}
+.maps-link-group .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

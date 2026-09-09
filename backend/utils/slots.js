@@ -1,0 +1,220 @@
+// Time-slot engine: derive bookable start times from a cook's open windows
+// (Availability, status "available") minus already-booked intervals, sized to
+// the customer's input service hours.
+//
+// Cooks publish broad windows (e.g. 09:00–14:00); customers pick a duration
+// (e.g. 3h) and get every viable start time on a 30-min grid.
+
+const Availability = require("../models/Availability");
+const Booking = require("../models/Booking");
+const CookProfile = require("../models/CookProfile");
+
+// Booking statuses that PERMANENTLY block overlapping re-booking.
+const BLOCKING_STATUSES = ["accepted", "confirmed", "in_progress"];
+
+// Mongo $or fragment matching every booking that currently occupies the
+// calendar: permanent blocks (above) plus pending "requested" ones inside
+// their 5-minute hold. When a customer sends a request they land on a waiting
+// page while the cook decides, and during that window the slot must be
+// invisible/unbookable for everyone else. The hold is expiry-aware — a
+// request whose requestExpiresAt has passed no longer blocks anything, so
+// stale requests can never lock the calendar. (Legacy "requested" docs
+// without requestExpiresAt don't match either — they can't hold forever.)
+const activeSlotMatch = () => [
+  { status: { $in: BLOCKING_STATUSES } },
+  { status: "requested", requestExpiresAt: { $gt: new Date() } },
+];
+
+const STEP_MINUTES = 30;
+// Full-day default windows can yield up to 48 starts (00:00–23:30 for 30-min
+// sessions) — the cap must cover the whole day, not just the morning.
+const MAX_OPTIONS = 48;
+
+// Service day for every cook: bookable slots run 08:00–20:00 only. Windows
+// are intersected with this range wherever slots are derived or validated.
+const SERVICE_DAY_START_MIN = 8 * 60;
+const SERVICE_DAY_END_MIN = 20 * 60;
+
+const timeToMinutes = (t) => {
+  const m = String(t || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+};
+
+const minutesToTime = (mins) => {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
+
+const dayBounds = (dateStr) => {
+  const start = new Date(dateStr);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(dateStr);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+// Normalize a "YYYY-MM-DD" date-only string to LOCAL midnight so stored
+// Availability/Booking dates always fall inside dayBounds() ranges regardless
+// of server timezone (plain new Date("YYYY-MM-DD") is UTC midnight).
+const parseDay = (dateStr) => {
+  const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const intervalsOverlap = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
+
+// Local "YYYY-MM-DD" day string for the given Date (avoids the UTC leak that
+// new Date("YYYY-MM-DD").toISOString() has on non-UTC servers).
+const localDayString = (d = new Date()) => {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+// A cook who toggled "unavailable" becomes available again automatically on the
+// next day. If the stored unavailableDate is before today, reset the flag in
+// the DB and return true so the cook is treated as available right now.
+// Canonical copy — controllers must import this instead of duplicating it.
+const resolveCookAvailability = async (profile) => {
+  if (!profile) return true;
+  const status = profile.availabilityStatus;
+  if (status === "unavailable") {
+    const today = localDayString();
+    // Treat as timeless if no date was recorded — availabilityStatus was raised
+    // before tracking dates, so keep them unavailable until manually changed.
+    if (profile.unavailableDate && profile.unavailableDate < today) {
+      try {
+        await CookProfile.findByIdAndUpdate(profile._id, {
+          availabilityStatus: "available",
+          unavailableDate: "",
+        });
+      } catch {}
+      return true;
+    }
+  }
+  // Field COULD be absent on legacy profiles (and controllers that only select
+  // a subset). The schema default is "available" — treat an unset status the
+  // same way so cooks are never silently rendered unbookable.
+  return status == null || status === "available";
+};
+
+const getDayWindows = async (cookId, dateStr) => {
+  const { start, end } = dayBounds(dateStr);
+  const windows = await Availability.find({
+    cook: cookId,
+    date: { $gte: start, $lte: end },
+    status: "available",
+  }).sort({ startTime: 1 });
+  // Cooks are available all hours by default: with no published windows the
+  // whole day is open (existing bookings still block overlaps). Cooks opt OUT
+  // via the unavailable toggle, enforced by the callers.
+  if (!windows.length) {
+    return [{ startTime: "08:00", endTime: "20:00", status: "available", derived: true }];
+  }
+  // Published windows are intersected with the 08:00–20:00 service day so
+  // early-morning / late-night availability never surfaces to customers.
+  return windows
+    .map((w) => {
+      const s = timeToMinutes(w.startTime);
+      const e = timeToMinutes(w.endTime);
+      if (s == null || e == null) return null;
+      const cs = Math.max(s, SERVICE_DAY_START_MIN);
+      const ce = Math.min(e, SERVICE_DAY_END_MIN);
+      if (ce <= cs) return null;
+      const clone = typeof w.toObject === "function" ? w.toObject() : { ...w };
+      clone.startTime = minutesToTime(cs);
+      clone.endTime = minutesToTime(ce);
+      return clone;
+    })
+    .filter(Boolean);
+};
+
+const getDayBookings = (cookId, dateStr) => {
+  const { start, end } = dayBounds(dateStr);
+  return Booking.find({
+    cook: cookId,
+    date: { $gte: start, $lte: end },
+    $or: activeSlotMatch(),
+  }).select("startTime endTime status");
+};
+
+// Every viable {startTime, endTime} of length durationHours inside the open
+// windows, skipping anything overlapping an existing booking.
+const computeStartOptions = (windows, bookings, durationHours) => {
+  const durMin = Math.round(Number(durationHours) * 60);
+  // Minimum 30 min — matches the 0.5h floor used by the booking route,
+  // availability endpoint and payment flow (short sessions are bookable).
+  if (!Number.isFinite(durMin) || durMin < 30 || durMin > 12 * 60) return [];
+
+  const busy = (bookings || [])
+    .map((b) => ({ s: timeToMinutes(b.startTime), e: timeToMinutes(b.endTime) }))
+    .filter((b) => b.s != null && b.e != null);
+
+  const options = [];
+  const seen = new Set();
+  for (const w of windows || []) {
+    let wStart = timeToMinutes(w.startTime);
+    let wEnd = timeToMinutes(w.endTime);
+    if (wStart == null || wEnd == null) continue;
+    // Clamp to the 08:00–20:00 service day (covers raw Availability docs
+    // passed in directly, not only getDayWindows output).
+    wStart = Math.max(wStart, SERVICE_DAY_START_MIN);
+    wEnd = Math.min(wEnd, SERVICE_DAY_END_MIN);
+    if (wEnd - wStart < durMin) continue;
+    for (let s = wStart; s + durMin <= wEnd && options.length < MAX_OPTIONS; s += STEP_MINUTES) {
+      const e = s + durMin;
+      if (busy.some((b) => intervalsOverlap(s, e, b.s, b.e))) continue;
+      const key = `${s}-${e}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push({ startTime: minutesToTime(s), endTime: minutesToTime(e) });
+    }
+    if (options.length >= MAX_OPTIONS) break;
+  }
+  return options.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+};
+
+// Is the requested [startTime, endTime] fully inside one open window?
+const findContainingWindow = (windows, startTime, endTime) => {
+  const s = timeToMinutes(startTime);
+  const e = timeToMinutes(endTime);
+  if (s == null || e == null || e <= s) return null;
+  return (windows || []).find((w) => {
+    const ws = timeToMinutes(w.startTime);
+    const we = timeToMinutes(w.endTime);
+    return ws != null && we != null && ws <= s && e <= we;
+  });
+};
+
+// First existing booking overlapping [startTime, endTime], if any.
+const findOverlapBooking = (bookings, startTime, endTime) => {
+  const s = timeToMinutes(startTime);
+  const e = timeToMinutes(endTime);
+  if (s == null || e == null || e <= s) return null;
+  return (bookings || []).find((b) => {
+    const bs = timeToMinutes(b.startTime);
+    const be = timeToMinutes(b.endTime);
+    return bs != null && be != null && intervalsOverlap(s, e, bs, be);
+  });
+};
+
+module.exports = {
+  BLOCKING_STATUSES,
+  activeSlotMatch,
+  timeToMinutes,
+  minutesToTime,
+  dayBounds,
+  parseDay,
+  localDayString,
+  resolveCookAvailability,
+  intervalsOverlap,
+  getDayWindows,
+  getDayBookings,
+  computeStartOptions,
+  findContainingWindow,
+  findOverlapBooking,
+};

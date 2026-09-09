@@ -1,0 +1,118 @@
+/* ==========================================================================
+   Buttons, Badges, Dots, Avatars
+   ========================================================================== */
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.62rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--slate-700);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); color: inherit; }
+.btn:active { transform: translateY(0); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: var(--shadow-sm); }
+.btn:focus-visible { outline: 3px solid var(--primary-glow); outline-offset: 2px; }
+
+.btn-primary {
+  background: var(--primary-gradient);
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+}
+.btn-primary:hover { filter: brightness(1.06); color: #fff; }
+
+.btn-secondary {
+  background: var(--slate-900);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+.btn-secondary:hover { background: #1f2937; color: #fff; }
+
+.btn-outline {
+  background: #fff;
+  border-color: var(--slate-200);
+  color: var(--slate-700);
+}
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+.btn-danger-outline {
+  background: #fff;
+  border-color: #fecdd3;
+  color: var(--accent-rose);
+}
+.btn-danger-outline:hover { background: var(--accent-rose-light); border-color: var(--accent-rose); color: var(--accent-rose); }
+
+.btn-success { background: var(--accent-emerald); color: #fff; box-shadow: var(--shadow-sm); }
+.btn-success:hover { background: #047857; color: #fff; }
+
+.btn-sm { padding: 0.42rem 0.8rem; font-size: 0.84rem; border-radius: 10px; }
+.btn-lg { padding: 0.85rem 1.6rem; font-size: 1rem; border-radius: 14px; }
+.btn-block { width: 100%; }
+
+/* ---- Badges ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 99px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+.badge-festive { background: var(--primary-light); color: var(--primary-700); }
+.badge-amber { background: var(--accent-amber-light); color: #92400e; }
+.badge-blue { background: var(--accent-blue-light); color: #1e40af; }
+.badge-emerald { background: var(--accent-emerald-light); color: #065f46; }
+.badge-purple { background: var(--accent-purple-light); color: #5b21b6; }
+.badge-rose { background: var(--accent-rose-light); color: #9f1239; }
+.badge-slate { background: var(--slate-100); color: var(--slate-600); }
+
+/* Verified check dot on cook avatars */
+.verified-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-emerald);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid #fff;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.4);
+}
+
+/* ---- Chips / tags ---- */
+.tag, .tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.26rem 0.6rem;
+  border-radius: 99px;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Star rating cluster */
+.star-rating-display { display: inline-flex; align-items: center; gap: 2px; }
+.rating-count-label { color: var(--slate-400); font-size: 0.82rem; }

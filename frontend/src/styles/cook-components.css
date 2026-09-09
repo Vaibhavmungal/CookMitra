@@ -1,0 +1,45 @@
+/* Cook components — simple clean restyle. One soft card language everywhere. */
+.cook-dash-head,.cook-form-card,.cook-card,.cook-doc-card,.cook-review-summary,.cook-review-item,.cook-modal-card{background:#fff;border:1px solid #f0e8df;border-radius:16px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+.cook-dash-head{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cook-dash-head h1{margin:0;font-size:1.3rem}
+.cook-dash-head p{margin:.15rem 0 0;color:#64748b;font-size:.88rem}
+.cook-tabs{display:flex;gap:.35rem;background:#fff;border:1px solid #f0e8df;border-radius:14px;padding:.3rem;margin-bottom:1rem;overflow-x:auto}
+.cook-tab{border:0;background:transparent;color:#64748b;font-weight:700;font-size:.87rem;padding:.5rem .95rem;border-radius:10px;white-space:nowrap}
+.cook-tab:hover{background:#faf9f7;color:#1e293b}
+.cook-tab.active{background:#e8590c;color:#fff}
+.cook-card{padding:1.1rem 1.2rem;margin-bottom:.8rem}
+.cook-card-top{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start;margin-bottom:.5rem}
+.cook-card-top h3{margin:0;font-size:1rem}
+.cook-card-sub{margin:.2rem 0 0;font-size:.85rem;color:#64748b}
+.cook-amount{margin:0 0 .7rem;font-weight:800;font-size:1.02rem}
+.cook-note{font-size:.86rem;color:#64748b;background:#faf9f7;border-radius:10px;padding:.55rem .75rem;margin:0 0 .7rem}
+.cook-empty{text-align:center;padding:2rem 1rem;background:#fff;border:1px dashed #e2e8f0;border-radius:16px;color:#64748b}
+.cook-empty h3{margin:0 0 .3rem}.cook-empty p{margin:0;font-size:.88rem}
+.cook-link-btn{background:none;border:0;color:#e8590c;font-weight:700;cursor:pointer;padding:0;font-size:.88rem}
+.cook-avail{display:inline-flex;align-items:center;gap:.5rem;border:0;border-radius:999px;padding:.55rem 1.1rem;font-weight:700;font-size:.86rem;color:#fff;min-height:42px;cursor:pointer}
+.cook-avail.on{background:#059669}.cook-avail.off{background:#e11d48}
+.cook-avail:disabled{opacity:.65;cursor:default}
+.cook-status{display:inline-block;padding:.28rem .7rem;border-radius:999px;font-size:.74rem;font-weight:800;letter-spacing:.01em}
+.cook-status.requested{background:#fef3c7;color:#92400e}.cook-status.scheduled{background:#dbeafe;color:#1e40af}
+.cook-status.completed{background:#d1fae5;color:#065f46}.cook-status.declined{background:#ffe4e6;color:#9f1239}
+.cook-status.cancelled{background:#f1f5f9;color:#475569}
+.cook-form-card{padding:1.4rem;margin-bottom:1rem}
+.cook-form-card h2{margin:0 0 .2rem;font-size:1.2rem}
+.cook-form-sub{color:#64748b;font-size:.86rem;margin:0 0 1rem}
+.cook-2col{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.cook-svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.cook-svc{border:1.5px solid #e2e8f0;background:#fff;border-radius:12px;padding:.75rem .9rem;font-weight:600;font-size:.88rem;display:flex;justify-content:space-between;align-items:center;cursor:pointer;color:#334155}
+.cook-svc.selected{border-color:#e8590c;background:#fff7ed;color:#c2410c}
+.cook-doc-card{border:1.5px dashed #e2e8f0;border-radius:12px;padding:.9rem 1rem;margin-bottom:.7rem;background:#faf9f7}
+.cook-doc-card strong{font-size:.9rem}
+.cook-doc-row{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:.5rem}
+.cook-review-summary{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.25rem;margin-bottom:1rem}
+.cook-review-num{font-size:1.6rem;font-weight:800}
+.cook-review-item{padding:1rem 1.15rem;margin-bottom:.7rem}
+.cook-review-item h4{margin:0;font-size:.95rem}.cook-review-item p{margin:.35rem 0 0;font-size:.88rem;color:#475569}
+.cook-modal-card{position:relative;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:1.75rem 1.5rem;border-radius:20px}
+.cook-modal-head{text-align:center;margin-bottom:1.1rem}
+.cook-modal-head h3{margin:0 0 .3rem}.cook-modal-head p{margin:0;color:#64748b;font-size:.88rem}
+.cook-cred{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:.9rem 1rem;margin-bottom:1rem;display:flex;flex-direction:column;gap:.6rem}
+.cook-cred-row{display:flex;justify-content:space-between;align-items:center;gap:.6rem;background:#fff;border:1px solid #eef2f6;border-radius:10px;padding:.5rem .7rem}
+@media(max-width:640px){.cook-2col,.cook-svc-grid{grid-template-columns:1fr}.cook-form-card{padding:1.1rem}.cook-modal-card{padding:1.4rem 1.1rem}}

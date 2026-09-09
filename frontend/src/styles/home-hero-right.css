@@ -1,0 +1,143 @@
+/* ==========================================================================
+   Home — Hero (part 2: cook visual, floating cards, stats)
+   ========================================================================== */
+
+.hero-v2-right { position: relative; display: flex; justify-content: center; align-items: center; }
+/* Warm festive glow behind the hero image */
+.hero-v2-right::before {
+  content: "";
+  position: absolute;
+  width: 115%;
+  aspect-ratio: 1;
+  background: radial-gradient(closest-side, rgba(251, 191, 36, 0.38), rgba(251, 146, 60, 0.16) 55%, transparent 72%);
+  filter: blur(30px);
+  pointer-events: none;
+}
+/* Modern photo card — clean rounded frame with a gold gradient edge and a
+   soft offset accent plate behind it (static, no motion).
+   NOTE: no z-index here on purpose — a z-index would create a stacking
+   context and the ::before accent plate (z-index: -1) would paint behind
+   this element's own gradient background, i.e. become invisible. */
+.hero-v2-cook-wrap {
+  position: relative;
+  width: min(100%, 520px);
+  border-radius: 28px;
+  padding: 10px;
+  background: linear-gradient(165deg, #fff3c4 0%, #f5a623 30%, #8a3c0c 72%, #ffd24d 100%);
+  box-shadow: 0 30px 60px -18px rgba(124, 45, 18, 0.35), 0 0 50px rgba(251, 191, 36, 0.3);
+}
+.hero-v2-cook-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 22px -14px -14px 22px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.4), rgba(251, 146, 60, 0.14));
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  z-index: -1;
+  pointer-events: none;
+}
+.hero-v2-cook-img {
+  border-radius: 20px;
+  width: 100%;
+  max-height: 600px;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, #FFFBEB 0%, #FFEDD5 100%);
+  transition: transform 0.4s ease;
+}
+.hero-v2-cook-wrap:hover .hero-v2-cook-img { transform: scale(1.025); }
+/* Flickering diyas at the base of the arch */
+.hero-diyas {
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  font-size: 1.5rem;
+  filter: drop-shadow(0 3px 10px rgba(180, 83, 9, 0.35));
+  pointer-events: none;
+}
+.hero-diyas .hero-diya-big { font-size: 2rem; }
+.hero-diyas span { display: inline-block; }
+
+.hero-v2-float {
+  position: absolute;
+  /* Above the photo card (.hero-v2-cook-wrap is z-index: 1) and the diyas
+     (z-index: 3) — otherwise the image paints over these floating badges and
+     they end up hidden behind it. */
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 14px;
+  padding: 0.5rem 0.85rem;
+  color: #431407;
+  font-size: 0.82rem;
+  font-weight: 650;
+  box-shadow: 0 12px 28px rgba(124, 45, 18, 0.18);
+}
+.hero-v2-float-rating { top: -14px; right: -8px; }
+.hero-v2-float-stars { display: flex; gap: 2px; }
+.hero-v2-float-num { font-weight: 800; }
+.hero-v2-float-label { opacity: 0.92; }
+.hero-v2-float-live { top: 34%; left: -34px; }
+.hero-v2-float-live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.25);
+  animation: pulseDot 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.hero-v2-float-live-sub { font-size: 0.74rem; opacity: 0.92; }
+
+/* Stats strip — festive glass pills */
+.hero-v2-stats {
+  position: relative;
+  z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.4rem 1.5rem 1.8rem;
+  border-top: 1px solid rgba(180, 83, 9, 0.18);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.hero-v2-stat {
+  text-align: center;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 0.8rem 1.6rem;
+  min-width: 150px;
+  box-shadow: 0 10px 28px rgba(124, 45, 18, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.hero-v2-stat-num {
+  font-size: 1.7rem;
+  font-weight: 800;
+  background: linear-gradient(180deg, #C2410C, #EA580C 55%, #F59E0B);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(251, 146, 60, 0.3));
+}
+.hero-v2-stat-label { font-size: 0.78rem; color: #7C2D12; margin-top: 0.2rem; }
+.hero-v2-stat-sep { display: none; }
+
+/* Entrance */
+.hero-enter {
+  opacity: 0;
+  animation: riseIn 0.55s ease forwards;
+  animation-delay: var(--d, 0s);
+}

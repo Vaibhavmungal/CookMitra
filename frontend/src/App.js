@@ -1,0 +1,188 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { LocationProvider } from "./context/LocationContext";
+import { ToastProvider } from "./context/ToastContext";
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+import ProtectedRoute from "./components/ProtectedRoute";
+import ScrollToTop from "./components/ScrollToTop";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import CookProfile from "./pages/CookProfile";
+import CookOnDemand from "./pages/CookOnDemand";
+import CustomerDashboard from "./pages/CustomerDashboard";
+import CustomerProfile from "./pages/CustomerProfile";
+import BookingDetails from "./pages/BookingDetails";
+import Notifications from "./pages/Notifications";
+import CookDashboard from "./pages/CookDashboard";
+import CookSetup from "./pages/CookSetup";
+import CookReviews from "./pages/CookReviews";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminCookProfile from "./pages/AdminCookProfile";
+import LiveCookTracking from "./pages/LiveCookTracking";
+import BookingWaiting from "./pages/BookingWaiting";
+import BookingPayment from "./pages/BookingPayment";
+import { TermsConditions, PrivacyPolicy, RefundPolicy, ContactUs } from "./pages/Legal";
+import "./App.css";
+
+// Customer-only pages (Find Cooks / Book a Cook).
+// Guests + customers can view; admins -> /admin, cooks -> cook dashboard.
+const NonAdminRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="loading">Loading...</div>;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  if (user?.role === "cook") return <Navigate to="/dashboard/cook-bookings" replace />;
+  return children;
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <LocationProvider>
+      <ToastProvider>
+        <Router>
+        <ScrollToTop />
+        <div className="App">
+          <Navbar />
+          <main className="main-content">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              {/* Compliance pages (required for payment-gateway activation) —
+                  public for every role, including guests. */}
+              <Route path="/terms" element={<TermsConditions />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/refunds" element={<RefundPolicy />} />
+              <Route path="/contact" element={<ContactUs />} />
+              {/* Find Cooks listing removed — all discovery goes through
+                  Book a Cook. Old /cooks URLs land there too. */}
+              <Route
+                path="/cooks"
+                element={<Navigate to="/cook-on-demand" replace />}
+              />
+              <Route
+                path="/cooks/:id"
+                element={
+                  <NonAdminRoute>
+                    <CookProfile />
+                  </NonAdminRoute>
+                }
+              />
+              <Route
+                path="/cook-on-demand"
+                element={
+                  <NonAdminRoute>
+                    <CookOnDemand />
+                  </NonAdminRoute>
+                }
+              />
+              <Route
+                path="/dashboard/my-bookings"
+                element={
+                  <ProtectedRoute roles={["customer"]}>
+                    <CustomerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/profile"
+                element={
+                  <ProtectedRoute roles={["customer"]}>
+                    <CustomerProfile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/notifications"
+                element={
+                  <ProtectedRoute roles={["customer", "cook"]}>
+                    <Notifications />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bookings/:bookingId"
+                element={
+                  <ProtectedRoute roles={["customer", "cook", "admin"]}>
+                    <BookingDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bookings/:bookingId/wait"
+                element={
+                  <ProtectedRoute roles={["customer"]}>
+                    <BookingWaiting />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bookings/:bookingId/pay"
+                element={
+                  <ProtectedRoute roles={["customer"]}>
+                    <BookingPayment />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/cook-bookings"
+                element={
+                  <ProtectedRoute roles={["cook"]}>
+                    <CookDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/cook-profile"
+                element={
+                  <ProtectedRoute roles={["cook"]}>
+                    <CookSetup />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/cook-reviews"
+                element={
+                  <ProtectedRoute roles={["cook"]}>
+                    <CookReviews />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/track/:bookingId"
+                element={
+                  <ProtectedRoute roles={["customer", "cook", "admin"]}>
+                    <LiveCookTracking />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute roles={["admin"]}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/cooks/:id"
+                element={
+                  <ProtectedRoute roles={["admin"]}>
+                    <AdminCookProfile />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </Router>
+      </ToastProvider>
+      </LocationProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;

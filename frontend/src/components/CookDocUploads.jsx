@@ -1,0 +1,204 @@
+import React, { useState } from "react";
+import API from "../api/axios";
+import { useToast } from "../context/ToastContext";
+import { Upload, FileCheck, X, Camera } from "lucide-react";
+
+// Backend serves uploaded files under /uploads; API base ends with /api.
+// Falls back to same-origin so single-service deployments need no build env.
+const API_ORIGIN = (process.env.REACT_APP_API_URL || "/api").replace(/\/api\/?$/, "");
+
+export const resolveFileUrl = (url) => {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_ORIGIN}${url.startsWith("/") ? url : `/${url}`}`;
+};
+
+const FIELD_TO_KEY = {
+  aadhar: "aadharCardUrl",
+  pan: "panCardUrl",
+  photo: "photoUrl",
+};
+
+// Reusable Aadhaar (required) / PAN (required) / profile photo (optional)
+// upload section for cook profile forms. Uploads immediately via
+// POST /cooks/upload-docs and reports URLs through onChange(urlKey, url).
+// Props: aadharCardUrl, panCardUrl, photoUrl, onChange, onError (optional),
+// requireDocs (default true — set false to skip required markers/validation hints).
+const CookDocUploads = ({
+  aadharCardUrl = "",
+  panCardUrl = "",
+  photoUrl = "",
+  onChange,
+  onError,
+  onUploadingChange,
+  requireDocs = true,
+}) => {
+  const { showToast } = useToast();
+  const [uploading, setUploading] = useState({ aadhar: false, pan: false, photo: false });
+
+  const setFieldUploading = (field, value) => {
+    setUploading((prev) => {
+      const next = { ...prev, [field]: value };
+      onUploadingChange?.(Object.values(next).some(Boolean));
+      return next;
+    });
+  };
+
+  const handleFileUpload = async (field, file) => {
+    if (!file) return;
+    const urlKey = FIELD_TO_KEY[field];
+    setFieldUploading(field, true);
+    try {
+      const fd = new FormData();
+      fd.append(field, file);
+      const res = await API.post("/cooks/upload-docs", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const url = res.data?.[urlKey] || "";
+      if (!url) throw new Error("Upload failed — no file URL returned");
+      onChange?.(urlKey, url);
+      showToast("File uploaded successfully!", "success");
+    } catch (err) {
+      const msg = err.response?.data?.message || "File upload failed (JPG/PNG/WEBP/PDF, max 5MB)";
+      onError?.(msg);
+      showToast(msg, "error");
+    } finally {
+      setFieldUploading(field, false);
+    }
+  };
+
+  const fileInput = (field, accept, label) => (
+    <label className="btn btn-outline btn-sm" style={{ cursor: "pointer" }}>
+      {field === "photo" ? <Camera size={15} /> : <Upload size={15} />}{" "}
+      {uploading[field] ? "Uploading..." : label}
+      <input
+        type="file"
+        accept={accept}
+        hidden
+        disabled={uploading[field]}
+        onChange={(e) => {
+          handleFileUpload(field, e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+
+  return (
+    <div className="booking-form-group">
+      <label style={{ marginBottom: "0.75rem" }}>
+        Identity Verification{" "}
+        {requireDocs && <span style={{ color: "var(--primary)" }}>(Aadhaar & PAN required)</span>}
+      </label>
+
+      {/* Aadhaar Card */}
+      <div className="cook-doc-box">
+        <div className="cook-doc-head">
+          <strong style={{ fontSize: "0.92rem" }}>
+            Aadhaar Card {requireDocs && <span style={{ color: "#dc2626" }}>*</span>}
+          </strong>
+          {aadharCardUrl && (
+            <span className="badge badge-emerald">
+              <FileCheck size={13} /> Uploaded
+            </span>
+          )}
+        </div>
+        {aadharCardUrl ? (
+          <div className="cook-doc-row">
+            <a
+              href={resolveFileUrl(aadharCardUrl)}
+              target="_blank"
+              rel="noreferrer"
+              className="cook-doc-link"
+            >
+              View uploaded Aadhaar
+            </a>
+            <button
+              type="button"
+              className="btn btn-danger-outline btn-sm"
+              onClick={() => onChange?.("aadharCardUrl", "")}
+            >
+              <X size={14} /> Remove
+            </button>
+          </div>
+        ) : (
+          fileInput("aadhar", "image/jpeg,image/png,image/webp,.pdf", "Upload Aadhaar (JPG/PNG/PDF, max 5MB)")
+        )}
+      </div>
+
+      {/* PAN Card */}
+      <div className="cook-doc-box">
+        <div className="cook-doc-head">
+          <strong style={{ fontSize: "0.92rem" }}>
+            PAN Card {requireDocs && <span style={{ color: "#dc2626" }}>*</span>}
+          </strong>
+          {panCardUrl && (
+            <span className="badge badge-emerald">
+              <FileCheck size={13} /> Uploaded
+            </span>
+          )}
+        </div>
+        {panCardUrl ? (
+          <div className="cook-doc-row">
+            <a
+              href={resolveFileUrl(panCardUrl)}
+              target="_blank"
+              rel="noreferrer"
+              className="cook-doc-link"
+            >
+              View uploaded PAN card
+            </a>
+            <button
+              type="button"
+              className="btn btn-danger-outline btn-sm"
+              onClick={() => onChange?.("panCardUrl", "")}
+            >
+              <X size={14} /> Remove
+            </button>
+          </div>
+        ) : (
+          fileInput("pan", "image/jpeg,image/png,image/webp,.pdf", "Upload PAN (JPG/PNG/PDF, max 5MB)")
+        )}
+      </div>
+
+      {/* Profile Photo (optional) */}
+      <div className="cook-doc-box">
+        <div className="cook-doc-head">
+          <strong style={{ fontSize: "0.92rem" }}>
+            Profile Photo <span style={{ color: "var(--slate-400)", fontWeight: 500 }}>(optional)</span>
+          </strong>
+          {photoUrl && (
+            <span className="badge badge-emerald">
+              <FileCheck size={13} /> Uploaded
+            </span>
+          )}
+        </div>
+        <div className="cook-doc-row">
+          {photoUrl && (
+            <img
+              src={resolveFileUrl(photoUrl)}
+              alt="Cook profile"
+              className="cook-doc-photo"
+            />
+          )}
+          {photoUrl ? (
+            <button
+              type="button"
+              className="btn btn-danger-outline btn-sm"
+              onClick={() => onChange?.("photoUrl", "")}
+            >
+              <X size={14} /> Remove
+            </button>
+          ) : (
+            fileInput("photo", "image/jpeg,image/png,image/webp", "Upload Photo (JPG/PNG/WEBP, max 5MB)")
+          )}
+        </div>
+      </div>
+      <p style={{ fontSize: "0.8rem", color: "var(--slate-500)", marginTop: "0.5rem" }}>
+        Your Aadhaar and PAN are visible only to the admin for verification.
+      </p>
+    </div>
+  );
+};
+
+export default CookDocUploads;

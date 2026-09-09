@@ -1,0 +1,151 @@
+const mongoose = require("mongoose");
+
+const bookingSchema = new mongoose.Schema(
+  {
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    cook: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    serviceType: {
+      type: String,
+      enum: ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"],
+      required: true,
+    },
+    selectedItems: [
+      {
+        type: String,
+      },
+    ],
+    date: {
+      type: Date,
+      required: [true, "Booking date is required"],
+    },
+    startTime: {
+      type: String,
+      required: [true, "Start time is required"],
+    },
+    endTime: {
+      type: String,
+      required: [true, "End time is required"],
+    },
+    address: {
+      type: String,
+      required: [true, "Address is required"],
+    },
+    addressDetails: {
+      flatNo: { type: String, default: "" },
+      society: { type: String, default: "" },
+      landmark: { type: String, default: "" },
+      city: { type: String, default: "" },
+    },
+    location: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+    },
+    // Snapshot of the cook's live location shared for this booking, so the
+    // customer can track/navigate to the cook on WhatsApp + Google Maps.
+    cookLocation: {
+      lat: { type: Number, min: -90, max: 90 },
+      lng: { type: Number, min: -180, max: 180 },
+      // GPS fix radius in metres (null when shared from a saved pin).
+      accuracy: { type: Number, min: 0, max: 100000 },
+      updatedAt: { type: Date },
+    },
+    // Arrival: set when the cook reaches the venue (auto-detected from GPS
+    // or marked manually). Drives the "cook has arrived" user notification.
+    cookArrived: { type: Boolean, default: false },
+    cookArrivedAt: { type: Date },
+    // Cooking-hours completion: set once the session end time passes while
+    // the booking is active. Drives the "cooking hours complete" alarm.
+    hoursCompleted: { type: Boolean, default: false },
+    hoursCompletedAt: { type: Date },
+    guests: {
+      type: Number,
+      min: [1, "At least 1 person"],
+      max: [500, "Too many guests"],
+    },
+    durationHours: {
+      type: Number,
+      min: [1, "Minimum 1 hour"],
+      max: [12, "Maximum 12 hours"],
+    },
+    notes: {
+      type: String,
+      default: "",
+    },
+    amount: {
+      type: Number,
+      default: 0,
+    },
+    // Prepaid fee via Razorpay — collected BEFORE booking is created.
+    payment: {
+      razorpayOrderId: { type: String, default: "" },
+      razorpayPaymentId: { type: String, default: "" },
+      razorpaySignature: { type: String, default: "" },
+      status: {
+        type: String,
+        enum: ["pending", "paid", "failed"],
+        default: "pending",
+      },
+      paidAmount: { type: Number, default: 0 },
+      paidAt: { type: Date },
+      // Refund tracking for cancelled paid bookings. `refundStatus`:
+      // "none" (default) → "pending" (sent to gateway) → "processed", or
+      // "failed" (gateway rejected — contact support), or "manual" (test
+      // payment / gateway unconfigured — settled outside Razorpay).
+      refundId: { type: String, default: "" },
+      refundStatus: {
+        type: String,
+        enum: ["none", "pending", "processed", "failed", "manual"],
+        default: "none",
+      },
+      refundAmount: { type: Number, default: 0 },
+      refundedAt: { type: Date },
+      // True for dev-gated test checkouts (no real money). Lets test
+      // payments be told apart from real gateway payments later.
+      testMode: { type: Boolean, default: false },
+    },
+    // 5-minute confirmation windows:
+    // - requestExpiresAt: the cook must accept within 5 minutes of the
+    //   request, otherwise it auto-expires and the customer is sent back to
+    //   find another cook.
+    // - paymentExpiresAt: once accepted, the customer must pay within 5
+    //   minutes, otherwise the booking auto-cancels and frees the slot.
+    requestExpiresAt: { type: Date },
+    paymentExpiresAt: { type: Date },
+    status: {
+      type: String,
+      enum: [
+        "requested",
+        "accepted",
+        "rejected",
+        "confirmed",
+        "in_progress",
+        "completed",
+        "cancelled",
+        "expired",
+      ],
+      default: "requested",
+    },
+    statusHistory: [
+      {
+        status: String,
+        timestamp: { type: Date, default: Date.now },
+        note: String,
+      },
+    ],
+  },
+  { timestamps: true }
+);
+
+bookingSchema.index({ customer: 1, status: 1 });
+bookingSchema.index({ cook: 1, status: 1 });
+bookingSchema.index({ cook: 1, date: 1, startTime: 1, endTime: 1 });
+
+module.exports = mongoose.model("Booking", bookingSchema);

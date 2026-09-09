@@ -1,0 +1,247 @@
+/* ==========================================================================
+   Misc chrome — icon buttons, admin tables, tracking niceties
+   ========================================================================== */
+
+/* Bell icon button (desktop nav) */
+.nav-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slate-600);
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.nav-icon-btn:hover { background: var(--slate-100); color: var(--slate-900); }
+.nav-icon-btn.active { background: var(--primary-light); color: var(--primary); }
+.nav-icon-badge {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tracking page location status */
+.loc-msg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
+  padding: 0.5rem 0.8rem;
+}
+
+/* Auth-friendly brand box reuse */
+.auth-brand-badge svg { color: #fff; }
+
+/* Admin stat tables inside dossier (inline-table friendly) */
+table { border-collapse: collapse; width: 100%; }
+th { text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500); }
+td, th { padding: 0.7rem 0.5rem; }
+
+/* ---- Gap fillers (coverage audit) ---- */
+.error-message { color: var(--accent-rose); font-weight: 600; font-size: 0.9rem; }
+
+/* Cook dashboard wrapper */
+.cook-modern { max-width: 1200px; margin: 0 auto; padding: 1.75rem 1.5rem; }
+
+/* Hero floating "Live Tracking" title */
+.hero-v2-float-live-title { font-weight: 800; font-size: 0.9rem; line-height: 1.2; }
+
+/* How-it-works card header row */
+.how-card-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; }
+.how-card-header h3 { margin: 0; }
+
+/* Lead capture left copy */
+.lead-copy .section-title { margin-bottom: 0.6rem; }
+
+/* Lead form container */
+.lead-form .booking-form-group { margin-bottom: 0.85rem; }
+.lead-form .btn { width: 100%; margin-top: 0.25rem; }
+
+/* Login form layout */
+.login-form { display: flex; flex-direction: column; gap: 0.35rem; }
+.login-input { padding-left: 2.6rem; }
+
+/* Best-match card top row */
+.match-card-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+
+/* Note under slot chips (on-demand) */
+.slot-pay-note { color: var(--slate-500); font-size: 0.82rem; text-align: center; margin-top: 0.6rem; }
+
+/* Booking-flow action button */
+.bf-btn { min-width: 150px; }
+
+/* ---- Login prompt modal ---- */
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(20, 10, 4, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: loginModalFade 0.2s ease;
+}
+.login-modal {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-subtle);
+  padding: 2.2rem 1.75rem;
+  text-align: center;
+  animation: loginModalPop 0.22s ease;
+}
+@keyframes loginModalFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes loginModalPop {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.login-modal-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.login-modal-close:hover { background: var(--slate-200); color: var(--slate-900); }
+.login-modal-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 1rem;
+  border-radius: 18px;
+  background: var(--primary-gradient);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+}
+.login-modal h3 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+.login-modal-sub {
+  color: var(--slate-600);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  margin: 0 0 1.5rem;
+}
+.login-modal-cta { margin-bottom: 0.65rem; }
+.login-modal-cta-alt { margin-bottom: 0.9rem; }
+.login-modal-maybe {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  color: var(--slate-400);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  transition: color 0.15s ease;
+}
+.login-modal-maybe:hover { color: var(--slate-700); }
+
+/* ---- Add cook (admin) modal ---- */
+.add-cook-modal {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-subtle);
+  padding: 2rem 1.75rem;
+  animation: loginModalPop 0.22s ease;
+}
+.add-cook-head { text-align: center; margin-bottom: 1.25rem; margin-top: 0.5rem; }
+.add-cook-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 0.85rem;
+  border-radius: 16px;
+  background: var(--primary-gradient);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+}
+.add-cook-head h3 { margin: 0 0 0.35rem; font-size: 1.3rem; }
+.add-cook-head p { color: var(--slate-500); font-size: 0.9rem; margin: 0; }
+.add-cook-success { text-align: center; padding: 0.5rem 0; }
+.add-cook-success h4 { margin: 0 0 0.5rem; font-size: 1.2rem; }
+.add-cook-success .btn + .btn { margin-top: 0.5rem; }
+/* Login credentials card shown to the admin after adding a cook */
+.add-cook-creds {
+  text-align: left;
+  background: var(--slate-50);
+  border: 1px dashed var(--slate-300);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.add-cook-creds-title { font-weight: 800; font-size: 0.85rem; color: var(--slate-700); }
+.add-cook-cred-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+}
+.add-cook-cred-field { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.add-cook-cred-field span { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-400); }
+.add-cook-cred-field strong { font-size: 0.92rem; color: var(--slate-900); overflow-wrap: anywhere; }
+.add-cook-cred-pass { font-family: var(--font-mono); }
+.add-cook-creds-note { margin: 0; font-size: 0.78rem; color: var(--slate-500); }
+
+/* Legal / compliance pages (Terms, Privacy, Refunds, Contact) */
+.legal-page { max-width: 860px; }
+.legal-page h1 { margin: 0.35rem 0 0; }
+.legal-content h3 { margin: 1.4rem 0 0.5rem; font-size: 1.02rem; }
+.legal-content h3:first-child { margin-top: 0; }
+.legal-content p { color: var(--slate-700); line-height: 1.65; margin: 0 0 0.7rem; }
+.legal-content ul { color: var(--slate-700); line-height: 1.65; margin: 0 0 0.7rem; padding-left: 1.25rem; }
+.legal-content li { margin-bottom: 0.35rem; }

@@ -1,0 +1,36 @@
+# Render Blueprint — deploy backend + static frontend in one service:
+# 1. Push this repo to GitHub.
+# 2. In Render: New → Blueprint → select the repo → Apply.
+# 3. Fill in the sync:false secrets in the dashboard (JWT_SECRET, Razorpay, Google).
+services:
+  - type: web
+    name: festivecook
+    runtime: node
+    plan: free # change as needed
+    rootDir: .
+    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci
+    startCommand: cd backend && node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      # Mongo: create a free cluster at mongodb.com/atlas and paste the SRV URI,
+      # or create a Render MongoDB add-on and reference its internal URI.
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true # long random secret, generated on first deploy
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      # Same-origin deployment: the backend serves frontend/build, so CORS is
+      # not needed. Set this only if you host the frontend elsewhere.
+      # - key: CLIENT_URL
+      #   sync: false

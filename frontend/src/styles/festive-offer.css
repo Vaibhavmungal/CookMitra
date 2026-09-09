@@ -1,0 +1,529 @@
+/* ==========================================================================
+   Festive offer billboard — clean modern minimal
+   Light neutral theme. Flat single accent (#c2410c). No glows, no gradients
+   on surfaces, no decorative motion.
+   No-scroll card: everything fits in 88vh. Width may grow, height must not.
+   ========================================================================== */
+
+/* ---- Top billboard strip ---- */
+.festive-strip {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 2.5rem 0.45rem 1rem;
+  color: #1c1917;
+  overflow: hidden;
+  font-size: 0.85rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e7e5e4;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.festive-strip-text {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+}
+.festive-strip-pop { color: #c2410c; }
+.festive-strip-sub { opacity: 0.75; font-weight: 500; }
+.festive-strip-code {
+  margin-left: 0.35rem;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 8px;
+  padding: 0.1rem 0.55rem;
+  letter-spacing: 0.1em;
+  font-weight: 900;
+}
+.festive-strip-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+  padding: 0.15rem 0.6rem;
+  border-radius: 99px;
+  color: #57534e;
+  font-variant-numeric: tabular-nums;
+}
+.festive-strip-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #c2410c;
+  color: #fff;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 0.28rem 0.95rem;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.festive-strip-cta:hover { background: #9a3412; transform: translateY(-1px); }
+.festive-strip-close {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #e7e5e4;
+  background: #f5f5f4;
+  color: #57534e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.festive-strip-close:hover { background: #e7e5e4; }
+
+/* ---- Entry popup overlay ---- */
+.festive-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(28, 25, 23, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 1rem;
+  animation: festiveFade 0.25s ease;
+}
+@keyframes festiveFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- Card ---- */
+.festive-card {
+  position: relative;
+  width: min(96vw, 1040px);
+  margin: 0 auto;
+  max-height: 88vh;
+  overflow: hidden;
+  text-align: left;
+  border-radius: 24px;
+  color: #1c1917;
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  animation: festivePop 0.3s cubic-bezier(0.2, 1, 0.35, 1);
+}
+@keyframes festivePop {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Split-hero body ---- */
+.festive-body {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1.04fr 0.96fr;
+  grid-template-areas:
+    "main showcase"
+    "bottom bottom";
+  gap: 1.1rem 1.75rem;
+  align-items: center;
+  overflow: hidden;
+  padding: 1.6rem 2rem 1.35rem;
+  scrollbar-width: none;
+}
+.festive-main { grid-area: main; min-width: 0; }
+.festive-showcase { grid-area: showcase; min-width: 0; }
+.festive-bottom-row {
+  grid-area: bottom;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  align-items: stretch;
+  border-top: 1px solid #e7e5e4;
+  padding-top: 1rem;
+}
+
+/* Close button */
+.festive-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #e7e5e4;
+  background: #f5f5f4;
+  color: #57534e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.festive-close:hover { background: #e7e5e4; transform: rotate(90deg); }
+.festive-close:focus-visible,
+.festive-copy-btn:focus-visible,
+.festive-cta:focus-visible,
+.festive-maybe:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
+}
+
+/* Eyebrow badge */
+.festive-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.6rem;
+  padding: 0.32rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9a3412;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 99px;
+}
+
+/* Title */
+.festive-title {
+  margin: 0 0 0.55rem;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: #1c1917;
+}
+.festive-title-first { color: #1c1917; }
+.festive-title-gold { color: #c2410c; }
+
+/* Description */
+.festive-desc {
+  margin: 0 0 0.9rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #57534e;
+  max-width: 46ch;
+}
+
+/* Offer + countdown side by side */
+.festive-offer-row {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 0.7rem;
+  align-items: stretch;
+}
+
+/* Hero discount lockup */
+.festive-mega {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: 0;
+  height: 100%;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 16px;
+  padding: 0.55rem 0.75rem;
+  overflow: hidden;
+}
+.festive-burst {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #c2410c;
+}
+.festive-burst svg { display: none; }
+.festive-burst span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.6rem;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #fff;
+}
+.festive-mega-num { display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; flex-shrink: 0; }
+.mega-20 {
+  font-size: 2.15rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: #c2410c;
+}
+.mega-off {
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 0.12rem 0.42rem;
+  background: #fff7ed;
+}
+.festive-mega-side { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; font-size: 0.72rem; font-weight: 600; color: #57534e; text-align: left; min-width: 0; line-height: 1.3; }
+.festive-mega-stars { display: flex; gap: 3px; }
+.festive-mega-stars svg { width: 12px; height: 12px; fill: #ea580c; color: #ea580c; }
+
+/* Countdown */
+.festive-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 0;
+  height: 100%;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
+  border-radius: 16px;
+  padding: 0.55rem 0.7rem;
+  overflow: hidden;
+}
+.festive-count-flame { color: #ea580c; flex-shrink: 0; }
+.festive-count-flame svg, svg.festive-count-flame { width: 15px; height: 15px; }
+.festive-count-head { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; min-width: 0; }
+.festive-count-label { font-size: 0.75rem; font-weight: 700; color: #57534e; white-space: nowrap; }
+.festive-count-boxes { display: flex; gap: 0.35rem; justify-content: center; width: 100%; min-width: 0; }
+.festive-count-box {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 56px;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  border-radius: 10px;
+  padding: 0.3rem 0.3rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.festive-count-box strong { font-size: 0.95rem; color: #1c1917; line-height: 1.1; text-align: center; }
+.festive-count-box em { font-style: normal; font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; color: #78716c; text-align: center; }
+
+/* Showcase — food imagery, 3×2 gallery, always fully visible, no wrap, no scroll */
+.festive-foods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  justify-items: center;
+  gap: 0.85rem;
+  margin: 0;
+  overflow: hidden;
+}
+.festive-food { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 0.35rem; min-width: 0; width: 100%; }
+.festive-food-ring {
+  position: relative;
+  width: clamp(104px, 11.5vw, 128px);
+  height: clamp(104px, 11.5vw, 128px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  padding: 3px;
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+.festive-food-ring:hover { transform: scale(1.04); }
+.festive-food-ring img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+  background: #f5f5f4;
+}
+.festive-food-tag {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border-radius: 99px;
+  padding: 0.14rem 0.5rem;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.festive-food-tag.off { background: #15803d; color: #fff; }
+.festive-food-tag.hot { background: #db2777; color: #fff; }
+.festive-food figcaption { font-size: 0.74rem; font-weight: 600; color: #44403c; line-height: 1.25; text-align: center; word-break: break-word; max-width: 100%; }
+.festive-showcase-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.76rem;
+  font-weight: 500;
+  text-align: center;
+  color: #78716c;
+}
+
+/* Coupon */
+.festive-coupon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  min-width: 0;
+  height: 100%;
+  background: #fafaf9;
+  border: 1px dashed #d6d3d1;
+  border-radius: 14px;
+  padding: 0.55rem 0.8rem;
+  overflow: hidden;
+}
+.festive-coupon-label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: #57534e; white-space: nowrap; }
+.festive-coupon-code {
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #9a3412;
+}
+.festive-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: #1c1917;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.festive-copy-btn:hover { background: #44403c; transform: scale(1.03); }
+
+/* Actions */
+.festive-actions { display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 0.3rem; min-width: 0; height: 100%; }
+.festive-cta {
+  display: inline-flex;
+  background: #c2410c;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  white-space: nowrap;
+  width: 100%;
+  min-height: 52px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 20px rgba(194, 65, 12, 0.28);
+  transition: background 0.15s ease, transform 0.15s ease;
+  font-size: 1rem;
+  padding: 0.7rem 0.9rem;
+}
+.festive-cta:hover { background: #9a3412; color: #fff; transform: translateY(-1px); }
+.festive-cta:active { transform: translateY(0) scale(0.98); }
+.festive-maybe {
+  background: none;
+  border: none;
+  color: #78716c;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 8px;
+}
+.festive-maybe:hover { color: #44403c; }
+
+/* ---- Tablet / mobile: stack ---- */
+@media (max-width: 860px) {
+  .festive-card { width: min(96vw, 640px); text-align: center; }
+  .festive-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "main"
+      "showcase"
+      "bottom";
+    gap: 0.85rem;
+    padding: 1.25rem 1.25rem 1rem;
+    justify-items: center;
+  }
+  .festive-main { display: flex; flex-direction: column; align-items: center; width: 100%; }
+  .festive-desc { max-width: 52ch; }
+  .festive-offer-row { width: 100%; }
+  .festive-showcase { width: 100%; }
+  .festive-bottom-row { width: 100%; }
+}
+
+/* ---- Phones: compact, still no scroll ---- */
+@media (max-width: 560px) {
+  .festive-card { width: calc(100vw - 1.5rem); border-radius: 20px; }
+  .festive-body { padding: 1rem 0.7rem 0.75rem; gap: 0.6rem; }
+  .festive-eyebrow { font-size: 0.62rem; padding: 0.25rem 0.65rem; margin-bottom: 0.4rem; }
+  .festive-title { font-size: 1.2rem; margin-bottom: 0.35rem; }
+  .festive-desc { font-size: 0.8rem; margin-bottom: 0.6rem; }
+  .festive-offer-row { gap: 0.4rem; }
+  .festive-mega { padding: 0.4rem 0.5rem; gap: 0.4rem; border-radius: 12px; }
+  .mega-20 { font-size: 1.6rem; }
+  .mega-off { font-size: 0.68rem; padding: 0.08rem 0.3rem; }
+  .festive-mega-side { font-size: 0.62rem; }
+  .festive-mega-stars svg { width: 10px; height: 10px; }
+  .festive-burst { width: 36px; height: 36px; }
+  .festive-burst span { font-size: 0.52rem; }
+  .festive-countdown { padding: 0.4rem 0.45rem; border-radius: 12px; }
+  .festive-count-boxes { gap: 0.22rem; }
+  .festive-count-box { padding: 0.2rem 0.12rem 0.16rem; min-height: 0; }
+  .festive-count-box strong { font-size: 0.78rem; }
+  .festive-count-box em { font-size: 0.5rem; }
+  .festive-count-label { font-size: 0.68rem; }
+  .festive-strip { font-size: 0.76rem; }
+  .festive-strip-timer { display: none; }
+  .festive-foods { gap: 0.45rem 0.3rem; }
+  .festive-food-ring { width: 100%; height: auto; min-width: 0; }
+  .festive-food figcaption { font-size: 0.62rem; }
+  .festive-food-tag { font-size: 0.52rem; padding: 0.1rem 0.35rem; bottom: -5px; }
+  .festive-showcase-note { font-size: 0.68rem; margin-top: 0.4rem; }
+  .festive-bottom-row { gap: 0.45rem; padding-top: 0.7rem; }
+  .festive-coupon { padding: 0.4rem 0.5rem; gap: 0.4rem; border-radius: 12px; }
+  .festive-coupon-label { font-size: 0.72rem; }
+  .festive-coupon-code { font-size: 0.9rem; letter-spacing: 0.08em; }
+  .festive-copy-btn { font-size: 0.72rem; padding: 0.35rem 0.65rem; min-height: 36px; }
+  .festive-cta { font-size: 0.85rem; padding: 0.6rem 0.5rem; min-height: 48px; border-radius: 12px; }
+  .festive-cta svg { width: 16px; height: 16px; }
+  .festive-maybe { font-size: 0.74rem; }
+}
+
+/* Short viewports — compress vertically so everything still fits in 88vh */
+@media (max-height: 720px) {
+  .festive-body { padding: 1rem 1.6rem 0.85rem; gap: 0.7rem 1.25rem; }
+  .festive-eyebrow { margin-bottom: 0.35rem; }
+  .festive-title { font-size: 1.55rem; margin-bottom: 0.3rem; }
+  .festive-desc { margin-bottom: 0.55rem; font-size: 0.84rem; }
+  .festive-mega { padding: 0.4rem 0.6rem; }
+  .mega-20 { font-size: 1.8rem; }
+  .festive-countdown { padding: 0.4rem 0.55rem; }
+  .festive-count-box { min-height: 0; }
+  .festive-food-ring { width: clamp(72px, 10vh, 104px); height: clamp(72px, 10vh, 104px); }
+  .festive-showcase-note { margin-top: 0.35rem; }
+  .festive-bottom-row { padding-top: 0.7rem; }
+  .festive-cta { min-height: 48px; }
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .festive-card { animation: none !important; }
+}
