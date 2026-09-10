@@ -12,7 +12,6 @@
   .bf-grid-side { position: static; }
   .cook-profile-grid { grid-template-columns: 1fr; }
   .cook-profile-right-col { position: static; }
-  .cook-profile-right-col .bk-card { box-shadow: var(--shadow-md); }
   .lead-grid { grid-template-columns: 1fr; gap: 1.6rem; }
 }
 
@@ -160,18 +159,6 @@
   /* Mobile menu improvements */
   .mobile-menu { max-height: calc(100vh - 62px); overflow-y: auto; }
   
-  /* Booking form on mobile */
-  .bk { max-width: 100%; }
-  .bk-head { padding: 1rem 1.1rem; }
-  .bk-head-text h3 { font-size: 1rem; }
-  .bk-head-total-amount { font-size: 1.2rem; }
-  .bk-card { padding: 0.85rem 0.95rem; }
-  .bk-service-grid { grid-template-columns: 1fr 1fr; }
-  .bk-addr-grid { grid-template-columns: 1fr; }
-  .bk-date-chip { min-width: 56px; padding: 0.45rem 0.6rem; }
-  .bk-date-num { font-size: 1.05rem; }
-  .bk-submit { min-height: 46px; font-size: 0.92rem; }
-  
   /* Review form on mobile */
   .review-form-container { padding: 1rem; }
   
@@ -191,13 +178,13 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Fix for very small screens */
+/* Fix for very small screens — never drop tap targets below ~40px */
 @media (max-width: 360px) {
   .navbar-brand { font-size: 1rem; }
   .brand-icon-box { width: 32px; height: 32px; }
   .brand-icon-box svg { width: 16px; height: 16px; }
-  .mobile-toggle-btn { width: 36px; height: 36px; }
-  .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+  .mobile-toggle-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+  .btn-sm { padding: 0.42rem 0.7rem; font-size: 0.78rem; min-height: 40px; }
 }
 
 /* Home registration form responsive */
@@ -304,17 +291,10 @@
   .cook-service-toggles { grid-template-columns: 1fr; }
   .cook-doc-grid { grid-template-columns: 1fr; }
   .cook-doc-grid .btn { width: 100%; }
-  .bk-service-grid { grid-template-columns: 1fr 1fr; }
-  .bk-addr-grid { grid-template-columns: 1fr; }
-  .bk-pin-btn { width: 100%; justify-content: center; }
-  .bk-foot-total { font-size: 1rem; }
   /* Prevent iOS auto-zoom on form fields */
   .ondemand-form-card .form-control,
   .cook-setup-page .form-control,
-  .add-cook-modal .form-control,
-  .bk-addr-input,
-  .bk-notes,
-  .bk-dur-custom { font-size: 16px; }
+  .add-cook-modal .form-control { font-size: 16px; }
 
   /* ---- Tracking ---- */
   .track-map-frame { height: 260px; }
@@ -344,11 +324,4 @@
   .match-rate { font-size: 0.9rem; }
   .cook-setup-head h1 { font-size: 1.45rem; }
   .ondemand-hero .section-title { font-size: 1.4rem; }
-  .bk-head { border-radius: 12px; padding: 0.9rem 1rem; }
-  .bk-card { border-radius: 12px; padding: 0.75rem 0.85rem; }
-  .bk-date-chip { min-width: 50px; padding: 0.4rem 0.5rem; }
-  .bk-date-num { font-size: 0.95rem; }
-  .bk-service-card { padding: 0.55rem 0.2rem; }
-  .bk-service-label { font-size: 0.66rem; }
-  .bk-service-desc { font-size: 0.56rem; }
 }

@@ -11,11 +11,14 @@ import {
   bookingWhatsAppUrl,
   bookingCustomerWhatsAppUrl,
   bookingCookJobWhatsAppUrl,
+  bookingRescheduleWhatsAppUrl,
   hoursCompleteWhatsAppUrl,
   cookLiveMapsUrl,
   sessionEndDate,
+  hasServiceHoursStarted,
   formatRemaining,
   timeAgo,
+  localTodayStr,
   SERVICE_DETAILS,
 } from "../utils/constants";
 import {
@@ -46,6 +49,19 @@ const BookingDetails = () => {
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // Cook enters the customer's OTP to start the service clock.
+  const [otpInput, setOtpInput] = useState("");
+  const [startingService, setStartingService] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  // Reschedule (customer moves an upcoming booking to a new date/time —
+  // duration and fee stay fixed).
+  const [reschedOpen, setReschedOpen] = useState(false);
+  const [rsDate, setRsDate] = useState("");
+  const [rsStart, setRsStart] = useState("");
+  const [freeStarts, setFreeStarts] = useState([]);
+  const [startsLoading, setStartsLoading] = useState(false);
+  const [reschedSaving, setReschedSaving] = useState(false);
+  const [rsError, setRsError] = useState("");
 
   const fetchDetails = async () => {
     setLoading(true);
@@ -69,6 +85,28 @@ const BookingDetails = () => {
     return () => clearInterval(t);
   }, []);
 
+  const handleStartService = async () => {
+    const code = otpInput.trim();
+    if (!/^\d{4}$/.test(code)) {
+      setOtpError("Enter the 4-digit code from the customer");
+      return;
+    }
+    setStartingService(true);
+    setOtpError("");
+    try {
+      const res = await API.patch(`/bookings/${bookingId}/start-service`, { otp: code });
+      setBooking((prev) => ({ ...prev, ...res.data }));
+      setOtpInput("");
+      showToast("Service started — the clock is running!", "success");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Could not start service";
+      setOtpError(msg);
+      showToast(msg, "error");
+    } finally {
+      setStartingService(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (!window.confirm("Are you sure you want to cancel this booking session?")) return;
     setCancelling(true);
@@ -82,6 +120,108 @@ const BookingDetails = () => {
       setCancelling(false);
     }
   };
+
+  /* ── Reschedule helpers ── */
+  const dayInputStr = (d) => {
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "";
+    const p = (n) => String(n).padStart(2, "0");
+    return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+  };
+  const addHours = (t, h) => {
+    const m = String(t || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return "";
+    const total = Number(m[1]) * 60 + Number(m[2]) + Math.round(Number(h) * 60);
+    if (!Number.isFinite(total)) return "";
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  };
+  const fmtSlot12 = (t) => {
+    const m = String(t || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return t;
+    let h = Number(m[1]);
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${h}:${m[2]} ${ap}`;
+  };
+
+  // Once the service hours begin, Cancel and Reschedule disappear — the
+  // session is under way and can no longer be moved or called off here.
+  const serviceStarted = hasServiceHoursStarted(booking);
+  const canReschedule =
+    user?.role === "customer" &&
+    ["requested", "accepted", "confirmed"].includes(booking?.status) &&
+    !serviceStarted;
+
+  // Latest "Rescheduled …" timeline note, if the time was ever moved.
+  const reschedNote =
+    [...(booking?.statusHistory || [])]
+      .reverse()
+      .find((h) => String(h.note || "").startsWith("Rescheduled"))?.note || "";
+  const reschedOldSlot = (() => {
+    const m = String(reschedNote).match(/from (.*) to (.*) by /);
+    return m ? m[1] : "";
+  })();
+
+  const loadFreeStarts = async (dateStr) => {
+    const cuid = booking?.cook?._id || booking?.cook;
+    if (!cuid || !dateStr || !booking?.durationHours) {
+      setFreeStarts([]);
+      return;
+    }
+    setStartsLoading(true);
+    try {
+      const res = await API.get(
+        `/availability/${cuid}?date=${dateStr}&durationHours=${booking.durationHours}`
+      );
+      const list = Array.isArray(res.data) ? res.data : res.data?.slots || [];
+      setFreeStarts(list);
+    } catch {
+      setFreeStarts([]);
+    } finally {
+      setStartsLoading(false);
+    }
+  };
+
+  const openReschedule = () => {
+    setRsError("");
+    setRsStart("");
+    const d = dayInputStr(booking.date) || localTodayStr();
+    setRsDate(d);
+    setReschedOpen(true);
+    loadFreeStarts(d);
+  };
+
+  const handleReschedule = async () => {
+    if (!rsDate || !rsStart) {
+      setRsError("Pick a new date and start time");
+      return;
+    }
+    setReschedSaving(true);
+    setRsError("");
+    try {
+      const res = await API.patch(`/bookings/${bookingId}/reschedule`, {
+        date: rsDate,
+        startTime: rsStart,
+      });
+      setBooking((prev) => ({ ...prev, ...res.data }));
+      setReschedOpen(false);
+      showToast(`Moved to ${rsDate} ${fmtSlot12(rsStart)} — your cook has been notified`, "success");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Could not reschedule — try another time";
+      setRsError(msg);
+      showToast(msg, "error");
+    } finally {
+      setReschedSaving(false);
+    }
+  };
+
+  const reschedWa = bookingRescheduleWhatsAppUrl({
+    cookPhone: booking?.cook?.phone,
+    customerName: user?.name,
+    customerPhone: user?.phone,
+    booking,
+    oldSlot: reschedOldSlot,
+  });
 
   const getStatusBadge = (status) => {
     if (booking?.hoursCompleted && ["accepted", "confirmed", "in_progress"].includes(status)) {
@@ -148,6 +288,17 @@ const BookingDetails = () => {
   const end = sessionEndDate(booking);
   const remainingLabel = end ? formatRemaining(end, now) : null;
   const isActive = ["requested", "accepted", "confirmed", "in_progress"].includes(booking.status);
+  // OTP service-start state.
+  const sessionLive = ["accepted", "confirmed", "in_progress"].includes(booking.status);
+  const showOtpCard =
+    user?.role === "customer" && sessionLive && booking.serviceOtp && !booking.serviceStartedAt;
+  const showOtpForm =
+    user?.role === "cook" && sessionLive && !booking.serviceStartedAt;
+  const startedAtLabel = booking.serviceStartedAt
+    ? new Date(booking.serviceStartedAt).toLocaleString("en-IN", {
+        day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+      })
+    : "";
 
   const waToCook = bookingWhatsAppUrl({
     cookPhone: booking.cook?.phone,
@@ -234,6 +385,203 @@ const BookingDetails = () => {
         >
           <BellRing size={18} style={{ color: "#b45309", flexShrink: 0 }} />
           <span>Your cooking hours are complete! Please review your session below.</span>
+        </div>
+      )}
+      {reschedNote && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: "0.5rem",
+            background: "#eff6ff", border: "1px solid #93c5fd",
+            borderRadius: "10px", padding: "0.65rem 0.9rem",
+            marginBottom: "0.75rem", fontSize: "0.88rem", fontWeight: 600,
+            color: "#1e40af", flexWrap: "wrap",
+          }}
+        >
+          <Clock size={18} style={{ color: "#2563eb", flexShrink: 0 }} />
+          <span>⏰ Time changed — {reschedNote}. Duration and fee unchanged.</span>
+          {user?.role === "customer" && reschedWa && (
+            <a href={reschedWa} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm" style={{ marginLeft: "auto" }}>
+              <MessageCircle size={15} /> Send update to cook
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Reschedule panel (customer moves upcoming bookings; duration fixed) */}
+      {reschedOpen && canReschedule && (
+        <div className="profile-card-block" style={{ marginBottom: "1.25rem" }}>
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Calendar size={18} style={{ color: "var(--primary)" }} /> Move to a new time
+          </h3>
+          <p style={{ margin: "0 0 0.75rem", color: "var(--slate-600)", fontSize: "0.88rem" }}>
+            Session stays {booking.durationHours} hr{Number(booking.durationHours) === 1 ? "" : "s"} — only the date and start
+            time change, so the fee and any payment stay exactly as they are. Your cook is notified instantly.
+          </p>
+          <div className="booking-metadata-grid" style={{ marginBottom: "0.75rem" }}>
+            <div className="meta-field">
+              <label>New date</label>
+              <input
+                type="date"
+                className="form-control"
+                value={rsDate}
+                min={localTodayStr()}
+                onChange={(e) => {
+                  setRsDate(e.target.value);
+                  setRsStart("");
+                  setRsError("");
+                  loadFreeStarts(e.target.value);
+                }}
+              />
+            </div>
+            <div className="meta-field">
+              <label>New start time</label>
+              {startsLoading ? (
+                <span style={{ fontSize: "0.88rem", color: "var(--slate-500)" }}>Checking free times…</span>
+              ) : freeStarts.length === 0 ? (
+                <span style={{ fontSize: "0.88rem", color: "var(--slate-500)" }}>
+                  No {booking.durationHours}-hr starts that day — try another date.
+                </span>
+              ) : (
+                <div className="slot-list" role="radiogroup" aria-label="Free start times">
+                  {freeStarts.map((s) => (
+                    <button
+                      key={s.startTime}
+                      type="button"
+                      role="radio"
+                      aria-checked={rsStart === s.startTime}
+                      className={`slot-chip ${rsStart === s.startTime ? "selected" : ""}`}
+                      onClick={() => {
+                        setRsStart(s.startTime);
+                        setRsError("");
+                      }}
+                    >
+                      <Clock size={15} /> {fmtSlot12(s.startTime)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          {rsStart && (
+            <p style={{ fontSize: "0.88rem", color: "var(--slate-600)", margin: "0 0 0.75rem" }}>
+              New slot: <strong>{rsDate} · {fmtSlot12(rsStart)} – {fmtSlot12(addHours(rsStart, booking.durationHours))}</strong>
+            </p>
+          )}
+          {rsError && (
+            <div className="error-alert-banner" style={{ marginBottom: "0.75rem" }}>
+              <AlertCircle size={16} /> {rsError}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!rsStart || reschedSaving}
+              onClick={handleReschedule}
+            >
+              <CheckCircle2 size={16} /> {reschedSaving ? "Moving…" : "Confirm new time"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setReschedOpen(false)}
+              disabled={reschedSaving}
+            >
+              Keep current time
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Service-start OTP: customer shows it, cook enters it. The hours
+          below only start counting once the code is verified. */}
+      {showOtpCard && (
+        <div
+          className="profile-card-block"
+          style={{ marginBottom: "1.25rem", textAlign: "center", border: "2px dashed var(--primary)" }}
+        >
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+            <Clock size={18} style={{ color: "var(--primary)" }} /> Your service-start code
+          </h3>
+          <div
+            style={{
+              fontSize: "2.4rem", fontWeight: 800, letterSpacing: "0.35em",
+              color: "var(--primary-800)", margin: "0.25rem 0 0.5rem", paddingLeft: "0.35em",
+            }}
+            aria-label={`Your service start code is ${booking.serviceOtp}`}
+          >
+            {booking.serviceOtp}
+          </div>
+          <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--slate-600)" }}>
+            Share this 4-digit code with {booking.cook?.name || "your cook"} when they arrive —
+            your cooking hours start counting only after they enter it.
+          </p>
+        </div>
+      )}
+
+      {booking.serviceStartedAt && sessionLive && (
+        <div
+          style={{
+            display: "flex", alignItems: "center", gap: "0.5rem",
+            background: "var(--accent-emerald-light, #ecfdf5)",
+            border: "1px solid var(--accent-emerald, #10b981)",
+            borderRadius: "10px", padding: "0.65rem 0.9rem",
+            marginBottom: "0.75rem", fontSize: "0.88rem", fontWeight: 600,
+          }}
+        >
+          <CheckCircle2 size={18} style={{ color: "var(--accent-emerald, #10b981)", flexShrink: 0 }} />
+          <span>
+            Service started {startedAtLabel}
+            {end ? ` • ends about ${formatRemaining(end, now)}` : ""} — hours are being counted.
+          </span>
+        </div>
+      )}
+
+      {showOtpForm && (
+        <div className="profile-card-block" style={{ marginBottom: "1.25rem" }}>
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Clock size={18} style={{ color: "var(--primary)" }} /> Start service with customer OTP
+          </h3>
+          <p style={{ margin: "0 0 0.75rem", color: "var(--slate-600)", fontSize: "0.88rem" }}>
+            Ask {booking.customer?.name || "the customer"} for the 4-digit code on their booking —
+            entering it marks your arrival and starts the {booking.durationHours}-hour clock.
+          </p>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              className="form-control"
+              style={{ maxWidth: 140, textAlign: "center", fontSize: "1.3rem", fontWeight: 800, letterSpacing: "0.25em" }}
+              placeholder="••••"
+              value={otpInput}
+              onChange={(e) => {
+                setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 4));
+                setOtpError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleStartService();
+                }
+              }}
+              aria-label="4-digit service start code"
+            />
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={startingService || otpInput.trim().length !== 4}
+              onClick={handleStartService}
+            >
+              <CheckCircle2 size={16} /> {startingService ? "Starting…" : "Start Service"}
+            </button>
+          </div>
+          {otpError && (
+            <div className="error-alert-banner" style={{ marginTop: "0.75rem" }}>
+              <AlertCircle size={16} /> {otpError}
+            </div>
+          )}
         </div>
       )}
 
@@ -370,6 +718,25 @@ const BookingDetails = () => {
           <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <Receipt size={18} style={{ color: "var(--primary)" }} /> Payment
           </h3>
+          {Number(booking.slabPrice) > 0 && (
+            <div className="price-rows" style={{ marginBottom: "0.75rem" }}>
+              <div className="price-row">
+                <span>Service Price · {booking.durationHours} hr{Number(booking.durationHours) === 1 ? "" : "s"}</span>
+                <span>{formatCurrency(booking.slabPrice)}</span>
+              </div>
+              {booking.couponCode ? (
+                <div className="price-row discount">
+                  <span>Coupon {booking.couponCode}</span>
+                  <span>−{formatCurrency(booking.discount)}</span>
+                </div>
+              ) : null}
+            </div>
+          )}
+          {user?.role === "cook" && Number(booking.cookPayout) > 0 && (
+            <div style={{ fontSize: "0.85rem", color: "var(--slate-600)", background: "var(--slate-50)", padding: "0.55rem 0.85rem", borderRadius: "var(--radius-sm)", marginBottom: "0.75rem" }}>
+              Your payout (90%): <strong style={{ color: "var(--accent-emerald)" }}>{formatCurrency(booking.cookPayout)}</strong>
+            </div>
+          )}
           <div className="booking-metadata-grid">
             <div className="meta-field">
               <label>{booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId ? "Total Paid" : "Amount Due"}</label>
@@ -442,9 +809,22 @@ const BookingDetails = () => {
       {/* Actions */}
       <div className="booking-item-card" style={{ marginTop: "1.25rem" }}>
         <div className="booking-actions-row">
-          {isActive && user?.role !== "admin" && (
+          {canReschedule && (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => (reschedOpen ? setReschedOpen(false) : openReschedule())}
+            >
+              <Calendar size={16} /> {reschedOpen ? "Close reschedule" : "Reschedule"}
+            </button>
+          )}
+          {isActive && !serviceStarted && user?.role !== "admin" && (
             <button className="btn btn-danger-outline btn-sm" onClick={handleCancel} disabled={cancelling}>
-              <XCircle size={16} /> {cancelling ? "Cancelling..." : "Cancel Session"}
+              <XCircle size={16} />{" "}
+              {cancelling
+                ? "Cancelling..."
+                : booking.status === "requested"
+                  ? "Cancel Request"
+                  : "Cancel Booking"}
             </button>
           )}
           {waToSelf && (

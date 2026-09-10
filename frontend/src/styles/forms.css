@@ -87,8 +87,18 @@ input[type="number"] {
   color: var(--slate-400);
   padding: 0.35rem;
   border-radius: 8px;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .password-toggle-btn:hover { color: var(--slate-700); background: var(--slate-100); }
+
+@media (max-width: 640px) {
+  /* 16px inputs prevent iOS auto-zoom on login/register and all forms. */
+  .form-control { font-size: 16px; }
+}
 
 /* Phone with prefix */
 .phone-input-group { display: flex; gap: 0.5rem; align-items: stretch; }

@@ -37,6 +37,18 @@ export const formatCurrency = (amount) => {
   }).format(amount || 0);
 };
 
+// Festive-launch price list (mirror of backend/utils/pricing.js — the
+// server recomputes every amount, this is display + preview only).
+// Whole-hour 1–4 sessions, one flat price for every cook and service.
+export const LAUNCH_SLAB_PRICES = { 1: 199, 2: 349, 3: 499, 4: 649 };
+export const COMMISSION_RATE = 0.1;
+
+export const slabPriceForDuration = (hours) => {
+  const h = Number(hours);
+  if (!Number.isInteger(h) || LAUNCH_SLAB_PRICES[h] == null) return null;
+  return LAUNCH_SLAB_PRICES[h];
+};
+
 export const formatDate = (dateStr) => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -177,9 +189,14 @@ export const cookLiveMapsUrl = (cookLocation) => {
   return `https://www.google.com/maps?q=${cookLocation.lat},${cookLocation.lng}`;
 };
 
-// Session end datetime from date + endTime ("HH:MM"). Null when unknown.
-// Accepts either a booking ({date,endTime}) or live payload ({date,endTime}).
+// Session end datetime. Prefers the live service clock (serviceEndsAt, set
+// when the cook verifies the OTP) over the static schedule, so countdowns
+// and alarms count real cooking time. Accepts a booking or live payload.
 export const sessionEndDate = (obj) => {
+  if (obj?.serviceEndsAt) {
+    const live = new Date(obj.serviceEndsAt);
+    if (!Number.isNaN(live.getTime())) return live;
+  }
   const date = obj?.sessionEnd || obj?.date;
   if (!date) return null;
   if (obj?.sessionEnd && !obj?.endTime) return new Date(obj.sessionEnd);
@@ -191,6 +208,28 @@ export const sessionEndDate = (obj) => {
   if (Number.isNaN(d.getTime())) return null;
   d.setHours(Number(m[1]), Number(m[2]), 0, 0);
   return d;
+};
+
+// Session start datetime from date + startTime ("HH:MM"). Null when unknown.
+// Mirrors sessionEndDate so the UI can gate actions to "before service hours".
+export const sessionStartDate = (obj) => {
+  const date = obj?.date;
+  if (!date) return null;
+  const startTime = obj?.startTime;
+  if (!startTime) return null;
+  const m = String(startTime).match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  return d;
+};
+
+// True when now ≥ date + startTime — the service hours have begun. Unknown
+// start ⇒ false, matching how hours-complete treats an unknown end.
+export const hasServiceHoursStarted = (obj) => {
+  const start = sessionStartDate(obj);
+  return !!start && Date.now() >= start.getTime();
 };
 
 // Human countdown: "2h 15m left" / "Overdue by 10m" / null when unknown
@@ -371,6 +410,35 @@ export const bookingCookJobWhatsAppUrl = ({ cookPhone, customerName, customerPho
   if (booking?._id) lines.push(`Booking ID: ${booking._id}`);
   if (trackLink) lines.push(`Live tracking: ${trackLink}`);
   lines.push("The customer has PAID. Please reach the venue on time.");
+
+  return `https://wa.me/91${mobile}?text=${encodeURIComponent(lines.join("\n"))}`;
+};
+
+// Customer → cook time-change notice after a reschedule: old vs new slot
+// plus venue + booking id so the cook can spot it instantly. Returns null
+// when the cook has no valid number.
+export const bookingRescheduleWhatsAppUrl = ({ cookPhone, customerName, customerPhone, booking, oldSlot }) => {
+  const mobile = normalizeIndianMobile(cookPhone);
+  if (!mobile) return null;
+
+  const newSlot = [
+    booking?.date ? new Date(booking.date).toLocaleDateString() : "",
+    booking?.startTime && booking?.endTime ? `${booking.startTime} - ${booking.endTime}` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  const lines = [
+    "*Cook Mitra: Booking Time Changed* ⏰",
+    `Customer: ${customerName || "Customer"}${customerPhone ? ` (${customerPhone})` : ""}`,
+    `Service: ${(booking?.serviceType || "").replace(/_/g, " ")}`,
+  ];
+  if (oldSlot) lines.push(`Was: ${oldSlot}`);
+  if (newSlot) lines.push(`Now: ${newSlot}`);
+  lines.push(`Venue: ${booking?.address || ""}`);
+  if (booking?.durationHours) lines.push(`Duration: ${booking.durationHours} hrs (unchanged — fee stays the same)`);
+  if (booking?._id) lines.push(`Booking ID: ${booking._id}`);
+  lines.push("Please confirm you can make the new time.");
 
   return `https://wa.me/91${mobile}?text=${encodeURIComponent(lines.join("\n"))}`;
 };

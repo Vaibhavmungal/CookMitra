@@ -69,7 +69,7 @@ const CookReviewsBlock = ({ reviews, loading, error }) => {
                 <div className="cook-customer-avatar">
                   {rev.customer?.name ? rev.customer.name[0].toUpperCase() : <User size={22} />}
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
                   <h3 style={{ margin: 0, fontSize: "1.05rem" }}>{rev.customer?.name || "Verified Customer"}</h3>
                   <span style={{ fontSize: "0.8rem", color: "var(--slate-500)" }}>
                     {rev.createdAt ? formatDate(rev.createdAt) : ""}

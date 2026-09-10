@@ -61,6 +61,15 @@ const bookingSchema = new mongoose.Schema(
     // or marked manually). Drives the "cook has arrived" user notification.
     cookArrived: { type: Boolean, default: false },
     cookArrivedAt: { type: Date },
+    // Service-start OTP: a 4-digit code generated per order. Shown on the
+    // customer's booking details; the cook must enter it on arrival, which
+    // starts the service clock (serviceStartedAt). Never sent to the cook
+    // before verification — always strip from cook-facing serializers.
+  serviceOtp: { type: String },
+  serviceOtpGeneratedAt: { type: Date },
+  serviceStartedAt: { type: Date },
+  serviceEndsAt: { type: Date },
+    serviceEndsAt: { type: Date },
     // Cooking-hours completion: set once the session end time passes while
     // the booking is active. Drives the "cooking hours complete" alarm.
     hoursCompleted: { type: Boolean, default: false },
@@ -73,16 +82,25 @@ const bookingSchema = new mongoose.Schema(
     durationHours: {
       type: Number,
       min: [1, "Minimum 1 hour"],
-      max: [12, "Maximum 12 hours"],
+      max: [4, "Maximum 4 hours"],
     },
     notes: {
       type: String,
       default: "",
     },
+    // Final payable (post-discount). Everything downstream — payment
+    // verification, gateway orders, refunds — keys off this number.
     amount: {
       type: Number,
       default: 0,
     },
+    // Launch price breakdown snapshot (recomputed server-side at creation).
+    slabPrice: { type: Number, default: 0 },
+    couponCode: { type: String, default: "", trim: true, uppercase: true },
+    discount: { type: Number, default: 0 },
+    // Platform ~10% of the final amount; the cook earns the rest.
+    commission: { type: Number, default: 0 },
+    cookPayout: { type: Number, default: 0 },
     // Prepaid fee via Razorpay — collected BEFORE booking is created.
     payment: {
       razorpayOrderId: { type: String, default: "" },

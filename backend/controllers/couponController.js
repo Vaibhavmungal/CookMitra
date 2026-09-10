@@ -1,15 +1,26 @@
 const Coupon = require("../models/Coupon");
+const Booking = require("../models/Booking");
 const { normalizeCode, rejectionReason, computeDiscount } = require("../utils/coupons");
 
 // POST /api/coupons/validate — preview a coupon against an order amount.
 // Auth required (per-user limits need the user). Never mutates usage.
+// Body: { code, amount, serviceType? }.
 exports.validateCoupon = async (req, res, next) => {
   try {
-    const { code, amount } = req.body;
+    const { code, amount, serviceType } = req.body;
     const coupon = await Coupon.findOne({ code: normalizeCode(code) });
+    // First-booking check only runs for coupons that need it, so plain
+    // coupons never pay the extra query.
+    let isFirstBooking;
+    if (coupon?.firstBookingOnly && req.user?.id) {
+      isFirstBooking =
+        (await Booking.countDocuments({ customer: req.user.id })) === 0;
+    }
     const reason = rejectionReason(coupon, {
       amount,
       userId: req.user?.id,
+      serviceType,
+      isFirstBooking,
     });
     if (reason) {
       return res.status(400).json({ message: reason });
@@ -21,7 +32,9 @@ exports.validateCoupon = async (req, res, next) => {
     }
     res.json({
       code: coupon.code,
+      discountType: coupon.discountType || "percent",
       percent: coupon.percent,
+      flatAmount: coupon.flatAmount,
       maxDiscount: coupon.maxDiscount,
       discount,
       fullFee,
@@ -50,7 +63,9 @@ exports.listActiveCoupons = async (req, res, next) => {
         },
       ],
     })
-      .select("code description percent maxDiscount minOrder validTo")
+      .select(
+        "code description discountType percent flatAmount maxDiscount minOrder firstBookingOnly validTo"
+      )
       .sort({ percent: -1 });
     res.json(coupons);
   } catch (error) {

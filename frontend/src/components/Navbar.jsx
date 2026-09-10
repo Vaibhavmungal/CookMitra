@@ -381,10 +381,11 @@ const Navbar = () => {
                   className="mobile-profile-link"
                   onClick={closeMobile}
                   aria-label="Go to my profile"
+                  style={{ minWidth: 0, flex: 1 }}
                 >
                   <NavAvatar name={user.name} photo={cookPhoto} />
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{user.name}</div>
+                  <div style={{ minWidth: 0, overflow: "hidden" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.9rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
                     <div style={{ fontSize: "0.75rem", color: "var(--primary)", textTransform: "capitalize" }}>{user.role}</div>
                   </div>
                 </Link>

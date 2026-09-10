@@ -1,11 +1,12 @@
 /* ==========================================================================
-   Dish carousel — sweets & festive dishes strip below the navbar
+   Dish carousel — centered slider with previous/next peeks on the sides.
    ========================================================================== */
 
 .dish-carousel {
-  max-width: 1200px;
+  width: 95%;
+  max-width: none;
   margin: 0 auto;
-  padding: 1.4rem 1.5rem 0.4rem;
+  padding: 0.6rem 0 0.2rem;
 }
 
 .dish-carousel-head {
@@ -13,103 +14,129 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.3rem;
+  padding: 0 1.5rem;
 }
 
 .dish-carousel-title {
-  margin: 0.15rem 0 0;
-  font-size: 1.4rem;
+  margin: 0.1rem 0 0;
+  font-size: 1.2rem;
   letter-spacing: -0.01em;
   color: var(--slate-900);
 }
 
-.dish-carousel-nav { display: flex; gap: 0.5rem; }
+/* Viewport: hides the film overflow so neighbours show as peeks */
+.dish-stage {
+  position: relative;
+  overflow: hidden;
+  padding: 0.15rem 0 0.3rem;
+}
 
-.dish-carousel-arrow {
+.dish-film {
+  display: flex;
+  gap: 8px;
+  will-change: transform;
+  /* No CSS transition here on purpose: all motion runs through the Web
+     Animations API in the component, so React renders can never race it. */
+}
+
+.dish-frame {
+  position: relative;
+  flex: 0 0 max(170px, 20%);
+  min-width: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  background: #000;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+  user-select: none;
+}
+.dish-frame.active { box-shadow: var(--shadow-md); }
+.dish-frame:not(.active) { opacity: 0.92; }
+.dish-frame img,
+.dish-frame video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  background: #000;
+  pointer-events: none;
+}
+
+/* Overlay arrows */
+.dish-stage-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  border: 1px solid var(--slate-200);
-  background: #fff;
-  color: var(--slate-700);
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
+  z-index: 6;
 }
-.dish-carousel-arrow:hover {
-  transform: translateY(-1px);
-  border-color: var(--primary);
-  color: var(--primary);
+.dish-stage-arrow.left { left: 0.7rem; }
+.dish-stage-arrow.right { right: 0.7rem; }
+.dish-stage-arrow:hover {
+  background: var(--primary);
+  transform: translateY(-50%) scale(1.06);
 }
 
-.dish-carousel-track {
-  display: flex;
-  gap: 1rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-  padding: 0.25rem 0.1rem 0.5rem;
+/* Voice toggle over the video slide */
+.dish-mute-btn {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  z-index: 6;
 }
-.dish-carousel-track::-webkit-scrollbar { display: none; }
+.dish-mute-btn:hover {
+  background: var(--primary);
+  transform: scale(1.06);
+}
 
-.dish-card {
-  flex: 0 0 auto;
-  width: 190px;
-  scroll-snap-align: start;
-  text-decoration: none;
-  color: inherit;
-  background: #fff;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-.dish-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-}
-.dish-card-imgwrap {
-  position: relative;
-  display: block;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  background: linear-gradient(135deg, #ffedd5, #fed7aa);
-}
-.dish-card-imgwrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
+/* Tag chip on each frame */
 .dish-card-tag {
   position: absolute;
-  left: 0.55rem;
-  bottom: 0.55rem;
-  font-size: 0.68rem;
+  left: 0.8rem;
+  bottom: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
   border-radius: 99px;
-  padding: 0.18rem 0.6rem;
-}
-.dish-card-name {
-  display: block;
-  padding: 0.55rem 0.75rem 0.7rem;
-  font-weight: 800;
-  font-size: 0.9rem;
-  color: var(--slate-800);
+  padding: 0.28rem 0.8rem;
+  pointer-events: none;
 }
 
 .dish-carousel-dots {
   display: flex;
   justify-content: center;
   gap: 0.4rem;
-  padding: 0.35rem 0 0.2rem;
+  padding: 0.35rem 1.5rem 0.1rem;
 }
 .dish-carousel-dot {
   width: 8px;
@@ -126,12 +153,36 @@
 .dish-carousel-cta {
   display: flex;
   justify-content: center;
-  padding: 0.7rem 0 0.4rem;
+  padding: 0.4rem 1.5rem 0.2rem;
+}
+
+@media (max-width: 1024px) {
+  .dish-carousel { width: 95%; max-width: none; }
+  .dish-frame { flex-basis: max(150px, 20%); }
+  .dish-carousel-title { font-size: 1.1rem; }
 }
 
 @media (max-width: 640px) {
-  .dish-carousel { padding: 1.1rem 1rem 0.3rem; }
-  .dish-carousel-title { font-size: 1.15rem; }
-  .dish-card { width: 152px; }
-  .dish-carousel-arrow { width: 34px; height: 34px; }
+  .dish-carousel { padding: 0.6rem 0 0.2rem; }
+  .dish-carousel-head,
+  .dish-carousel-dots,
+  .dish-carousel-cta { padding-left: 1rem; padding-right: 1rem; }
+  .dish-frame { flex-basis: 40%; border-radius: 16px; aspect-ratio: 16 / 10; }
+  .dish-stage-arrow { width: 34px; height: 34px; }
+  .dish-carousel-dot { width: 10px; height: 10px; }
+  .dish-carousel-dot.active { width: 28px; }
+}
+
+@media (max-width: 400px) {
+  .dish-frame { flex-basis: 42%; border-radius: 14px; }
+  .dish-stage-arrow { width: 30px; height: 30px; }
+  .dish-stage-arrow.left { left: 0.5rem; }
+  .dish-stage-arrow.right { right: 0.5rem; }
+  .dish-card-tag { font-size: 0.7rem; left: 0.6rem; bottom: 0.6rem; }
+  .dish-mute-btn { width: 32px; height: 32px; right: 0.5rem; bottom: 0.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dish-film { transition: none; }
+  .dish-stage-arrow:hover { transform: translateY(-50%); }
 }

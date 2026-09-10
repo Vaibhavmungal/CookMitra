@@ -57,9 +57,14 @@
 .btn-success { background: var(--accent-emerald); color: #fff; box-shadow: var(--shadow-sm); }
 .btn-success:hover { background: #047857; color: #fff; }
 
-.btn-sm { padding: 0.42rem 0.8rem; font-size: 0.84rem; border-radius: 10px; }
+.btn-sm { padding: 0.42rem 0.8rem; font-size: 0.84rem; border-radius: 10px; min-height: 40px; }
 .btn-lg { padding: 0.85rem 1.6rem; font-size: 1rem; border-radius: 14px; }
 .btn-block { width: 100%; }
+
+@media (max-width: 640px) {
+  /* Full-width buttons must wrap long labels instead of clipping them. */
+  .btn-block { white-space: normal; text-align: center; }
+}
 
 /* ---- Badges ---- */
 .badge {

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { safeNextPath } from "../utils/bookingDraft";
 import {
   Mail,
   Lock,
@@ -35,6 +36,8 @@ const Register = () => {
   const { register } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  // ?next=… resumes an interrupted booking for new customers.
+  const next = safeNextPath(searchParams.get("next"));
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -64,6 +67,8 @@ const Register = () => {
       showToast(`Welcome to Cook Mitra, ${user.name}!`, "success");
       if (user.role === "cook") {
         navigate("/dashboard/cook-bookings");
+      } else if (next) {
+        navigate(next);
       } else {
         navigate("/");
       }
@@ -88,6 +93,12 @@ const Register = () => {
           <h2>Create an Account</h2>
           <p>Your Cook. Your Occasion. Your Kitchen.</p>
         </div>
+
+        {next && (
+          <div className="auth-resume-note">
+            You were booking a cook — your details are saved and waiting after signup.
+          </div>
+        )}
 
         {/* Role Selector Segmented Control */}
         <div className="role-segmented-control">
@@ -225,6 +236,7 @@ const Register = () => {
           role={formData.role}
           text="signup_with"
           onError={setError}
+          next={next}
         />
 
         <div className="auth-footer-prompt">

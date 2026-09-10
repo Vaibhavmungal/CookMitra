@@ -1,7 +1,10 @@
 const Booking = require("../models/Booking");
 const Notification = require("../models/Notification");
 const CookProfile = require("../models/CookProfile");
+const Coupon = require("../models/Coupon");
 const User = require("../models/User");
+const { normalizeCode, rejectionReason, computeDiscount } = require("../utils/coupons");
+const { slabPriceForDuration, splitPayout } = require("../utils/pricing");
 const crypto = require("crypto");
 const {
   getDayWindows,
@@ -10,7 +13,9 @@ const {
   findContainingWindow,
   findOverlapBooking,
   timeToMinutes,
+  minutesToTime,
   parseDay,
+  localDayString,
   dayBounds,
   intervalsOverlap,
   resolveCookAvailability,
@@ -34,8 +39,19 @@ const haversineKm = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(aa));
 };
 
-// Session end datetime from booking.date + endTime ("HH:MM"). Null when unknown.
+// OTP for starting a service: 4 digits, first digit non-zero so it always
+// renders as 4 digits (no leading-zero display issues).
+const generateServiceOtp = () =>
+  String(1000 + crypto.randomInt(0, 9000));
+
+// End of the service clock. Prefers the live clock (serviceEndsAt, set when
+// the cook enters the OTP) over the static schedule (date + endTime) so the
+// hours-complete alarm counts from the actual start, not the booking slot.
 const sessionEndDate = (booking) => {
+  if (booking?.serviceEndsAt) {
+    const d = new Date(booking.serviceEndsAt);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
   if (!booking?.date || !booking?.endTime) return null;
   const m = String(booking.endTime).match(/^(\d{1,2}):(\d{2})/);
   if (!m) return null;
@@ -44,12 +60,44 @@ const sessionEndDate = (booking) => {
   return d;
 };
 
-// Flag cooking-hours completion once the end time passes while active.
-// Creates the alarm notification for BOTH customer and cook.
+// Strip the service OTP from a booking payload before it reaches the cook:
+// the cook must ask the customer for the code in person. Applies to a
+// Mongoose doc, a lean object, or an array of either.
+const stripServiceOtp = (payload) => {
+  const stripOne = (b) => {
+    if (!b || typeof b !== "object") return b;
+    if (typeof b.toObject === "function") {
+      const o = b.toObject();
+      delete o.serviceOtp;
+      return o;
+    }
+    const { serviceOtp: _omit, ...rest } = b;
+    return rest;
+  };
+  return Array.isArray(payload) ? payload.map(stripOne) : stripOne(payload);
+};
+
+// Ensure a booking has a service-start OTP (generated once at creation; back
+// filled for older bookings). Returns true when a new OTP was assigned.
+// The doc must be saved by the caller afterwards.
+const ensureServiceOtp = (booking) => {
+  if (booking?.serviceOtp) return false;
+  booking.serviceOtp = generateServiceOtp();
+  booking.serviceOtpGeneratedAt = new Date();
+  return true;
+};
+
+// Flag cooking-hours completion. The session clock only runs after the cook
+// verifies the service-start OTP (serviceStartedAt → serviceEndsAt); the
+// static schedule is only a fallback for bookings started before this
+// feature. Creates the alarm notification for BOTH customer and cook.
 // Returns true when newly flagged.
 const markHoursCompleteIfNeeded = async (booking) => {
   if (booking.hoursCompleted) return false;
   if (!["accepted", "confirmed", "in_progress"].includes(booking.status)) return false;
+  // Legacy bookings (no OTP flow yet) still complete on the static schedule;
+  // OTP-started bookings complete on the live service clock.
+  if (!booking.serviceStartedAt && booking.serviceOtp) return false;
   const end = sessionEndDate(booking);
   if (!end || Date.now() < end.getTime()) return false;
   booking.hoursCompleted = true;
@@ -176,8 +224,9 @@ exports.createBooking = async (req, res, next) => {
       return res.status(400).json({ message: "Invalid time slot" });
     }
     const billedHours = (endMin - startMin) / 60;
-    if (billedHours < 0.5 || billedHours > 12) {
-      return res.status(400).json({ message: "Service hours must be between 0.5 and 12" });
+    // Launch price list covers whole-hour 1–4h sessions only.
+    if (![1, 2, 3, 4].includes(billedHours)) {
+      return res.status(400).json({ message: "Sessions run 1–4 hours" });
     }
     // The stated duration must match the selected window (windows are sized
     // from the input service hours).
@@ -187,8 +236,43 @@ exports.createBooking = async (req, res, next) => {
         return res.status(400).json({ message: "Duration does not match the selected time slot" });
       }
     }
-    const fullFee = Math.round(Number(cookProfile.rate) * billedHours);
-    const expectedAmount = fullFee;
+    // Launch slab pricing — the fee comes from the price list, never from
+    // the client and no longer from the cook's rack rate.
+    const slabPrice = slabPriceForDuration(billedHours);
+    if (slabPrice == null) {
+      return res.status(400).json({ message: "Sessions run 1–4 hours" });
+    }
+    // Optional coupon: re-validated fresh here (eligibility, min order,
+    // service, first-booking) and redeemed on success. The /validate
+    // endpoint only previews — it never mutates usage.
+    let couponCode = "";
+    let discount = 0;
+    const rawCode = normalizeCode(req.body.couponCode);
+    if (rawCode) {
+      const coupon = await Coupon.findOne({ code: rawCode });
+      const isFirstBooking =
+        (await Booking.countDocuments({ customer: req.user.id })) === 0;
+      const reason = rejectionReason(coupon, {
+        amount: slabPrice,
+        userId: req.user.id,
+        serviceType: req.body.serviceType,
+        isFirstBooking,
+      });
+      if (reason) {
+        return res.status(400).json({ message: reason });
+      }
+      discount = computeDiscount(coupon, slabPrice);
+      if (discount <= 0) {
+        return res.status(400).json({ message: "This coupon gives no discount on this order." });
+      }
+      couponCode = coupon.code;
+      coupon.usedCount = Number(coupon.usedCount || 0) + 1;
+      coupon.usedBy.push(req.user.id);
+      await coupon.save();
+    }
+    // ~10% platform commission; the cook earns the rest of the final amount.
+    const { finalAmount, commission, cookPayout } = splitPayout(slabPrice - discount);
+    const expectedAmount = finalAmount;
     if (hasPayment) {
       const paidAmount = Number(req.body.amount ?? payment.paidAmount);
       if (!Number.isFinite(paidAmount) || Math.round(paidAmount) !== expectedAmount) {
@@ -204,6 +288,11 @@ exports.createBooking = async (req, res, next) => {
       ...pickBookingCustomerFields(req.body),
       date: parseDay(date),
       amount: expectedAmount,
+      slabPrice,
+      couponCode,
+      discount,
+      commission,
+      cookPayout,
       payment: hasPayment
         ? {
             razorpayOrderId,
@@ -220,6 +309,10 @@ exports.createBooking = async (req, res, next) => {
       status: "requested",
       requestExpiresAt: new Date(Date.now() + REQUEST_WINDOW_MS),
       statusHistory: [{ status: "requested" }],
+      // Every order gets its own 4-digit service-start OTP. Generated once
+      // at creation (never regenerated later), shown only to the customer.
+      serviceOtp: generateServiceOtp(),
+      serviceOtpGeneratedAt: new Date(),
     });
 
     // Close the two-user race: two customers can pass the pre-create overlap
@@ -473,6 +566,8 @@ exports.getCookBookings = async (req, res, next) => {
     const out = bookings.map((b) => {
       const obj = b.toObject ? b.toObject() : b;
       const end = sessionEndDate(b);
+      // Cook never sees the OTP — they ask the customer for it in person.
+      delete obj.serviceOtp;
       return { ...obj, sessionEnd: end ? end.toISOString() : null };
     });
     // Submitted customer ratings keyed by booking id (one per booking max),
@@ -777,6 +872,42 @@ exports.completeBooking = async (req, res, next) => {
   }
 };
 
+// Permanently remove a booking from the customer's history. Only the booking's
+// own customer may delete, and only records that never became a real
+// engagement: the cook never accepted (requested / rejected / expired) or the
+// customer already cancelled it. Anything with captured money is kept for the
+// financial trail — support can help with those.
+exports.deleteBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    if (booking.customer.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const DELETABLE_STATUSES = ["requested", "rejected", "expired", "cancelled"];
+    if (!DELETABLE_STATUSES.includes(booking.status)) {
+      return res.status(400).json({
+        message: "Only bookings that were not accepted by the cook, or that you cancelled, can be deleted",
+      });
+    }
+
+    if (booking.payment?.status === "paid") {
+      return res.status(400).json({
+        message: "This booking has a payment history and cannot be deleted. Please contact support.",
+      });
+    }
+
+    await Booking.findByIdAndDelete(booking._id);
+    res.json({ message: "Booking deleted", id: req.params.id });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.cancelBooking = async (req, res, next) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -868,6 +999,150 @@ exports.cancelBooking = async (req, res, next) => {
   }
 };
 
+// Customer moves an upcoming booking to a new date/start time. Duration (and
+// therefore the fee) stays fixed so paid bookings need no re-settlement.
+// Only requested/accepted/confirmed bookings can move — never in-progress,
+// completed, cancelled, rejected or expired ones. The new slot must sit
+// inside one of the cook's open windows and clash with nothing else (the
+// booking being moved is excluded from its own overlap check). Both sides
+// are notified; nothing here needs the cook's pre-approval, so the messages
+// make the change impossible to miss.
+exports.rescheduleBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+    if (booking.customer.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Only the customer can reschedule this booking" });
+    }
+    if (!["requested", "accepted", "confirmed"].includes(booking.status)) {
+      return res.status(400).json({ message: "Only upcoming bookings can be rescheduled" });
+    }
+
+    const { date, startTime } = req.body || {};
+    const startMin = timeToMinutes(startTime);
+    if (startMin == null) {
+      return res.status(400).json({ message: "Valid start time (HH:MM) is required" });
+    }
+    const day = parseDay(date);
+    if (Number.isNaN(day.getTime())) {
+      return res.status(400).json({ message: "Valid date is required" });
+    }
+    if (localDayString(day) < localDayString()) {
+      return res.status(400).json({ message: "That date already passed — please pick today or a future date" });
+    }
+
+    const durMin = Math.round(Number(booking.durationHours || 0) * 60);
+    if (!Number.isFinite(durMin) || durMin < 30) {
+      return res.status(400).json({ message: "This booking has no usable duration — please contact support" });
+    }
+    const endMin = startMin + durMin;
+    // Service day 08:00–20:00, mirroring the slot engine.
+    if (startMin < 8 * 60 || endMin > 20 * 60) {
+      return res.status(400).json({ message: "Sessions must run between 8:00 AM and 8:00 PM" });
+    }
+
+    const windows = await getDayWindows(booking.cook, date);
+    const endTime = minutesToTime(endMin);
+    if (!findContainingWindow(windows, startTime, endTime)) {
+      return res.status(400).json({ message: "Cook is not available at the selected time — please pick a slot shown as free" });
+    }
+    const rivals = (await getDayBookings(booking.cook, date)).filter(
+      (b) => String(b._id) !== String(booking._id)
+    );
+    if (findOverlapBooking(rivals, startTime, endTime)) {
+      return res.status(409).json({ message: "That time just got booked — please pick another start time" });
+    }
+
+    const oldLabel = `${booking.date ? new Date(booking.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""} ${booking.startTime || ""}–${booking.endTime || ""}`.trim();
+    booking.date = day;
+    booking.startTime = startTime;
+    booking.endTime = endTime;
+    const newLabel = `${day.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} ${startTime}–${endTime}`;
+    booking.statusHistory.push({
+      status: booking.status,
+      note: `Rescheduled from ${oldLabel} to ${newLabel} by customer`,
+    });
+    await booking.save();
+
+    try {
+      await Notification.create({
+        user: booking.cook,
+        type: "booking_rescheduled",
+        message: `Booking rescheduled to ${newLabel} by the customer. Please check your schedule.`,
+      });
+      await Notification.create({
+        user: booking.customer,
+        type: "booking_rescheduled",
+        message: `Your booking moved to ${newLabel}. Your cook has been notified.`,
+      });
+    } catch {
+      // non-fatal: the move itself must always succeed
+    }
+
+    res.json(booking);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Cook starts the service by entering the customer's 4-digit OTP (read out
+// to them in person at the venue). Sets the live service clock
+// (serviceStartedAt → serviceEndsAt = start + booked duration) and marks
+// arrival, so the hours-complete alarm counts real cooking time. Idempotent:
+// re-submitting after a start returns the current state. The OTP is never
+// returned to the cook — every response here is stripped.
+exports.startService = async (req, res, next) => {
+  try {
+    const filter = { _id: req.params.id };
+    if (req.user.role !== "admin") filter.cook = req.user.id;
+    const booking = await Booking.findOne(filter);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+    if (!["accepted", "confirmed", "in_progress"].includes(booking.status)) {
+      return res.status(400).json({ message: "Only accepted bookings can start service" });
+    }
+    if (booking.serviceStartedAt) {
+      const obj = stripServiceOtp(booking);
+      return res.json({ ...obj, serviceStarted: true });
+    }
+    const otp = String(req.body?.otp || "").trim();
+    if (!booking.serviceOtp || otp !== String(booking.serviceOtp)) {
+      return res.status(400).json({ message: "Incorrect OTP — please ask the customer for the 4-digit code shown on their booking" });
+    }
+    const durMin = Math.round(Number(booking.durationHours || 0) * 60);
+    if (!Number.isFinite(durMin) || durMin < 30) {
+      return res.status(400).json({ message: "This booking has no usable duration — please contact support" });
+    }
+    const startedAt = new Date();
+    booking.serviceStartedAt = startedAt;
+    booking.serviceEndsAt = new Date(startedAt.getTime() + durMin * 60 * 1000);
+    await markArrivedIfNeeded(booking, "manual");
+    if (booking.status !== "in_progress") {
+      booking.status = "in_progress";
+      booking.statusHistory.push({ status: "in_progress", note: "Service started (OTP verified)" });
+    } else {
+      booking.statusHistory.push({ status: "in_progress", note: "Service started (OTP verified)" });
+    }
+    await booking.save();
+    try {
+      await Notification.create({
+        user: booking.customer,
+        type: "service_started",
+        message: "Your service has started — enjoy your session! The hours are now being counted.",
+      });
+    } catch {
+      // non-fatal
+    }
+    const obj = stripServiceOtp(booking);
+    res.json({ ...obj, serviceStarted: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Cook shares their current live location for a specific booking. Stores a
 // snapshot on the booking + updates the cook profile, and returns a
 // customer-targeted WhatsApp link (order details + cook live location).
@@ -941,7 +1216,8 @@ exports.shareCookLocation = async (req, res, next) => {
       customerWhatsappUrl = null;
     }
 
-    const obj = booking.toObject ? booking.toObject() : booking;
+    // Cook-facing response: never leak the service-start OTP.
+    const obj = stripServiceOtp(booking);
     res.json({ ...obj, customerWhatsappUrl, justArrived });
   } catch (error) {
     next(error);
@@ -962,7 +1238,8 @@ exports.markCookArrived = async (req, res, next) => {
       return res.status(400).json({ message: "Booking is no longer active" });
     }
     const justArrived = await markArrivedIfNeeded(booking, "manual");
-    const obj = booking.toObject ? booking.toObject() : booking;
+    // Cook-facing response: never leak the service-start OTP.
+    const obj = stripServiceOtp(booking);
     res.json({ ...obj, justArrived });
   } catch (error) {
     next(error);
@@ -1110,7 +1387,10 @@ exports.getBookingById = async (req, res, next) => {
       cookLiveLocation = null;
     }
 
-    const obj = booking.toObject ? booking.toObject() : booking;
+    const fullObj = booking.toObject ? booking.toObject() : booking;
+    // The cook must never see the service-start OTP — they ask the customer
+    // for it in person. Customers and admins keep it.
+    const obj = isCook ? stripServiceOtp(fullObj) : fullObj;
     const end = sessionEndDate(booking);
     const hoursPayload = { ...obj, hoursCompletedAt: booking.hoursCompletedAt };
     // Submitted review for this service (one per booking max) — visible to

@@ -92,7 +92,8 @@
 }
 .booking-item-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
-.booking-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
+.booking-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+.booking-item-top > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .booking-party-info { min-width: 0; }
 .booking-party-info h3 { font-size: 1.02rem; margin: 0; }
 .booking-party-info > span { color: var(--slate-400); font-size: 0.78rem; }
@@ -114,6 +115,40 @@
 .meta-field a { font-size: 0.84rem; }
 
 .booking-actions-row { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.9rem; }
+
+@media (max-width: 400px) {
+  /* Full-width action on phones so it never squeezes beside the text. */
+  .notif-mark-read { width: 100%; }
+}
+
+/* Icon-only delete for removable bookings — sits top-right of the card,
+   next to the status badge. */
+.booking-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid var(--accent-rose);
+  background: #fff1f2;
+  color: var(--accent-rose);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.booking-delete-btn:hover {
+  color: #fff;
+  border-color: var(--accent-rose);
+  background: var(--accent-rose);
+}
+.booking-delete-btn:focus-visible {
+  outline: 2px solid var(--accent-rose);
+  outline-offset: 2px;
+}
 
 /* Cook dashboard booking card + status accent colours */
 .booking-item-card.cook-booking-card { border-left-width: 4px; }

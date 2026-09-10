@@ -3,6 +3,7 @@ import { GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { safeNextPath } from "../utils/bookingDraft";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 const isGoogleConfigured =
@@ -20,6 +21,7 @@ const GoogleSignInButton = ({
   role = "customer",
   text = "signin_with",
   onError,
+  next = null,
 }) => {
   const { loginWithGoogle } = useAuth();
   const { showToast } = useToast();
@@ -69,7 +71,9 @@ const GoogleSignInButton = ({
     try {
       const user = await loginWithGoogle(idToken, role);
       showToast(`Welcome${user?.name ? `, ${user.name}` : ""}!`, "success");
-      navigate(getDashboardPath(user));
+      // Interrupted booking? Customers go straight back to it.
+      const resumeTo = user?.role === "customer" ? safeNextPath(next) : null;
+      navigate(resumeTo || getDashboardPath(user));
     } catch (err) {
       const msg =
         err.response?.data?.message ||

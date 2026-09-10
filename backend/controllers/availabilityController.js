@@ -1,6 +1,6 @@
 const Availability = require("../models/Availability");
 const CookProfile = require("../models/CookProfile");
-const { getDayWindows, getDayBookings, computeStartOptions, parseDay, resolveCookAvailability } = require("../utils/slots");
+const { getDayWindows, getDayBookings, computeStartOptions, suggestDurations, parseDay, resolveCookAvailability } = require("../utils/slots");
 
 exports.getAvailability = async (req, res, next) => {
   try {
@@ -39,9 +39,16 @@ exports.getAvailability = async (req, res, next) => {
       const windows = slots.length ? slots : await getDayWindows(req.params.cookId, date);
       const bookings = await getDayBookings(req.params.cookId, date);
       const options = computeStartOptions(windows, bookings, dur);
-      return res.json(
-        options.map((o) => ({ _id: `${o.startTime}-${o.endTime}`, ...o, derived: true }))
-      );
+      const shaped = options.map((o) => ({ _id: `${o.startTime}-${o.endTime}`, ...o, derived: true }));
+      // Opt-in recovery hint: when nothing fits, name shorter session lengths
+      // that DO fit (computed from the same in-memory windows — no extra
+      // queries) so the client can offer one-tap retries. Shape is unchanged
+      // unless suggest=1 is passed.
+      if (req.query.suggest === "1" || req.query.suggest === "true") {
+        const suggestions = options.length ? [] : suggestDurations(windows, bookings, dur);
+        return res.json({ slots: shaped, suggestions });
+      }
+      return res.json(shaped);
     }
 
     res.json(slots);

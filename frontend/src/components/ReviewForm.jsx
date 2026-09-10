@@ -115,9 +115,16 @@ const ReviewForm = ({ bookingId, existingReview, onSubmitted }) => {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  padding: 2,
+                  padding: 10,
+                  margin: -6,
+                  minWidth: 44,
+                  minHeight: 44,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   transition: "transform 0.1s ease",
                 }}
+                aria-label={`Rate ${starVal} out of 5`}
               >
                 <Star
                   size={26}

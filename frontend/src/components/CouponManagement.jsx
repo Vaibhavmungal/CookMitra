@@ -109,10 +109,15 @@ const CouponManagement = () => {
                     {c.description ? <div className="coupon-desc">{c.description}</div> : null}
                   </td>
                   <td style={{ padding: "1rem" }}>
-                    <div className="coupon-pct">{c.percent}% OFF</div>
+                    <div className="coupon-pct">
+                      {c.discountType === "flat" ? `₹${c.flatAmount} OFF` : `${c.percent}% OFF`}
+                    </div>
                     <div className="coupon-sub">
-                      {c.maxDiscount != null ? `max ₹${c.maxDiscount}` : "uncapped"}
+                      {c.discountType === "flat"
+                        ? "flat discount"
+                        : c.maxDiscount != null ? `max ₹${c.maxDiscount}` : "uncapped"}
                       {c.minOrder > 0 ? ` • min ₹${c.minOrder}` : ""}
+                      {c.firstBookingOnly ? " • 1st booking" : ""}
                     </div>
                   </td>
                   <td style={{ padding: "1rem" }}>

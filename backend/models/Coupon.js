@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
-// Promo coupons (percent-off) managed by admins and applied at checkout.
-// Pricing is always recomputed server-side from these records — the client
-// only ever sends the code, never an amount.
+// Promo coupons (flat-₹ or percent-off) managed by admins and applied at
+// checkout. Pricing is always recomputed server-side from these records —
+// the client only ever sends the code, never an amount.
 const couponSchema = new mongoose.Schema(
   {
     code: {
@@ -20,12 +20,24 @@ const couponSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
-    // Percent off, e.g. 20 = 20% off.
+    // "flat" = fixed rupee off (flatAmount), "percent" = percent off.
+    discountType: {
+      type: String,
+      enum: ["flat", "percent"],
+      default: "percent",
+    },
+    // Percent off, e.g. 20 = 20% off (percent coupons only).
     percent: {
       type: Number,
-      required: [true, "Discount percent is required"],
       min: [1, "Percent must be at least 1"],
       max: [100, "Percent cannot exceed 100"],
+      default: null,
+    },
+    // Fixed rupee discount (flat coupons only).
+    flatAmount: {
+      type: Number,
+      min: [1, "Flat amount must be at least ₹1"],
+      default: null,
     },
     // Cap on the rupee discount (null = uncapped).
     maxDiscount: {
@@ -62,6 +74,16 @@ const couponSchema = new mongoose.Schema(
       type: Number,
       min: [1, "Per-user limit must be at least 1"],
       default: 1,
+    },
+    // Only customers with no prior bookings can use it (e.g. WELCOME50).
+    firstBookingOnly: {
+      type: Boolean,
+      default: false,
+    },
+    // Service types this coupon applies to (empty = all services).
+    applicableServices: {
+      type: [String],
+      default: [],
     },
     validFrom: {
       type: Date,

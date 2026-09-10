@@ -2,7 +2,11 @@ import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { LogIn, UserPlus, X, ChevronRight } from "lucide-react";
 
-const LoginPromptModal = ({ open, onClose }) => {
+const LoginPromptModal = ({ open, onClose, returnTo }) => {
+  // Where to send the customer after they sign in/up, so an interrupted
+  // booking resumes instead of restarting. Must be an app-relative path.
+  const loginTo = returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : "/login";
+  const registerTo = returnTo ? `/register?next=${encodeURIComponent(returnTo)}` : "/register";
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -46,10 +50,10 @@ const LoginPromptModal = ({ open, onClose }) => {
           New here? Creating an account takes less than a minute.
         </p>
 
-        <Link to="/login" className="btn btn-primary btn-block btn-lg login-modal-cta">
+        <Link to={loginTo} className="btn btn-primary btn-block btn-lg login-modal-cta">
           <LogIn size={18} /> Login to Continue Booking
         </Link>
-        <Link to="/register" className="btn btn-outline btn-block login-modal-cta-alt">
+        <Link to={registerTo} className="btn btn-outline btn-block login-modal-cta-alt">
           <UserPlus size={18} /> Create a New Account
         </Link>
 

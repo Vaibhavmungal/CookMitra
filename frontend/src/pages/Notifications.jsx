@@ -25,6 +25,8 @@ const TYPE_META = {
   booking_confirmed: { label: "Booking confirmed", icon: CheckCircle2, color: "var(--accent-blue)" },
   booking_completed: { label: "Booking completed", icon: CheckCheck, color: "var(--accent-emerald)" },
   booking_cancelled: { label: "Booking cancelled", icon: XCircle, color: "var(--slate-500)" },
+  service_started: { label: "Service started", icon: ChefHat, color: "var(--accent-emerald)" },
+  booking_rescheduled: { label: "Booking rescheduled", icon: Calendar, color: "var(--accent-blue)" },
   cook_arrived: { label: "Cook arrived", icon: ChefHat, color: "var(--accent-emerald)" },
   cooking_hours_completed: { label: "Cooking hours complete", icon: Clock, color: "var(--accent-amber)" },
   review_received: { label: "New review", icon: Star, color: "var(--accent-amber)" },
@@ -219,10 +221,10 @@ const Notifications = () => {
                   background: n.read ? "white" : "var(--primary-light, #fff7ed)",
                 }}
               >
-                <div style={{ display: "flex", gap: "0.9rem", alignItems: "flex-start" }}>
+                <div style={{ display: "flex", gap: "0.9rem", alignItems: "flex-start", flexWrap: "wrap" }}>
                   <div
                     className="stat-icon-wrapper"
-                    style={{ background: "white", color: meta.color, border: "1px solid var(--border-subtle)" }}
+                    style={{ background: "white", color: meta.color, border: "1px solid var(--border-subtle)", flexShrink: 0 }}
                   >
                     <Icon size={22} />
                   </div>
@@ -246,7 +248,7 @@ const Notifications = () => {
                   </div>
                   {!n.read && (
                     <button
-                      className="btn btn-outline btn-sm"
+                      className="btn btn-outline btn-sm notif-mark-read"
                       onClick={() => handleMarkRead(n._id)}
                       disabled={actioning === n._id}
                       title="Mark as read"

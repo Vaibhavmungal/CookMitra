@@ -186,7 +186,6 @@ const CookProfile = () => {
             cookUserId={cook?.user?._id}
             cookPhone={cook?.user?.phone}
             cookName={cook?.user?.name}
-            hourlyRate={cook?.rate}
             onSubmit={handleBookingSubmit}
           />
         </div>

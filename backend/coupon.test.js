@@ -118,7 +118,7 @@ const stubFindOne = (doc) => () => Q(doc);
       const r = makeRes();
       try {
         await couponCtrl.validateCoupon({ body: { code: "NOPE", amount: 1000 }, user: { id: "u1" } }, r, next);
-        check("unknown code → 400", r.statusCode === 400 && /invalid coupon/i.test(r.body.message || ""), `s=${r.statusCode}`);
+        check("unknown code → 400", r.statusCode === 400 && /not valid for this booking/i.test(r.body.message || ""), `s=${r.statusCode}`);
       } catch (e) { check("unknown code", false, e.message); }
       finally { Coupon.findOne = oF; }
     }

@@ -76,10 +76,6 @@ td, th { padding: 0.7rem 0.5rem; }
 /* Lead capture left copy */
 .lead-copy .section-title { margin-bottom: 0.6rem; }
 
-/* Lead form container */
-.lead-form .booking-form-group { margin-bottom: 0.85rem; }
-.lead-form .btn { width: 100%; margin-top: 0.25rem; }
-
 /* Login form layout */
 .login-form { display: flex; flex-direction: column; gap: 0.35rem; }
 .login-input { padding-left: 2.6rem; }
@@ -127,8 +123,10 @@ td, th { padding: 0.7rem 0.5rem; }
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: 50%;
   border: none;
   background: var(--slate-100);
@@ -230,6 +228,7 @@ td, th { padding: 0.7rem 0.5rem; }
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 0.55rem 0.75rem;
+  flex-wrap: wrap;
 }
 .add-cook-cred-field { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .add-cook-cred-field span { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-400); }

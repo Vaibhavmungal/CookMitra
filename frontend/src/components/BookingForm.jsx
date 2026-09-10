@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 import API from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
-import { formatCurrency, localTodayStr } from "../utils/constants";
-import { getCurrentPositionRobust, formatAccuracy, accuracyGrade, reverseGeocode } from "../utils/geolocation";
+import { formatCurrency, localTodayStr, slabPriceForDuration } from "../utils/constants";
+import { useLocation } from "../context/LocationContext";
+import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/bookingDraft";
+import CouponApply from "./CouponApply";
 import {
-  Calendar, Clock, AlertCircle, LocateFixed, Navigation,
+  Calendar, Clock, AlertCircle, Navigation,
   History, Copy, Check, ChefHat, Users, BookOpen, Scissors,
-  MapPin, StickyNote, Send, ArrowRight
+  MapPin, StickyNote, Send, ArrowRight, ChevronLeft, ChevronRight
 } from "lucide-react";
 import LoginPromptModal from "./LoginPromptModal";
 
@@ -88,10 +90,12 @@ const SERVICE_OPTIONS = [
   { value: "preparation_help", label: "Prep help", icon: Scissors, desc: "Chop & fry" },
 ];
 
-const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
+const DURATION_OPTIONS = [1, 2, 3, 4];
+const DURATION_MIN = 1;
+const DURATION_MAX = 4;
 
 /* ── Component ───────────────────────────────────────────────────────── */
-const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit }) => {
+const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
   const { showToast } = useToast();
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
@@ -112,7 +116,6 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [coords, setCoords] = useState(null);
-  const [locating, setLocating] = useState(false);
   const [locMsg, setLocMsg] = useState("");
   const [resolvedCookUserId, setResolvedCookUserId] = useState(cookUserId || null);
   const [savedLocations, setSavedLocations] = useState([]);
@@ -121,6 +124,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
   const errorRef = useRef(null);
   const [copiedPin, setCopiedPin] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const { location: siteLocation } = useLocation();
 
   /* ── Resolve cook user id ── */
   useEffect(() => {
@@ -139,11 +143,13 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
 
   const minDateStr = localTodayStr();
 
+  const [coupon, setCoupon] = useState(null);
+
   const hoursValid =
     formData.durationHours !== "" &&
-    Number.isFinite(Number(formData.durationHours)) &&
-    Number(formData.durationHours) >= 0.5 &&
-    Number(formData.durationHours) <= 12;
+    Number.isInteger(Number(formData.durationHours)) &&
+    Number(formData.durationHours) >= DURATION_MIN &&
+    Number(formData.durationHours) <= DURATION_MAX;
 
 
 
@@ -157,38 +163,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
 
   
 
-  /* ── Location ── */
-  const handleDetectLocation = async () => {
-    setLocating(true);
-    setLocMsg("Detecting…");
-    try {
-      const c = await getCurrentPositionRobust();
-      setCoords(c);
-      const geo = await reverseGeocode(c.lat, c.lng);
-      const filled = [];
-      if (geo.city || geo.street || geo.suburb) {
-        setFormData((prev) => ({
-          ...prev,
-          city: prev.city.trim() ? prev.city : geo.city || prev.city,
-          society: prev.society.trim() ? prev.society : geo.street || prev.society,
-          landmark: prev.landmark.trim() ? prev.landmark : geo.suburb || prev.landmark,
-        }));
-        if (geo.city) filled.push("city");
-        if (geo.street) filled.push("street");
-        if (geo.suburb) filled.push("area");
-      }
-      const autoNote = filled.length > 0 ? `Address guessed (${filled.join(", ")}) — verify below.` : "Pin saved — type address.";
-      const grade = accuracyGrade(c.accuracy);
-      const fixNote = grade === "poor" ? "Poor GPS." : grade === "fair" ? "Approximate." : "Good fix.";
-      setLocMsg(`${fixNote} ${autoNote}`);
-    } catch (err) {
-      setLocMsg(err.message || "Could not detect — type your address.");
-    } finally {
-      setLocating(false);
-    }
-  };
-
-  /* ── Estimate ── */
+/* ── Estimate ── */
   const nowHM = (() => {
     const n = new Date();
     return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
@@ -206,21 +181,11 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
     hourOptions.unshift(formData.startTime);
   }
 
-  const calculateEstimate = () => {
-    const entered = Number(formData.durationHours);
-    if (formData.durationHours !== "" && Number.isFinite(entered) && entered > 0) {
-      const hours = Math.min(12, entered);
-      return { hours, total: hours * hourlyRate };
-    }
-    // Fallback: compute based on startTime and duration if possible
-    const toMin = (t) => {
-      const [h, m] = String(t).split(":").map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-    const hours = Math.max(0.5, (toMin(derivedEndTime) - toMin(formData.startTime)) / 60);
-    return { hours, total: hours * hourlyRate };
-  };
-  const estimate = calculateEstimate();
+  // Launch slab pricing: one flat price per whole-hour session (the server
+  // recomputes it — this is display + coupon preview only).
+  const slab = slabPriceForDuration(Number(formData.durationHours));
+  const discount = slab != null && coupon ? Math.min(coupon.discount, slab) : 0;
+  const finalAmount = slab != null ? Math.max(0, slab - discount) : 0;
 
   // Derived end time based on start time and duration (service hours limits)
   const derivedEndTime = (() => {
@@ -303,10 +268,10 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
       setCoords({ lat: saved.location.lat, lng: saved.location.lng });
       setLocMsg("Previous location applied with saved pin.");
     } else {
-      // Drop any stale GPS pin from an earlier detect — it would point at the
-      // wrong place for this address.
+      // Drop any stale detected pin — it would point at the wrong place
+      // for this address.
       setCoords(null);
-      setLocMsg("Previous location applied — pin for navigation.");
+      setLocMsg("Previous location applied — verify the address below.");
     }
   };
 
@@ -340,26 +305,67 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
     }
   }, [savedLocations, savedLoaded, user?.role, user?.address]);
 
-  // Auto-detect location when reaching the address step if no address was auto-filled
+  // Auto-fill address fields from the LocationContext-detected location
+  // (auto-detected on page visit) when no address has been filled yet.
+  // Typed, saved, or profile input always wins. The detected pin is also
+  // attached for cook navigation — no manual detect button needed.
   useEffect(() => {
-    if (step === 2 && !autoFilled.current && savedLoaded && user?.role === "customer") {
-      autoFilled.current = true;
-      handleDetectLocation();
+    if (!siteLocation?.city && !siteLocation?.area && !siteLocation?.state) return;
+    if (autoFilled.current) return;
+    autoFilled.current = true;
+    setFormData((prev) => {
+      if (prev.flatNo || prev.society || prev.landmark || prev.city) return prev;
+      return {
+        ...prev,
+        city: prev.city.trim() ? prev.city : siteLocation.city || "",
+        society: prev.society.trim() ? prev.society : siteLocation.area || siteLocation.street || "",
+        landmark: prev.landmark.trim() ? prev.landmark : siteLocation.street || siteLocation.area || "",
+      };
+    });
+    if (Number.isFinite(siteLocation?.lat) && Number.isFinite(siteLocation?.lng)) {
+      setCoords((c) => c || { lat: siteLocation.lat, lng: siteLocation.lng });
     }
+  }, [siteLocation?.city, siteLocation?.area, siteLocation?.state, siteLocation?.street, siteLocation?.lat, siteLocation?.lng]);
+
+  // Returning from login with an unfinished booking for THIS cook: restore
+  // the filled fields + pin and land back on the confirm step. Runs once;
+  // another cook's draft or a stale one is left alone.
+  const resumedDraft = useRef(false);
+  useEffect(() => {
+    if (resumedDraft.current || !user) return;
+    const d = loadBookingDraft();
+    if (!d || d.kind !== "cook-profile" || !d.form) return;
+    if (cookId && d.cookId && String(d.cookId) !== String(cookId)) return;
+    if (!d.savedAt || Date.now() - d.savedAt > 2 * 3600 * 1000) {
+      clearBookingDraft();
+      return;
+    }
+    resumedDraft.current = true;
+    autoFilled.current = true;
+    setFormData((prev) => ({ ...prev, ...d.form }));
+    if (d.coords?.lat != null) setCoords(d.coords);
+    setStep(2);
+    showToast("Welcome back — your booking details were restored. Just tap Send Request.", "success");
+    clearBookingDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, savedLoaded, user?.role]);
+  }, [user, cookId]);
 
   /* ── Submit ── */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!user) { setShowLoginModal(true); return; }
+    if (!user) {
+      // Remember the unfinished booking across the login wall.
+      saveBookingDraft({ kind: "cook-profile", cookId: cookId ?? resolvedCookUserId, form: formData, coords });
+      setShowLoginModal(true);
+      return;
+    }
     if (user.role !== "customer") {
       setError("Only customers can book"); scrollToError(); return;
     }
     const fail = (msg) => { setError(msg); scrollToError(); };
     const serviceHours = Number(formData.durationHours);
-    if (!formData.durationHours || isNaN(serviceHours) || serviceHours < 0.5 || serviceHours > 12) {
-      fail("Enter hours between 0.5 – 12"); return;
+    if (!formData.durationHours || !Number.isInteger(serviceHours) || serviceHours < DURATION_MIN || serviceHours > DURATION_MAX) {
+      fail("Please choose 1, 2, 3 or 4 hours"); return;
     }
     if (!resolvedCookUserId) { fail("Cook details loading — retry"); return; }
     if (!formData.startTime || !derivedEndTime) { fail("Pick a start time"); return; }
@@ -388,10 +394,12 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
         notes: formData.notes,
         selectedItems,
         durationHours: serviceHours,
-        amount: estimate ? Math.max(1, Math.round(estimate.total)) : 0,
+        couponCode: coupon?.code || "",
+        amount: finalAmount,
       };
       if (coords) payload.location = coords;
       const res = await API.post("/bookings", payload);
+      clearBookingDraft();
       showToast("Request sent — slot held for 5 min.", "success", 7000);
       onSubmit?.(res.data);
       navigate(`/bookings/${res.data._id}/wait`);
@@ -412,21 +420,36 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
 
   /* ════════════════════════════════════════════════════════════════════ */
   return (
-  <div className="bk">
+  <div className={`bk bk-step-${step}`}>
 
     {/* Error alert */}
     {error && (
       <div ref={errorRef} className="bk-error" role="alert">
-        <AlertCircle size={15} /> {error}
+        <AlertCircle size={14} /> {error}
       </div>
     )}
 
+    {/* Step progress */}
+    <div className="bk-steps" aria-hidden="true">
+      {STEP_TITLES.map((_, i) => (
+        <span
+          key={STEP_TITLES[i]}
+          className={`bk-step-dot ${i < step ? "done" : i === step ? "active" : ""}`}
+        />
+      ))}
+    </div>
+    <div className="bk-step-meta" aria-live="polite">
+      <span>Step {step + 1} of {STEP_TITLES.length}</span>
+      <strong>{STEP_TITLES[step]}</strong>
+    </div>
+
     <form onSubmit={handleSubmit} aria-busy={submitting}>
+      <div className="bk-step" key={step}>
       {/* ── Step 0: Service Type ── */}
       {step === 0 && (
         <div className="bk-card">
           <div className="bk-card-label">
-            <ChefHat size={15} /> Service
+            <ChefHat size={14} /> Service
           </div>
           <div className="bk-service-grid">
             {SERVICE_OPTIONS.map((opt) => {
@@ -440,7 +463,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
                   onClick={() => setFormData((p) => ({ ...p, serviceType: opt.value }))}
                   aria-pressed={active}
                 >
-                  <Icon size={20} />
+                  <Icon size={17} />
                   <span className="bk-service-label">{opt.label}</span>
                   <span className="bk-service-desc">{opt.desc}</span>
                 </button>
@@ -456,7 +479,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
           {/* Duration chips */}
           <div className="bk-card">
             <div className="bk-card-label">
-              <Clock size={15} /> Duration
+              <Clock size={14} /> Duration
             </div>
             <div className="bk-duration-row">
               {DURATION_OPTIONS.map((h) => {
@@ -474,14 +497,14 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
               })}
               <input
                 type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[.]?[0-9]*"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 name="durationHours"
                 className="bk-dur-custom"
                 placeholder="Other"
-                min={0.5}
-                max={12}
-                step={0.5}
+                min={DURATION_MIN}
+                max={DURATION_MAX}
+                step={1}
                 value={
                   DURATION_OPTIONS.includes(Number(formData.durationHours))
                     ? ""
@@ -489,7 +512,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
                 }
                 onChange={(e) => {
                   const v = e.target.value;
-                  if (v === "" || (!isNaN(Number(v)) && Number(v) >= 0.5 && Number(v) <= 12)) {
+                  if (v === "" || (Number.isInteger(Number(v)) && Number(v) >= DURATION_MIN && Number(v) <= DURATION_MAX)) {
                     setFormData((p) => ({ ...p, durationHours: v }));
                   }
                 }}
@@ -500,13 +523,14 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
                   Ends <strong>{fmtHour12(derivedEndTime)}</strong>
                 </div>
               )}
+              <span className="bk-pin-msg">Launch pricing: 1 hr ₹199 · 2 hrs ₹349 · 3 hrs ₹499 · 4 hrs ₹649.</span>
             </div>
           </div>
 
           {/* Start hour selector */}
           <div className="bk-card">
             <div className="bk-card-label">
-              <Clock size={15} /> Start Hour
+              <Clock size={14} /> Start Hour
             </div>
             <div className="bk-hour-select">
               {hourOptions.map((t) => {
@@ -533,7 +557,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
           {/* Address */}
           <div className="bk-card">
             <div className="bk-card-label">
-              <MapPin size={15} /> Address
+              <MapPin size={14} /> Address
             </div>
             {savedLocations.length > 0 && (
               <div className="bk-saved-wrap">
@@ -588,17 +612,8 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
                 onChange={handleChange}
               />
             </div>
-            {/* GPS pin */}
+            {/* Auto-attached map pin (from detected location or saved entry) */}
             <div className="bk-pin-bar">
-              <button
-                type="button"
-                className="bk-pin-btn"
-                onClick={handleDetectLocation}
-                disabled={locating}
-              >
-                <LocateFixed size={14} />
-                {locating ? "Detecting…" : coords ? "Re-pin" : "Pin my location"}
-              </button>
               {pinMapsUrl && (
                 <>
                   <button type="button" className="bk-pin-icon" onClick={handleCopyPin} title="Copy link">
@@ -616,7 +631,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
           {/* Notes */}
           <div className="bk-card">
             <div className="bk-card-label">
-              <StickyNote size={15} /> Notes
+              <StickyNote size={14} /> Notes
             </div>
             <textarea
               name="notes"
@@ -628,13 +643,34 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
             />
           </div>
 
-          {/* Sticky footer with estimate and submit */}
+          {/* Sticky footer with price breakdown and submit */}
           <div className="bk-foot">
-            {estimate && (
+            {slab != null && (
               <div className="bk-foot-estimate">
-                <span>{estimate.hours} hr × {formatCurrency(hourlyRate)}</span>
-                <span className="bk-foot-total">{formatCurrency(Math.max(1, Math.round(estimate.total)))}</span>
+                <div className="price-rows" style={{ flex: 1 }}>
+                  <div className="price-row">
+                    <span>Service Price · {formData.durationHours} hr{Number(formData.durationHours) === 1 ? "" : "s"}</span>
+                    <span>{formatCurrency(slab)}</span>
+                  </div>
+                  {coupon && (
+                    <div className="price-row discount">
+                      <span>Coupon {coupon.code}</span>
+                      <span>−{formatCurrency(discount)}</span>
+                    </div>
+                  )}
+                  <div className="price-row total">
+                    <span>Final Amount</span>
+                    <strong>{formatCurrency(finalAmount)}</strong>
+                  </div>
+                </div>
               </div>
+            )}
+            {slab != null && (
+              <CouponApply
+                amount={slab}
+                serviceType={formData.serviceType}
+                onApplied={setCoupon}
+              />
             )}
             <button type="submit" className="bk-submit" disabled={submitting}>
               {submitting ? (
@@ -642,7 +678,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
               ) : (
                 <>
                   Send Request
-                  <ArrowRight size={18} />
+                  <ArrowRight size={16} />
                 </>
               )}
             </button>
@@ -650,9 +686,10 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
           </div>
         </>
       )}
+      </div>
 
       {/* Navigation Buttons */}
-      <div className="bk-nav-buttons" style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+      <div className="bk-nav-buttons">
         {step > 0 && (
           <button type="button" className="bk-back-btn" onClick={() => setStep(step - 1)} disabled={submitting}>
             Back
@@ -666,7 +703,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
               // simple validation before advancing
               if (step === 0 && !formData.serviceType) { setError("Select a service type"); scrollToError(); return; }
               if (step === 1) {
-                if (!hoursValid) { setError("Enter a valid duration"); scrollToError(); return; }
+                if (!hoursValid) { setError("Please choose 1, 2, 3 or 4 hours"); scrollToError(); return; }
                 if (!formData.startTime) { setError("Select a start time"); scrollToError(); return; }
               }
               setError(""); // clear any previous errors
@@ -680,7 +717,11 @@ const BookingForm = ({ cookId, cookUserId, cookName, hourlyRate = 500, onSubmit 
       </div>
     </form>
 
-    <LoginPromptModal open={showLoginModal} onClose={() => setShowLoginModal(false)} />
+    <LoginPromptModal
+      open={showLoginModal}
+      onClose={() => setShowLoginModal(false)}
+      returnTo={cookId ? `/cooks/${cookId}` : null}
+    />
   </div>
 );
 };

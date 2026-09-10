@@ -129,8 +129,6 @@
   opacity: 0.8;
 }
 .slot-chip.selected .slot-chip-count { opacity: 0.95; }
-/* Step-3 single book button: full-width tap target */
-.slot-chip-book { width: 100%; border-radius: 14px; }
 
 /* Custom checkbox (login remember) */
 .login-remember {
@@ -171,22 +169,6 @@
 .login-label-row label { font-weight: 700; font-size: 0.85rem; color: var(--slate-700); }
 .login-link-btn { border: none; background: none; color: var(--primary); font-size: 0.82rem; font-weight: 600; padding: 0; }
 .login-link-btn:hover { text-decoration: underline; }
-
-/* Geo/location helper */
-.detect-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.55rem 0.9rem;
-  border-radius: 11px;
-  border: 1.5px dashed var(--slate-300);
-  background: var(--slate-50);
-  color: var(--slate-600);
-  font-weight: 650;
-  font-size: 0.86rem;
-  transition: all 0.15s ease;
-}
-.detect-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
 
 /* Maps link input group (copy link) */
 .maps-link-group {

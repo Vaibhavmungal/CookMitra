@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { safeNextPath } from "../utils/bookingDraft";
 import {
   Mail,
   Lock,
@@ -28,6 +29,10 @@ const Login = () => {
   const { login } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // ?next=… is set when login interrupted a booking — customers return to it.
+  const next = safeNextPath(searchParams.get("next"));
+  const registerTo = next ? `/register?next=${encodeURIComponent(next)}` : "/register";
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -45,6 +50,8 @@ const Login = () => {
         navigate("/dashboard/cook-bookings");
       } else if (user.role === "admin") {
         navigate("/admin");
+      } else if (next) {
+        navigate(next);
       } else {
         navigate("/");
       }
@@ -135,6 +142,12 @@ const Login = () => {
             <p>Enter your email and password to continue</p>
           </div>
 
+          {next && (
+            <div className="auth-resume-note">
+              You were booking a cook — sign in to pick up right where you left off.
+            </div>
+          )}
+
           {error && (
             <div className="error-alert-banner login-error">
               <AlertCircle size={16} /> {error}
@@ -222,10 +235,10 @@ const Login = () => {
             <span>or</span>
           </div>
 
-          <GoogleSignInButton text="signin_with" onError={setError} />
+          <GoogleSignInButton text="signin_with" onError={setError} next={next} />
 
           <div className="auth-footer-prompt">
-            Don&apos;t have an account yet? <Link to="/register">Create an account</Link>
+            Don&apos;t have an account yet? <Link to={registerTo}>Create an account</Link>
           </div>
 
           <div className="login-secure-note">

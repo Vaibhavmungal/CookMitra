@@ -32,6 +32,8 @@ const check = (name, ok, detail) => {
     "booking_completed",
     "booking_expired",
     "booking_cancelled",
+    "booking_rescheduled",
+    "service_started",
     "cook_arrived",
     "cooking_hours_completed",
     "review_received",

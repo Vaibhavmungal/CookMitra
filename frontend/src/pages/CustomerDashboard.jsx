@@ -5,7 +5,7 @@ import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import ReviewForm from "../components/ReviewForm";
-import { formatCurrency, formatDate, bookingCustomerWhatsAppUrl, bookingReviewWhatsAppUrl, sessionEndDate, formatRemaining, hoursCompleteWhatsAppUrl, playAlarmSound } from "../utils/constants";
+import { formatCurrency, formatDate, bookingCustomerWhatsAppUrl, bookingReviewWhatsAppUrl, sessionEndDate, hasServiceHoursStarted, formatRemaining, hoursCompleteWhatsAppUrl, playAlarmSound } from "../utils/constants";
 import {
   Calendar,
   Clock,
@@ -20,6 +20,7 @@ import {
   Sparkles,
   ChefHat,
   BellRing,
+  Trash2,
 } from "lucide-react";
 
 const CustomerDashboard = () => {
@@ -163,6 +164,17 @@ const CustomerDashboard = () => {
       refetch();
     } catch (err) {
       showToast(err.response?.data?.message || "Failed to cancel booking", "error");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this booking permanently from your history? This can't be undone.")) return;
+    try {
+      await API.delete(`/bookings/${id}`);
+      showToast("Booking deleted", "info");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to delete booking", "error");
     }
   };
 
@@ -334,9 +346,13 @@ const CustomerDashboard = () => {
                   : "Confirmed — use Track Live on the day to follow your cook."}
             </div>
           </div>
-          <Link to={`/track/${nextUp._id}`} className="btn btn-primary btn-sm">
-            <Navigation size={15} /> Track
-          </Link>
+          {/* Track is only meaningful once the cook accepted — for requests that
+              are still waiting, Details is the only useful action. */}
+          {["accepted", "confirmed"].includes(nextUp.status) && (
+            <Link to={`/track/${nextUp._id}`} className="btn btn-primary btn-sm">
+              <Navigation size={15} /> Track
+            </Link>
+          )}
           <Link to={`/bookings/${nextUp._id}`} className="btn btn-outline btn-sm">
             Details
           </Link>
@@ -358,7 +374,22 @@ const CustomerDashboard = () => {
                     Ref #{booking._id?.substring(18).toUpperCase()}
                   </span>
                 </div>
-                <div>{getStatusBadge(booking.status, booking)}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                  <div>{getStatusBadge(booking.status, booking)}</div>
+                  {/* Removable bookings (never accepted / cancelled) get a
+                      compact delete control in the card's top-right corner. */}
+                  {["requested", "rejected", "expired", "cancelled"].includes(booking.status) && (
+                    <button
+                      type="button"
+                      className="booking-delete-btn"
+                      onClick={() => handleDelete(booking._id)}
+                      title="Delete this booking permanently"
+                      aria-label="Delete this booking permanently"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {booking.status === "requested" && (
@@ -411,7 +442,9 @@ const CustomerDashboard = () => {
                       </>
                     )}
                     <br />
-                    Get the confirmation with live tracking on your WhatsApp below.
+                    {booking.status === "confirmed"
+                      ? "Get the confirmation with live tracking on your WhatsApp below."
+                      : "Complete your payment to confirm the booking."}
                   </span>
                 </div>
               )}
@@ -537,9 +570,10 @@ const CustomerDashboard = () => {
                 </div>
               )}
 
-              {/* Actions */}
+              {/* Actions — Cancel only shows until service hours begin. */}
               <div className="booking-actions-row">
-                {!(["completed", "cancelled", "rejected"].includes(booking.status)) && (
+                {["accepted", "confirmed", "in_progress"].includes(booking.status) &&
+                  !hasServiceHoursStarted(booking) && (
                   <button
                     className="btn btn-danger-outline btn-sm"
                     onClick={() => handleCancel(booking._id)}
@@ -548,8 +582,11 @@ const CustomerDashboard = () => {
                   </button>
                 )}
 
-                {/* Single WhatsApp with all booking info */}
-                {(() => {
+                {/* Single WhatsApp with all booking info — only for confirmed
+                    bookings whose service hours aren't complete yet. */}
+                {["confirmed", "in_progress"].includes(booking.status) &&
+                  !booking.hoursCompleted &&
+                  (() => {
                   const myWaUrl = bookingCustomerWhatsAppUrl({
                     customerPhone: user?.phone,
                     cookName: booking.cook?.name,

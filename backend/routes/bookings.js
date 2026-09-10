@@ -16,6 +16,9 @@ const {
   rejectBooking,
   completeBooking,
   cancelBooking,
+  deleteBooking,
+  rescheduleBooking,
+  startService,
   payBooking,
   shareCookLocation,
   markCookArrived,
@@ -40,8 +43,12 @@ router.post(
       .withMessage("Guests must be between 1 and 500"),
     body("durationHours")
       .optional()
-      .isFloat({ min: 0.5, max: 12 })
-      .withMessage("Duration must be between 0.5 and 12 hours"),
+      .isInt({ min: 1, max: 4 })
+      .withMessage("Sessions run 1–4 hours"),
+    body("couponCode")
+      .optional()
+      .isString()
+      .withMessage("Coupon code must be text"),
     body("location.lat")
       .optional()
       .isFloat({ min: -90, max: 90 })
@@ -85,6 +92,30 @@ router.patch(
   shareCookLocation
 );
 router.patch("/:id/arrived", auth, authorize("cook", "admin"), markCookArrived);
+router.patch(
+  "/:id/start-service",
+  auth,
+  authorize("cook", "admin"),
+  [body("otp").trim().notEmpty().withMessage("OTP is required")],
+  validate,
+  startService
+);
 router.patch("/:id/cancel", auth, cancelBooking);
+// Customers may permanently remove bookings the cook never accepted
+// (requested / rejected / expired) or ones they already cancelled.
+router.delete("/:id", auth, authorize("customer"), deleteBooking);
+router.patch(
+  "/:id/reschedule",
+  auth,
+  authorize("customer"),
+  [
+    body("date").isISO8601().withMessage("Valid date is required"),
+    body("startTime")
+      .matches(/^(\d{1,2}):(\d{2})$/)
+      .withMessage("Valid start time (HH:MM) is required"),
+  ],
+  validate,
+  rescheduleBooking
+);
 
 module.exports = router;

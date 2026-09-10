@@ -10,14 +10,20 @@ const toDateInputValue = (d) =>
 const numberOrNull = (v) => (v === "" || v == null ? null : Number(v));
 const numberOrZero = (v) => (v === "" || v == null ? 0 : Number(v));
 
+const SERVICE_IDS = ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"];
+
 const blankForm = () => ({
   code: "",
   description: "",
+  discountType: "flat",
   percent: "",
+  flatAmount: "",
   maxDiscount: "",
   minOrder: "0",
   usageLimit: "",
   perUserLimit: "1",
+  firstBookingOnly: false,
+  applicableServices: "",
   validFrom: "",
   validTo: "",
   active: true,
@@ -26,11 +32,15 @@ const blankForm = () => ({
 const formFromCoupon = (coupon) => ({
   code: coupon.code || "",
   description: coupon.description || "",
+  discountType: coupon.discountType || "percent",
   percent: coupon.percent != null ? String(coupon.percent) : "",
+  flatAmount: coupon.flatAmount != null ? String(coupon.flatAmount) : "",
   maxDiscount: coupon.maxDiscount != null ? String(coupon.maxDiscount) : "",
   minOrder: coupon.minOrder != null ? String(coupon.minOrder) : "0",
   usageLimit: coupon.usageLimit != null ? String(coupon.usageLimit) : "",
   perUserLimit: coupon.perUserLimit != null ? String(coupon.perUserLimit) : "1",
+  firstBookingOnly: coupon.firstBookingOnly === true,
+  applicableServices: (coupon.applicableServices || []).join(", "),
   validFrom: toDateInputValue(coupon.validFrom),
   validTo: toDateInputValue(coupon.validTo),
   active: coupon.active !== false,
@@ -74,14 +84,32 @@ const CouponModal = ({ open, onClose, onSaved, coupon }) => {
     e.preventDefault();
     setSaving(true);
     setError("");
+    const isFlat = form.discountType === "flat";
+    if (isFlat && !(Number(form.flatAmount) >= 1)) {
+      setSaving(false);
+      setError("Flat discount needs an amount of at least ₹1.");
+      return;
+    }
+    if (!isFlat && !(Number(form.percent) >= 1 && Number(form.percent) <= 100)) {
+      setSaving(false);
+      setError("Percent discount must be between 1 and 100.");
+      return;
+    }
     const payload = {
       code: (form.code || "").trim().toUpperCase(),
       description: (form.description || "").trim(),
-      percent: Number(form.percent),
+      discountType: isFlat ? "flat" : "percent",
+      percent: isFlat ? null : Number(form.percent),
+      flatAmount: isFlat ? Number(form.flatAmount) : null,
       maxDiscount: numberOrNull(form.maxDiscount),
       minOrder: numberOrZero(form.minOrder),
       usageLimit: numberOrNull(form.usageLimit),
       perUserLimit: numberOrNull(form.perUserLimit),
+      firstBookingOnly: form.firstBookingOnly === true,
+      applicableServices: String(form.applicableServices || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => SERVICE_IDS.includes(s)),
       validFrom: form.validFrom ? new Date(`${form.validFrom}T00:00:00`) : null,
       validTo: form.validTo ? new Date(`${form.validTo}T00:00:00`) : null,
       active: form.active,
@@ -136,36 +164,63 @@ const CouponModal = ({ open, onClose, onSaved, coupon }) => {
             </div>
           )}
 
+          <div className="booking-form-group">
+            <label>Coupon Code *</label>
+            <input
+              type="text"
+              name="code"
+              className="form-control"
+              value={form.code}
+              onChange={handleChange}
+              placeholder="e.g. WELCOME50"
+              maxLength={24}
+              pattern="[A-Za-z0-9]+"
+              required
+              style={{ textTransform: "uppercase" }}
+            />
+          </div>
+
           <div className="modal-form-grid-2">
             <div className="booking-form-group">
-              <label>Coupon Code *</label>
-              <input
-                type="text"
-                name="code"
+              <label>Discount Type *</label>
+              <select
+                name="discountType"
                 className="form-control"
-                value={form.code}
+                value={form.discountType}
                 onChange={handleChange}
-                placeholder="e.g. BAPPA20"
-                maxLength={24}
-                pattern="[A-Za-z0-9]+"
-                required
-                style={{ textTransform: "uppercase" }}
-              />
+              >
+                <option value="flat">Flat ₹ off</option>
+                <option value="percent">Percent % off</option>
+              </select>
             </div>
             <div className="booking-form-group">
-              <label>Discount % *</label>
-              <input
-                type="number"
-                name="percent"
-                className="form-control"
-                value={form.percent}
-                onChange={handleChange}
-                min={1}
-                max={100}
-                step={1}
-                placeholder="e.g. 15"
-                required
-              />
+              <label>{form.discountType === "flat" ? "Flat Discount ₹ *" : "Discount % *"}</label>
+              {form.discountType === "flat" ? (
+                <input
+                  type="number"
+                  name="flatAmount"
+                  className="form-control"
+                  value={form.flatAmount}
+                  onChange={handleChange}
+                  min={1}
+                  step={1}
+                  placeholder="e.g. 50"
+                  required
+                />
+              ) : (
+                <input
+                  type="number"
+                  name="percent"
+                  className="form-control"
+                  value={form.percent}
+                  onChange={handleChange}
+                  min={1}
+                  max={100}
+                  step={1}
+                  placeholder="e.g. 15"
+                  required
+                />
+              )}
             </div>
           </div>
 
@@ -198,9 +253,28 @@ const CouponModal = ({ open, onClose, onSaved, coupon }) => {
               <input type="number" name="usageLimit" className="form-control" value={form.usageLimit} onChange={handleChange} min={1} placeholder="e.g. 500" />
             </div>
             <div className="booking-form-group">
-              <label>Uses per Customer</label>
+              <label>Uses per Customer (blank = unlimited)</label>
               <input type="number" name="perUserLimit" className="form-control" value={form.perUserLimit} onChange={handleChange} min={1} placeholder="1" />
             </div>
+          </div>
+
+          <div className="booking-form-group">
+            <label className="coupon-active-toggle">
+              <input type="checkbox" checked={form.firstBookingOnly} onChange={(e) => setForm((f) => ({ ...f, firstBookingOnly: e.target.checked }))} />
+              <span>First booking only (e.g. WELCOME50 — one per new customer)</span>
+            </label>
+          </div>
+
+          <div className="booking-form-group">
+            <label>Services (blank = all services)</label>
+            <input
+              type="text"
+              name="applicableServices"
+              className="form-control"
+              value={form.applicableServices}
+              onChange={handleChange}
+              placeholder="e.g. cook_for_me, teach_me"
+            />
           </div>
 
           <div className="modal-form-grid-2">

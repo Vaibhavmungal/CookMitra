@@ -121,6 +121,10 @@
   border: 1px solid var(--border-subtle);
   padding: 2.4rem 2rem;
 }
+@media (max-width: 400px) {
+  .login-card { padding: 1.5rem 1rem; }
+  .auth-card-modern { padding: 1.5rem 1rem; }
+}
 .login-card-header { text-align: center; margin-bottom: 1.6rem; }
 .login-card-header h1,
 .login-card-header h2 { font-size: 1.5rem; margin-bottom: 0.3rem; }
@@ -237,4 +241,17 @@
   object-fit: contain;
   display: block;
   margin: 0 auto 0.9rem;
+}
+
+/* Notice shown when login/signup resumes an interrupted booking (?next=) */
+.auth-resume-note {
+  background: var(--primary-light);
+  border: 1px solid var(--primary-100);
+  color: var(--primary-800);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.45;
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.9rem;
 }

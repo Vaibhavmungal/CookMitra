@@ -1,12 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useFetch } from "../hooks/useFetch";
 import API from "../api/axios";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../context/AuthContext";
-import { formatCurrency, formatDate } from "../utils/constants";
+import { formatCurrency, formatDate, playAlarmSound } from "../utils/constants";
 import CookProfileForm from "../components/CookProfileForm";
 import CookAvailabilityToggle from "../components/CookAvailabilityToggle";
+import { Check, X, BellRing, ArrowRight } from "lucide-react";
 
 const CookDashboard = () => {
   const { data: bookings, loading: loadingBookings, error: bookingError, refetch: refetchBookings } = useFetch("/bookings/cook");
@@ -15,6 +16,47 @@ const CookDashboard = () => {
   const { showToast } = useToast();
   const { user } = useAuth();
   const [view, setView] = useState("needs-action");
+  const seenHoursDone = useRef(new Set());
+  const firstLoadDone = useRef(false);
+
+  // Poll bookings so the hours-complete alarm fires without refresh.
+  useEffect(() => {
+    const id = setInterval(() => refetchBookings(), 30000);
+    return () => clearInterval(id);
+  }, [refetchBookings]);
+
+  // Alarm once per booking when hours complete (skip state that already
+  // existed on first load to avoid noise).
+  useEffect(() => {
+    if (!bookings?.length) return;
+    if (!firstLoadDone.current) {
+      bookings.forEach((b) => {
+        if (b.hoursCompleted) seenHoursDone.current.add(b._id);
+      });
+      firstLoadDone.current = true;
+      return;
+    }
+    bookings.forEach((b) => {
+      if (b.hoursCompleted && !seenHoursDone.current.has(b._id)) {
+        seenHoursDone.current.add(b._id);
+        showToast(
+          `Cooking hours complete for ${b.customer?.name || "your booking"} — please wrap up.`,
+          "warning",
+          8000
+        );
+        playAlarmSound();
+        try {
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Cooking hours complete!", {
+              body: "Your booked cooking hours are complete. Please wrap up the session.",
+            });
+          }
+        } catch {
+          // optional
+        }
+      }
+    });
+  }, [bookings, showToast]);
 
   const handleAction = async (bookingId, action) => {
     try {
@@ -36,6 +78,8 @@ const CookDashboard = () => {
       case "accepted":
       case "confirmed":
         return <span className="badge badge-blue">Scheduled</span>;
+      case "in_progress":
+        return <span className="badge badge-purple">In Progress</span>;
       case "completed":
         return <span className="badge badge-emerald">Completed</span>;
       case "rejected":
@@ -172,6 +216,21 @@ const CookDashboard = () => {
                     </p>
                   )}
 
+                  {booking.hoursCompleted && (
+                    <div
+                      style={{
+                        display: "flex", alignItems: "center", gap: "0.5rem",
+                        background: "#fef3c7", border: "1px solid #f59e0b",
+                        borderRadius: "10px", padding: "0.55rem 0.8rem",
+                        marginBottom: "0.75rem", fontSize: "0.85rem", fontWeight: 600,
+                        color: "#92400e",
+                      }}
+                    >
+                      <BellRing size={16} style={{ color: "#b45309", flexShrink: 0 }} />
+                      <span>Cooking hours complete — please wrap up the session.</span>
+                    </div>
+                  )}
+
                   {booking.status === "requested" && (
                     <div className="booking-actions-row">
                       <button className="btn btn-success" onClick={() => handleAction(booking._id, "accept")}>
@@ -180,11 +239,17 @@ const CookDashboard = () => {
                       <button className="btn btn-danger-outline" onClick={() => handleAction(booking._id, "reject")}>
                         <X size={16} /> Decline
                       </button>
+                      <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
+                        Open <ArrowRight size={15} />
+                      </Link>
                     </div>
                   )}
 
                   {["accepted", "confirmed", "in_progress"].includes(booking.status) && (
                     <div className="booking-actions-row">
+                      <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
+                        {booking.serviceStartedAt ? "Manage live" : "Start with OTP"} <ArrowRight size={15} />
+                      </Link>
                       <button className="btn btn-primary" onClick={() => handleAction(booking._id, "complete")}>
                         <Check size={16} /> Mark Completed
                       </button>

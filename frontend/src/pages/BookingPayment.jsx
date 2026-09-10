@@ -502,6 +502,20 @@ const BookingPayment = () => {
           <aside className="bf-grid-side">
             <div className="bf-amount-box">
               <span className="bf-amount-label">Amount payable</span>
+              {Number(booking?.slabPrice) > 0 ? (
+                <div className="price-rows" style={{ width: "100%", textAlign: "left", marginBottom: "0.4rem" }}>
+                  <div className="price-row">
+                    <span>Service Price · {booking?.durationHours} hr{Number(booking?.durationHours) === 1 ? "" : "s"}</span>
+                    <span>{formatCurrency(booking.slabPrice)}</span>
+                  </div>
+                  {booking?.couponCode ? (
+                    <div className="price-row discount">
+                      <span>Coupon {booking.couponCode}</span>
+                      <span>−{formatCurrency(booking.discount)}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <span className="bf-amount">{formatCurrency(amount)}</span>
               {items.length ? <span className="bf-amount-note">{items.join(" • ")}</span> : null}
             </div>

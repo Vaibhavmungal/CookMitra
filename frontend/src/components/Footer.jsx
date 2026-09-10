@@ -28,7 +28,7 @@ const Footer = () => {
               Connecting families with verified culinary masters to celebrate traditional festivals
               with genuine flavor, warmth, and authentic heritage recipes.
             </p>
-            <div style={{ display: "flex", gap: "1rem", marginTop: "1.25rem" }}>
+            <div style={{ display: "flex", gap: "0.6rem 1rem", marginTop: "1.25rem", flexWrap: "wrap" }}>
               <span className="badge badge-festive" style={{ background: "rgba(232, 89, 12, 0.15)", color: "#ffedd5" }}>
                 <ShieldCheck size={14} /> 100% Verified Cooks
               </span>
@@ -77,9 +77,9 @@ const Footer = () => {
           <div className="footer-links-col">
             <h4>Reach Us</h4>
             <ul className="footer-links-list">
-              <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
-                <Mail size={16} />
-                <a href="mailto:contactuscookmitra@gmail.com" style={{ color: "inherit" }}>contactuscookmitra@gmail.com</a>
+              <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)", minWidth: 0 }}>
+                <Mail size={16} style={{ flexShrink: 0 }} />
+                <a href="mailto:contactuscookmitra@gmail.com" style={{ color: "inherit", minWidth: 0, overflowWrap: "anywhere" }}>contactuscookmitra@gmail.com</a>
               </li>
               <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
                 <Phone size={16} />

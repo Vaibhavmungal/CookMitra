@@ -11,10 +11,10 @@ const {
 } = require("../utils/slots");
 const { isConfigured, keyId, razorpay } = require("../config/razorpay");
 
-// POST /api/payments/order — create a Razorpay order for the cook's defined
-// fee BEFORE booking. Body: { cook, date, startTime, endTime, durationHours? }.
-// Fee = cook's hourly rate × window length (windows are sized from the input
-// service hours). Returns the order for Razorpay Checkout.
+// POST /api/payments/order — create a Razorpay order for a booking window.
+// Body: { cook, date, startTime, endTime, durationHours?, bookingId? }.
+// With bookingId (the real checkout path) the order charges the booking's
+// stored payable (launch slab minus coupon). Returns the order for Checkout.
 exports.createOrder = async (req, res, next) => {
   try {
     if (!isConfigured) {
@@ -64,16 +64,16 @@ exports.createOrder = async (req, res, next) => {
       }
     }
 
-    const fullFee = Math.round(Number(cookProfile.rate) * hours);
-    const amountPaise = fullFee * 100;
-
     // Post-acceptance checkout must be for the customer's own live booking:
     // it must exist, belong to them, still await payment, and match this
     // window. (A bare order without bookingId stays generic — pre-booking.)
+    // The gateway always charges the booking's stored payable (slab price
+    // minus any coupon) — never a recomputed rack rate.
     let bookingForOrder = null;
+    let fullFee;
     if (bookingId) {
       bookingForOrder = await Booking.findById(bookingId).select(
-        "customer cook date startTime endTime status payment"
+        "customer cook date startTime endTime status payment amount"
       );
       if (!bookingForOrder) {
         return res.status(404).json({ message: "Booking not found" });
@@ -91,7 +91,11 @@ exports.createOrder = async (req, res, next) => {
       ) {
         return res.status(400).json({ message: "Order does not match the booking window" });
       }
+      fullFee = Math.max(1, Math.round(Number(bookingForOrder.amount) || 0));
+    } else {
+      fullFee = Math.round(Number(cookProfile.rate) * hours);
     }
+    const amountPaise = fullFee * 100;
 
     let order;
     try {

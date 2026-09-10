@@ -178,6 +178,20 @@ const computeStartOptions = (windows, bookings, durationHours) => {
   return options.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 };
 
+// Session lengths (whole launch hours) strictly below `requested` that still
+// fit at least one start option inside the open windows — largest first,
+// capped at `max`. Pure in-memory recovery hint so "no 3-hour slots" can
+// become a one-tap "try 2 hours" instead of a dead end.
+const suggestDurations = (windows, bookings, requested, max = 3) => {
+  const out = [];
+  const top = Math.floor(Number(requested));
+  if (!Number.isFinite(top) || top <= 1) return out;
+  for (let d = top - 1; d >= 1 && out.length < max; d -= 1) {
+    if (computeStartOptions(windows, bookings, d).length > 0) out.push(d);
+  }
+  return out;
+};
+
 // Is the requested [startTime, endTime] fully inside one open window?
 const findContainingWindow = (windows, startTime, endTime) => {
   const s = timeToMinutes(startTime);
@@ -215,6 +229,7 @@ module.exports = {
   getDayWindows,
   getDayBookings,
   computeStartOptions,
+  suggestDurations,
   findContainingWindow,
   findOverlapBooking,
 };

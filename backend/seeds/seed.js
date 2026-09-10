@@ -10,46 +10,83 @@ const Coupon = require("../models/Coupon");
 
 dotenv.config();
 
-// Initial promo coupons — upto 20% off festive bookings. Used both by the
-// full `npm run seed` and the safe `node seeds/seed.js --coupons-only` mode
-// (which only inserts missing codes into an existing database, no wiping).
-// validFrom/validTo are left null = active from now with no expiry.
+// Launch promo coupons — WELCOME50 + FESTIVE50 active, future campaign
+// codes seeded inactive. Used both by the full `npm run seed` and the safe
+// `node seeds/seed.js --coupons-only` mode (which only inserts missing codes
+// into an existing database, no wiping). validFrom/validTo are left null =
+// active from now with no expiry.
 const INITIAL_COUPONS = [
+  // Launch-active offers (the only two customers can use today).
   {
-    code: "BAPPA20",
-    description: "Ganesh Utsav special — flat 20% off festive cook bookings.",
-    percent: 20,
-    maxDiscount: 500,
-    minOrder: 0,
+    code: "WELCOME50",
+    description: "₹50 off your first booking (min order ₹399, one per customer).",
+    discountType: "flat",
+    flatAmount: 50,
+    minOrder: 399,
     perUserLimit: 1,
+    firstBookingOnly: true,
     active: true,
   },
   {
-    code: "FESTIVE15",
-    description: "15% off any festive cooking session this season.",
-    percent: 15,
-    maxDiscount: 400,
-    minOrder: 0,
-    perUserLimit: 1,
+    code: "FESTIVE50",
+    description: "₹50 off festive bookings (min order ₹399, one per booking).",
+    discountType: "flat",
+    flatAmount: 50,
+    minOrder: 399,
+    perUserLimit: null,
+    firstBookingOnly: false,
     active: true,
   },
+  // Future campaigns — seeded inactive, flip on from the admin panel.
   {
-    code: "UTSAV10",
-    description: "10% off on first festive cook booking.",
-    percent: 10,
-    maxDiscount: 300,
-    minOrder: 0,
+    code: "NEWUSER100",
+    description: "₹100 off for new customers.",
+    discountType: "flat",
+    flatAmount: 100,
+    minOrder: 499,
     perUserLimit: 1,
-    active: true,
+    firstBookingOnly: true,
+    active: false,
   },
   {
-    code: "MORYA5",
-    description: "5% early-bird festive offer.",
-    percent: 5,
-    maxDiscount: 200,
-    minOrder: 0,
+    code: "REFER50",
+    description: "₹50 off referral bookings.",
+    discountType: "flat",
+    flatAmount: 50,
+    minOrder: 399,
     perUserLimit: 1,
-    active: true,
+    firstBookingOnly: false,
+    active: false,
+  },
+  {
+    code: "REBOOK50",
+    description: "₹50 off repeat bookings.",
+    discountType: "flat",
+    flatAmount: 50,
+    minOrder: 399,
+    perUserLimit: null,
+    firstBookingOnly: false,
+    active: false,
+  },
+  {
+    code: "FESTIVE100",
+    description: "₹100 off festival campaign bookings.",
+    discountType: "flat",
+    flatAmount: 100,
+    minOrder: 799,
+    perUserLimit: 1,
+    firstBookingOnly: false,
+    active: false,
+  },
+  {
+    code: "WEEKDAY50",
+    description: "₹50 off weekday bookings.",
+    discountType: "flat",
+    flatAmount: 50,
+    minOrder: 399,
+    perUserLimit: null,
+    firstBookingOnly: false,
+    active: false,
   },
 ];
 
@@ -140,16 +177,19 @@ const seedData = async () => {
       approvalStatus: "pending",
     });
 
-    // Availability slots for the approved cook (next 7 days, 3 slots/day)
+    // Availability windows for the approved cook (next 7 days, 3 broad
+    // windows/day covering the whole 08:00–20:00 service day). Windows must
+    // comfortably exceed the app's default 3-hour session — narrow windows
+    // can never fit it and the date shows "no slots".
     const slots = [];
     for (let d = 1; d <= 7; d++) {
       const date = new Date();
       date.setDate(date.getDate() + d);
       date.setHours(0, 0, 0, 0);
       slots.push(
-        { cook: cook1._id, date: new Date(date), startTime: "09:00", endTime: "11:00", status: "available" },
-        { cook: cook1._id, date: new Date(date), startTime: "12:00", endTime: "14:00", status: "available" },
-        { cook: cook1._id, date: new Date(date), startTime: "16:00", endTime: "18:00", status: "available" }
+        { cook: cook1._id, date: new Date(date), startTime: "08:00", endTime: "12:00", status: "available" },
+        { cook: cook1._id, date: new Date(date), startTime: "12:00", endTime: "16:00", status: "available" },
+        { cook: cook1._id, date: new Date(date), startTime: "16:00", endTime: "20:00", status: "available" }
       );
     }
     await Availability.insertMany(slots);

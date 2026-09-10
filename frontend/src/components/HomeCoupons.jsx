@@ -52,7 +52,7 @@ const HomeCoupons = () => {
         <span className="section-eyebrow">🪔 Ganesh Utsav Specials</span>
         <h2 className="section-title">Festive Offers For You</h2>
         <p className="section-description">
-          Apply a coupon while paying for your booking — up to 20% off, fresh
+          Apply a coupon while booking — flat ₹50 off launch offers, fresh
           from Bappa's kitchen.
         </p>
       </div>
@@ -70,34 +70,39 @@ const HomeCoupons = () => {
               </span>
             )}
             <div className="coupon-off">
-              <BadgePercent size={24} />
-              <span>{c.percent}% OFF</span>
+              <BadgePercent size={26} />
+              <span>
+                {c.discountType === "flat" && c.flatAmount != null
+                  ? `₹${c.flatAmount} OFF`
+                  : `${c.percent}% OFF`}
+              </span>
             </div>
-            <div className="coupon-body">
+            <div className="coupon-code-row">
               <h3 className="coupon-code">{c.code}</h3>
-              {c.description && <p className="coupon-desc">{c.description}</p>}
-              <ul className="coupon-meta">
-                {c.maxDiscount ? <li>Up to ₹{c.maxDiscount} off</li> : null}
-                {c.minOrder ? <li>Min order ₹{c.minOrder}</li> : null}
-                {c.validTo ? <li>Valid till {fmtDate(c.validTo)}</li> : null}
-              </ul>
+              <button
+                type="button"
+                className="coupon-copy"
+                onClick={() => copyCode(c.code)}
+                aria-label={`Copy coupon code ${c.code}`}
+              >
+                {copiedCode === c.code ? (
+                  <>
+                    <Check size={14} /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} /> Copy
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              type="button"
-              className="coupon-copy"
-              onClick={() => copyCode(c.code)}
-              aria-label={`Copy coupon code ${c.code}`}
-            >
-              {copiedCode === c.code ? (
-                <>
-                  <Check size={15} /> Copied!
-                </>
-              ) : (
-                <>
-                  <Copy size={15} /> Copy Code
-                </>
-              )}
-            </button>
+            {c.description && <p className="coupon-desc">{c.description}</p>}
+            <ul className="coupon-meta">
+              {c.discountType !== "flat" && c.maxDiscount ? <li>Up to ₹{c.maxDiscount} off</li> : null}
+              {c.minOrder ? <li>Min order ₹{c.minOrder}</li> : null}
+              {c.firstBookingOnly ? <li>First booking only</li> : null}
+              {c.validTo ? <li>Valid till {fmtDate(c.validTo)}</li> : null}
+            </ul>
           </article>
         ))}
       </div>
