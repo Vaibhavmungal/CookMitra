@@ -181,6 +181,8 @@
 /* Fix for very small screens — never drop tap targets below ~40px */
 @media (max-width: 360px) {
   .navbar-brand { font-size: 1rem; }
+  /* 48px logo crowds tiny screens next to the hamburger — scale it down. */
+  .brand-logo-img { width: 38px; height: 38px; }
   .brand-icon-box { width: 32px; height: 32px; }
   .brand-icon-box svg { width: 16px; height: 16px; }
   .mobile-toggle-btn { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }

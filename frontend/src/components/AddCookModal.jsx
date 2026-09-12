@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { ChefHat, X, UserPlus, Loader2, AlertCircle, CheckCircle2, Copy, Check } from "lucide-react";
 
 const SERVICE_TYPES = [
@@ -22,7 +22,7 @@ const initialForm = {
 };
 
 const AddCookModal = ({ open, onClose, onCreated }) => {
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState("");
   const [created, setCreated] = useState(null);

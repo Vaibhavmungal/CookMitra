@@ -3,14 +3,14 @@
 import React, { useState } from "react";
 import API from "../api/axios";
 import { useFetch } from "../hooks/useFetch";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { formatDate } from "../utils/constants";
 import CouponModal from "./CouponModal";
 import { Plus, Pencil, Trash2, Power, PowerOff } from "lucide-react";
 
 const CouponManagement = () => {
   const { data: coupons, loading, refetch } = useFetch("/coupons");
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [showModal, setShowModal] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState(null);
 

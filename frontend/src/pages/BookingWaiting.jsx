@@ -11,7 +11,7 @@ import {
   XCircle,
 } from "lucide-react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { SERVICE_DETAILS, formatDate } from "../utils/constants";
 
 const WINDOW_MS = 5 * 60 * 1000; // 5-minute acceptance window
@@ -47,7 +47,7 @@ const SORRY_COPY = {
 const BookingWaiting = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const showToast = useShowToast();
 
   const [booking, setBooking] = useState(null);
   const [phase, setPhase] = useState("loading"); // loading | waiting | accepted | sorry | error

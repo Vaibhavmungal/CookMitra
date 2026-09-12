@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MapPin, LocateFixed, Search, X, AlertCircle } from "lucide-react";
-import { useLocation } from "../context/LocationContext";
+import { useDispatch } from "react-redux";
+import { useSiteLocation } from "../store/hooks";
+import {
+  requestPreciseLocation,
+  setManualLocation,
+  clearLocation,
+} from "../store/locationSlice";
 import { searchLocations } from "../utils/geolocation";
 
 // Header location pill + dropdown. Never blocks the page: GPS denial or a
 // failed lookup only shows an inline message while browsing keeps working.
 const LocationPicker = ({ onNavigate }) => {
-  const {
-    location,
-    status,
-    error,
-    isLocating,
-    requestPreciseLocation,
-    setManualLocation,
-    clearLocation,
-  } = useLocation();
+  const { location, status, error, isLocating } = useSiteLocation();
+  const dispatch = useDispatch();
+  const handlePrecise = () => dispatch(requestPreciseLocation());
+  const handleManual = (place) => dispatch(setManualLocation(place));
+  const handleClear = () => dispatch(clearLocation());
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -82,7 +84,7 @@ const LocationPicker = ({ onNavigate }) => {
             : "";
 
   const pick = (place) => {
-    setManualLocation(place);
+    handleManual(place);
     setOpen(false);
     setQuery("");
     setResults([]);
@@ -123,7 +125,7 @@ const LocationPicker = ({ onNavigate }) => {
           <div className="loc-drop-head">
             <span className="loc-drop-title">Your location</span>
             {location && (
-              <button type="button" className="loc-clear" onClick={clearLocation}>
+              <button type="button" className="loc-clear" onClick={handleClear}>
                 <X size={13} /> Clear
               </button>
             )}
@@ -142,7 +144,7 @@ const LocationPicker = ({ onNavigate }) => {
           <button
             type="button"
             className="btn btn-outline btn-sm loc-gps-btn"
-            onClick={requestPreciseLocation}
+            onClick={handlePrecise}
             disabled={isLocating}
           >
             <LocateFixed size={15} />

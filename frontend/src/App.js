@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
-import { LocationProvider } from "./context/LocationContext";
-import { ToastProvider } from "./context/ToastContext";
+import { Provider, useSelector, useDispatch } from "react-redux";
+import { store } from "./store/store";
+import { initLocation } from "./store/locationSlice";
+import Toasts from "./components/Toasts";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -29,19 +31,28 @@ import "./App.css";
 // Customer-only pages (Find Cooks / Book a Cook).
 // Guests + customers can view; admins -> /admin, cooks -> cook dashboard.
 const NonAdminRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+  const user = useSelector((s) => s.auth.user);
+  const loading = useSelector((s) => s.auth.loading);
   if (loading) return <div className="loading">Loading...</div>;
   if (user?.role === "admin") return <Navigate to="/admin" replace />;
   if (user?.role === "cook") return <Navigate to="/dashboard/cook-bookings" replace />;
   return children;
 };
 
+// Kicks off the first-visit location bootstrap once per app mount.
+const LocationBootstrap = () => {
+  const dispatch = useDispatch();
+  useEffect(() => {
+    dispatch(initLocation());
+  }, [dispatch]);
+  return null;
+};
+
 function App() {
   return (
-    <AuthProvider>
-      <LocationProvider>
-      <ToastProvider>
+    <Provider store={store}>
         <Router>
+        <LocationBootstrap />
         <ScrollToTop />
         <div className="App">
           <Navbar />
@@ -178,10 +189,9 @@ function App() {
           </main>
           <Footer />
         </div>
+        <Toasts />
       </Router>
-      </ToastProvider>
-      </LocationProvider>
-    </AuthProvider>
+    </Provider>
   );
 }
 

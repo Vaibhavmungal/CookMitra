@@ -71,6 +71,7 @@
   transition: all 0.15s ease;
 }
 .tab-btn:hover { background: var(--slate-50); color: var(--slate-700); }
+.tab-btn:focus-visible { outline: 3px solid var(--primary-glow); outline-offset: 2px; }
 .tab-btn.active {
   background: var(--primary-gradient);
   color: #fff;

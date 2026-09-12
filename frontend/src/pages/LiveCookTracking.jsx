@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import API from "../api/axios";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useSelector } from "react-redux";
+import { useShowToast } from "../store/hooks";
 import {
   formatCurrency,
   formatDate,
@@ -37,8 +37,8 @@ const POLL_MS = 15000;
 
 const LiveCookTracking = () => {
   const { bookingId } = useParams();
-  const { user } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const showToast = useShowToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

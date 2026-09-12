@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import API from "../api/axios";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useSelector } from "react-redux";
+import { useShowToast } from "../store/hooks";
 import ReviewForm from "../components/ReviewForm";
 import {
   formatCurrency,
@@ -42,8 +42,8 @@ import {
 
 const BookingDetails = () => {
   const { bookingId } = useParams();
-  const { user } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const showToast = useShowToast();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useDispatch } from "react-redux";
+import { loginUser } from "../store/authSlice";
+import { useShowToast } from "../store/hooks";
 import { safeNextPath } from "../utils/bookingDraft";
 import {
   Mail,
@@ -26,8 +27,8 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
-  const { showToast } = useToast();
+  const dispatch = useDispatch();
+  const showToast = useShowToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   // ?next=… is set when login interrupted a booking — customers return to it.
@@ -44,7 +45,9 @@ const Login = () => {
     setError("");
 
     try {
-      const user = await login(formData.email, formData.password);
+      const user = await dispatch(
+        loginUser({ email: formData.email, password: formData.password })
+      ).unwrap();
       showToast(`Welcome back, ${user.name}!`, "success");
       if (user.role === "cook") {
         navigate("/dashboard/cook-bookings");

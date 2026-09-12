@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useDispatch, useSelector } from "react-redux";
+import { logout } from "../store/authSlice";
+import { useShowToast } from "../store/hooks";
 import API from "../api/axios";
 import {
   ChefHat,
@@ -34,8 +35,9 @@ const NavAvatar = ({ name, photo }) => {
 };
 
 const Navbar = () => {
-  const { user, logout } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const dispatch = useDispatch();
+  const showToast = useShowToast();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -93,7 +95,7 @@ const Navbar = () => {
   }, [user]);
 
   const handleLogout = () => {
-    logout();
+    dispatch(logout());
     showToast("Logged out successfully", "info");
     setMobileMenuOpen(false);
     navigate("/login");

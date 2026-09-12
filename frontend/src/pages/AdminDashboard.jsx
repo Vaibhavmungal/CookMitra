@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/axios";
 import { useFetch } from "../hooks/useFetch";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { formatCurrency, formatDate } from "../utils/constants";
 import AddCookModal from "../components/AddCookModal";
 import AdminDocViewer from "../components/AdminDocViewer";
@@ -88,7 +88,7 @@ const AdminDashboard = () => {
 
 const CookManagement = () => {
   const { data: cooks, loading, refetch } = useFetch("/cooks");
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [filterStatus, setFilterStatus] = useState("all");
   const [showAddCook, setShowAddCook] = useState(false);
 
@@ -237,7 +237,8 @@ const CookManagement = () => {
 
 const BookingManagement = () => {
   const { data: bookings, loading, refetch } = useFetch("/bookings");
-  const { showToast } = useToast();
+  const showToast = useShowToast();
+  const [bookingFilter, setBookingFilter] = useState("all");
 
   const handleAction = async (bookingId, action) => {
     // Same guardrails as the cook dashboard: confirm before changing the slot.
@@ -255,13 +256,22 @@ const BookingManagement = () => {
       )
     )
       return;
+    if (
+      action === "complete" &&
+      !window.confirm(
+        "Mark this service as completed on behalf of the cook? The customer will be asked to rate the cook."
+      )
+    )
+      return;
     try {
       await API.patch(`/bookings/${bookingId}/${action}`);
       showToast(
         action === "accept"
           ? "Request accepted on behalf of the cook — the cook has been notified!"
+          : action === "complete"
+          ? "Service marked completed on behalf of the cook!"
           : "Request declined on behalf of the cook — the cook has been notified!",
-        action === "accept" ? "success" : "info"
+        action === "accept" || action === "complete" ? "success" : "info"
       );
       refetch();
     } catch (err) {
@@ -269,17 +279,67 @@ const BookingManagement = () => {
     }
   };
 
+  const isPast = (b) => ["completed", "cancelled", "rejected", "expired"].includes(b.status);
+  const isUpcoming = (b) => ["accepted", "confirmed", "in_progress"].includes(b.status);
+
+  const newCount = (bookings || []).filter((b) => b.status === "requested").length;
+  const upcomingCount = (bookings || []).filter(isUpcoming).length;
+  const pastCount = (bookings || []).filter(isPast).length;
+
+  const statusRank = (s) =>
+    ({ requested: 0, accepted: 1, confirmed: 1, in_progress: 2 }[s] ?? 3);
+
+  const visibleBookings = [...(bookings || [])]
+    .filter((b) => {
+      if (bookingFilter === "new") return b.status === "requested";
+      if (bookingFilter === "upcoming") return isUpcoming(b);
+      if (bookingFilter === "past") return isPast(b);
+      return true;
+    })
+    .sort((a, b) => {
+      if (bookingFilter === "past") return new Date(b.date) - new Date(a.date);
+      return statusRank(a.status) - statusRank(b.status) || new Date(a.date) - new Date(b.date);
+    });
+
+  const paymentLabel = (booking) => {
+    const paid = booking.payment?.status === "paid";
+    const amount = paid
+      ? Number(booking.payment?.paidAmount || booking.amount || 0)
+      : Number(booking.amount || 0);
+    return { paid, amount };
+  };
+
   return (
     <div>
-      <h2 style={{ fontSize: "1.4rem", marginBottom: "1.5rem" }}>All Platform Bookings</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        <h2 style={{ fontSize: "1.4rem", margin: 0 }}>All Platform Bookings</h2>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {[
+            { id: "all", label: `All (${(bookings || []).length})` },
+            { id: "new", label: `New (${newCount})` },
+            { id: "upcoming", label: `Upcoming (${upcomingCount})` },
+            { id: "past", label: `Past Services (${pastCount})` },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setBookingFilter(f.id)}
+              className={`btn btn-sm ${bookingFilter === f.id ? "btn-primary" : "btn-secondary"}`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {loading ? (
         <div className="loading-spinner-wrapper">
           <div className="spinner"></div>
           <p>Loading bookings...</p>
         </div>
-      ) : bookings && bookings.length > 0 ? (
+      ) : visibleBookings.length > 0 ? (
         <div className="bookings-list-modern">
-          {bookings.map((booking) => (
+          {visibleBookings.map((booking) => {
+            const { paid, amount } = paymentLabel(booking);
+            return (
             <div key={booking._id} className="booking-item-card">
               <div className="booking-item-top">
                 <div>
@@ -303,7 +363,18 @@ const BookingManagement = () => {
                 <div className="meta-field">
                   <label>Amount</label>
                   <span style={{ color: "var(--primary)", fontWeight: 700 }}>
-                    {formatCurrency(booking.amount)}
+                    {formatCurrency(amount)}
+                  </span>
+                </div>
+                <div className="meta-field">
+                  <label>Payment</label>
+                  <span
+                    className={`badge ${paid ? "badge-emerald" : "badge-amber"}`}
+                    style={{ alignSelf: "flex-start" }}
+                  >
+                    {paid
+                      ? `PAID${booking.payment?.testMode ? " • TEST" : ""}`
+                      : `UNPAID • ${String(booking.payment?.status || "pending").toUpperCase()}`}
                   </span>
                 </div>
                 <div className="meta-field">
@@ -334,13 +405,39 @@ const BookingManagement = () => {
                   >
                     <X size={16} /> Admin Reject
                   </button>
+                  <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
+                    View Details
+                  </Link>
+                </div>
+              )}
+              {isUpcoming(booking) && (
+                <div className="booking-actions-row">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleAction(booking._id, "complete")}
+                  >
+                    <Check size={16} /> Mark Completed
+                  </button>
+                  <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
+                    View Details
+                  </Link>
+                </div>
+              )}
+              {isPast(booking) && (
+                <div className="booking-actions-row">
+                  <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
+                    View Details
+                  </Link>
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
-        <p style={{ color: "var(--slate-500)" }}>No bookings in database.</p>
+        <p style={{ color: "var(--slate-500)" }}>
+          {bookings && bookings.length > 0 ? "No bookings match this filter." : "No bookings in database."}
+        </p>
       )}
     </div>
   );
@@ -348,7 +445,7 @@ const BookingManagement = () => {
 
 const UserManagement = () => {
   const { data: users, loading, refetch } = useFetch("/auth/users");
-  const { showToast } = useToast();
+  const showToast = useShowToast();
 
   const handleStatus = async (user, status) => {
     const blocking = status === "suspended";
@@ -477,7 +574,7 @@ const UserManagement = () => {
 
 const LeadManagement = () => {
   const { data: leads, loading, refetch } = useFetch("/leads");
-  const { showToast } = useToast();
+  const showToast = useShowToast();
 
   const handleStatus = async (id, status) => {
     try {

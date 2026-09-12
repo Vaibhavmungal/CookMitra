@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useDispatch } from "react-redux";
+import { googleLoginUser } from "../store/authSlice";
+import { useShowToast } from "../store/hooks";
 import { safeNextPath } from "../utils/bookingDraft";
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -23,8 +24,8 @@ const GoogleSignInButton = ({
   onError,
   next = null,
 }) => {
-  const { loginWithGoogle } = useAuth();
-  const { showToast } = useToast();
+  const dispatch = useDispatch();
+  const showToast = useShowToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
@@ -69,7 +70,7 @@ const GoogleSignInButton = ({
     }
     setLoading(true);
     try {
-      const user = await loginWithGoogle(idToken, role);
+      const user = await dispatch(googleLoginUser({ idToken, role })).unwrap();
       showToast(`Welcome${user?.name ? `, ${user.name}` : ""}!`, "success");
       // Interrupted booking? Customers go straight back to it.
       const resumeTo = user?.role === "customer" ? safeNextPath(next) : null;

@@ -2,7 +2,7 @@
 // Reuses the modal + form styling used by AddCookModal.
 import React, { useEffect, useState } from "react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { Tag, X, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 
 const toDateInputValue = (d) =>
@@ -47,7 +47,7 @@ const formFromCoupon = (coupon) => ({
 });
 
 const CouponModal = ({ open, onClose, onSaved, coupon }) => {
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const editing = Boolean(coupon);
   const [form, setForm] = useState(blankForm());
   const [error, setError] = useState("");

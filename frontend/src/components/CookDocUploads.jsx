@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { Upload, FileCheck, X, Camera } from "lucide-react";
 
 // Backend serves uploaded files under /uploads; API base ends with /api.
@@ -33,7 +33,7 @@ const CookDocUploads = ({
   onUploadingChange,
   requireDocs = true,
 }) => {
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [uploading, setUploading] = useState({ aadhar: false, pan: false, photo: false });
 
   const setFieldUploading = (field, value) => {

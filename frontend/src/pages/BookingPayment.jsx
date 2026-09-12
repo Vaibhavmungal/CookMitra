@@ -18,8 +18,8 @@ import {
   XCircle,
 } from "lucide-react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
-import { useAuth } from "../context/AuthContext";
+import { useSelector } from "react-redux";
+import { useShowToast } from "../store/hooks";
 import { SERVICE_DETAILS, formatCurrency, formatDate } from "../utils/constants";
 
 const WINDOW_MS = 5 * 60 * 1000; // 5-minute payment window
@@ -68,8 +68,8 @@ const loadRazorpay = () => {
 const BookingPayment = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
-  const { showToast } = useToast();
-  const { user } = useAuth();
+  const showToast = useShowToast();
+  const user = useSelector((s) => s.auth.user);
 
   const [booking, setBooking] = useState(null);
   const [phase, setPhase] = useState("loading"); // loading | pay | processing | success | expired | error

@@ -1,11 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useSelector } from "react-redux";
 import { ShieldCheck, Heart, Sparkles, Mail, MapPin, Phone, Camera } from "lucide-react";
 import cookMitraLogo from "../assets/logo.png";
 
 const Footer = () => {
-  const { user } = useAuth();
+  const user = useSelector((s) => s.auth.user);
   const isAdmin = user?.role === "admin";
   const isCook = user?.role === "cook";
   const hideCustomerPages = isAdmin || isCook;

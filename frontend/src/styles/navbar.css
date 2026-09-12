@@ -18,7 +18,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 1.5rem;
-  height: 68px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -58,8 +58,8 @@
 
 /* Cook Mitra logo mark (PNG asset, displayed as-is) */
 .brand-logo-img {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
   display: block;
   flex-shrink: 0;
@@ -90,6 +90,11 @@
 }
 .nav-link:hover { color: var(--slate-900); }
 .nav-link.active { color: var(--primary); border-bottom-color: var(--primary); }
+.nav-link:focus-visible {
+  outline: 3px solid var(--primary-glow);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
 
 .nav-divider { width: 1px; height: 22px; background: var(--slate-200); }
 

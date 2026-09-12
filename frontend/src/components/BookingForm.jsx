@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
-import { useAuth } from "../context/AuthContext";
+import { useDispatch, useSelector } from "react-redux";
+import { updateUser } from "../store/authSlice";
+import { useShowToast, useSiteLocation } from "../store/hooks";
 import { formatCurrency, localTodayStr, slabPriceForDuration } from "../utils/constants";
-import { useLocation } from "../context/LocationContext";
 import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/bookingDraft";
 import CouponApply from "./CouponApply";
 import {
@@ -96,8 +96,9 @@ const DURATION_MAX = 4;
 
 /* ── Component ───────────────────────────────────────────────────────── */
 const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
-  const { showToast } = useToast();
-  const { user, updateUser } = useAuth();
+  const showToast = useShowToast();
+  const user = useSelector((s) => s.auth.user);
+  const dispatch = useDispatch();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(() => ({
@@ -124,7 +125,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
   const errorRef = useRef(null);
   const [copiedPin, setCopiedPin] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const { location: siteLocation } = useLocation();
+  const { location: siteLocation } = useSiteLocation();
 
   /* ── Resolve cook user id ── */
   useEffect(() => {
@@ -235,7 +236,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
     if (user?.role !== "customer" || user?.address !== undefined) return;
     let cancelled = false;
     API.get("/auth/me")
-      .then((res) => { if (!cancelled) updateUser({ name: res.data?.name, phone: res.data?.phone, address: res.data?.address }); })
+      .then((res) => { if (!cancelled) dispatch(updateUser({ name: res.data?.name, phone: res.data?.phone, address: res.data?.address })); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [user?.role, user?.address]);

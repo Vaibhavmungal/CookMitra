@@ -26,9 +26,8 @@ import API from "../api/axios";
 import { formatCurrency, localTodayStr, localTomorrowStr, slabPriceForDuration } from "../utils/constants";
 import CouponApply from "../components/CouponApply";
 import { resolveFileUrl } from "../components/CookDocUploads";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
-import { useLocation as useSiteLocation } from "../context/LocationContext";
+import { useSelector } from "react-redux";
+import { useShowToast, useSiteLocation } from "../store/hooks";
 import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/bookingDraft";
 
 import LoginPromptModal from "../components/LoginPromptModal";
@@ -120,8 +119,8 @@ const SummaryBar = ({ form, serviceLabel, onEdit }) => (
 );
 
 const CookOnDemand = () => {
-  const { user } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const showToast = useShowToast();
   const { location: siteLocation } = useSiteLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

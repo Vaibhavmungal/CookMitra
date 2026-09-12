@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useDispatch } from "react-redux";
+import { registerUser } from "../store/authSlice";
+import { useShowToast } from "../store/hooks";
 import { safeNextPath } from "../utils/bookingDraft";
 import {
   Mail,
@@ -33,8 +34,8 @@ const Register = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { register } = useAuth();
-  const { showToast } = useToast();
+  const dispatch = useDispatch();
+  const showToast = useShowToast();
   const navigate = useNavigate();
   // ?next=… resumes an interrupted booking for new customers.
   const next = safeNextPath(searchParams.get("next"));
@@ -63,7 +64,7 @@ const Register = () => {
 
     try {
       const { confirmPassword, ...data } = formData;
-      const user = await register(data);
+      const user = await dispatch(registerUser(data)).unwrap();
       showToast(`Welcome to Cook Mitra, ${user.name}!`, "success");
       if (user.role === "cook") {
         navigate("/dashboard/cook-bookings");

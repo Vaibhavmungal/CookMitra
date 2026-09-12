@@ -36,6 +36,20 @@ API.interceptors.response.use(
         window.location.href = "/login";
       }
     }
+    // Admin-blocked accounts get 403 (not 401) on every request — sign them
+    // out immediately so the stale localStorage session can't linger.
+    // Only the explicit blocked-account message triggers this; other 403s
+    // (role mismatches) pass through to the page untouched.
+    const blockedMsg = error.response?.data?.message || "";
+    if (
+      error.response?.status === 403 &&
+      /blocked by an administrator/i.test(blockedMsg) &&
+      window.location.pathname !== "/login"
+    ) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
     return Promise.reject(error);
   }
 );

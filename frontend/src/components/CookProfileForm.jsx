@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { SERVICE_DETAILS } from "../utils/constants";
 import CookDocUploads from "./CookDocUploads";
 import { ChefHat, Check, AlertCircle } from "lucide-react";
@@ -21,7 +21,7 @@ const CookProfileForm = ({
   showStatus = false,
   onSaved,
 }) => {
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [formData, setFormData] = useState({
     bio: "",
     experienceYears: 0,

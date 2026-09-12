@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/axios";
 import { useFetch } from "../hooks/useFetch";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useSelector } from "react-redux";
+import { useShowToast } from "../store/hooks";
 import ReviewForm from "../components/ReviewForm";
 import { formatCurrency, formatDate, bookingCustomerWhatsAppUrl, bookingReviewWhatsAppUrl, sessionEndDate, hasServiceHoursStarted, formatRemaining, hoursCompleteWhatsAppUrl, playAlarmSound } from "../utils/constants";
 import {
@@ -25,8 +25,8 @@ import {
 
 const CustomerDashboard = () => {
   const { data: bookings, loading, error, refetch } = useFetch("/bookings/my");
-  const { user } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const showToast = useShowToast();
   const [activeFilter, setActiveFilter] = useState("all");
   const seenArrived = useRef(new Set());
   const seenHoursDone = useRef(new Set());

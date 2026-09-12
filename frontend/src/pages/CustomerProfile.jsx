@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/axios";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useDispatch, useSelector } from "react-redux";
+import { updateUser } from "../store/authSlice";
+import { useShowToast } from "../store/hooks";
 import { ArrowLeft, User, MapPin, Phone, Save, AlertCircle } from "lucide-react";
 
 const CustomerProfile = () => {
-  const { user, updateUser } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const dispatch = useDispatch();
+  const showToast = useShowToast();
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -22,11 +24,11 @@ const CustomerProfile = () => {
       try {
         const res = await API.get("/auth/me");
         const data = res.data;
-        updateUser({
+        dispatch(updateUser({
           name: data.name,
           phone: data.phone,
           address: data.address,
-        });
+        }));
         setFormData({
           name: data.name || "",
           phone: data.phone || "",
@@ -71,11 +73,11 @@ const CustomerProfile = () => {
     try {
       const res = await API.put("/auth/me", payload);
       const data = res.data;
-      updateUser({
+      dispatch(updateUser({
         name: data.name,
         phone: data.phone,
         address: data.address,
-      });
+      }));
       showToast("Profile updated successfully!", "success");
     } catch (err) {
       const msg = err.response?.data?.message || "Failed to update profile";

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { Star, CheckCircle, MessageSquare } from "lucide-react";
 
 const ReviewForm = ({ bookingId, existingReview, onSubmitted }) => {
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [rating, setRating] = useState(existingReview?.rating || undefined);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");

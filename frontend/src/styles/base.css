@@ -65,7 +65,9 @@
   --font-mono: "Cascadia Code", "SF Mono", Consolas, "Courier New", monospace;
 }
 
-html { scroll-behavior: smooth; }
+/* scroll-padding keeps anchored sections (e.g. #services) from hiding
+   under the 64px sticky navbar when jumping via in-page links. */
+html { scroll-behavior: smooth; scroll-padding-top: 78px; }
 
 body {
   margin: 0;
@@ -95,6 +97,9 @@ p { margin-top: 0; }
 
 a { color: var(--primary); text-decoration: none; transition: color 0.15s ease; }
 a:hover { color: var(--primary-700); }
+
+/* Warm tap highlight instead of the default grey flash on mobile. */
+a, button { -webkit-tap-highlight-color: rgba(232, 89, 12, 0.15); }
 
 button { cursor: pointer; font-family: inherit; }
 input, select, textarea { font-family: inherit; }
@@ -143,3 +148,13 @@ img { max-width: 100%; display: block; }
 @keyframes acceptPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: 0.7; } }
 @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 @keyframes marqueeTrack { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Respect users who prefer reduced motion: kill ambient animation. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

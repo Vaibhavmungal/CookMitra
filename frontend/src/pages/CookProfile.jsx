@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useFetch } from "../hooks/useFetch";
 import BookingForm from "../components/BookingForm";
 import { resolveFileUrl } from "../components/CookDocUploads";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 import { formatCurrency, SERVICE_DETAILS } from "../utils/constants";
 import {
   ArrowLeft,
@@ -20,7 +20,7 @@ const CookProfile = () => {
   const { id } = useParams();
   const { data: cook, loading: loadingCook } = useFetch(`/cooks/${id}`);
   const { data: reviews } = useFetch(`/reviews/cook/${id}`);
-  const { showToast } = useToast();
+  const showToast = useShowToast();
 
   if (loadingCook) {
     return (

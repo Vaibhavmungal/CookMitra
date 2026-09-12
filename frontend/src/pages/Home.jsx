@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../hooks/useFetch";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
+import { useDispatch, useSelector } from "react-redux";
+import { registerUser } from "../store/authSlice";
+import { useShowToast } from "../store/hooks";
 import { formatCurrency } from "../utils/constants";
 import heroImg from "../assets/hero.png";
-import FestiveOfferBillboard from "../components/FestiveOfferBillboard";
 import DishCarousel from "../components/DishCarousel";
 import HomeCoupons from "../components/HomeCoupons";
 import {
@@ -88,9 +88,9 @@ const TICKER_DISHES = [
 ];
 
 const Home = () => {
-  const { user } = useAuth();
-  const { register } = useAuth();
-  const { showToast } = useToast();
+  const user = useSelector((s) => s.auth.user);
+  const dispatch = useDispatch();
+  const showToast = useShowToast();
   const navigate = useNavigate();
 
   // Registration form state
@@ -130,7 +130,7 @@ const Home = () => {
 
     try {
       const { confirmPassword, ...data } = regForm;
-      await register(data);
+      await dispatch(registerUser(data)).unwrap();
       showToast("Registration successful! Please login to continue.", "success");
       navigate("/login");
     } catch (err) {
@@ -229,8 +229,6 @@ const Home = () => {
 
   return (
     <div className="home-container">
-      {/* Festive offer billboard — strip + entry popup, first home visit only */}
-      <FestiveOfferBillboard />
       {/* Sweets & festive dishes carousel, right below the navbar */}
       <DishCarousel />
       {/* Hero Section */}

@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import API from "../api/axios";
-import { useToast } from "../context/ToastContext";
+import { useShowToast } from "../store/hooks";
 
 // Cook-level on/off switch. When the cook goes "unavailable" they are hidden
 // from all booking until they toggle back to "available" OR the next day begins
 // (the backend auto-resets it, so the button also reflects that reset).
 const CookAvailabilityToggle = ({ availabilityStatus, onChanged }) => {
-  const { showToast } = useToast();
+  const showToast = useShowToast();
   const [status, setStatus] = useState(availabilityStatus);
   const [busy, setBusy] = useState(false);
 
