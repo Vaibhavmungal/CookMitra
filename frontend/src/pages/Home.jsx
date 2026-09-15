@@ -4,10 +4,12 @@ import { useFetch } from "../hooks/useFetch";
 import { useDispatch, useSelector } from "react-redux";
 import { registerUser } from "../store/authSlice";
 import { useShowToast } from "../store/hooks";
-import { formatCurrency } from "../utils/constants";
+import { formatCurrency, formatDate } from "../utils/constants";
+import API from "../api/axios";
 import heroImg from "../assets/hero.png";
 import DishCarousel from "../components/DishCarousel";
 import HomeCoupons from "../components/HomeCoupons";
+import ReviewForm from "../components/ReviewForm";
 import {
   ArrowRight,
   BadgeIndianRupee,
@@ -29,6 +31,7 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
+  X,
 } from "lucide-react";
 
 // Animated number that counts up when scrolled into view.
@@ -86,6 +89,227 @@ const TICKER_DISHES = [
   "Shankarpali",
   "Sabudana Khichdi",
 ];
+
+const DISMISSED_RATINGS_KEY = "home-rate-dismissed";
+
+// True when the booked service hours have ended: completed status, the
+// hours-complete flag, or the session end time is in the past.
+const serviceHoursEnded = (booking) => {
+  if (!booking) return false;
+  if (booking.status === "completed") return true;
+  if (booking.hoursCompleted) return true;
+  let end = null;
+  if (booking.serviceEndsAt || booking.sessionEnd) {
+    const d = new Date(booking.serviceEndsAt || booking.sessionEnd);
+    if (!Number.isNaN(d.getTime())) end = d;
+  } else if (booking.date && booking.endTime) {
+    const m = String(booking.endTime).match(/^(\d{1,2}):(\d{2})/);
+    if (m) {
+      const d = new Date(booking.date);
+      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      if (!Number.isNaN(d.getTime())) end = d;
+    }
+  }
+  return !!end && Date.now() >= end.getTime();
+};
+
+// One rateable booking card: cook info + star rating (comment optional) +
+// per-card cross button to dismiss. Disappears once the rating is submitted.
+const PendingRatingCard = ({ booking, onRated, onDismiss }) => {
+  return (
+    <div
+      style={{
+        position: "relative",
+        background: "#fff",
+        border: "1px solid var(--border-subtle, #e2e8f0)",
+        borderRadius: "14px",
+        padding: "1.1rem 1.2rem",
+        boxShadow: "var(--shadow-sm)",
+        minWidth: 280,
+        flex: "1 1 320px",
+        maxWidth: 520,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onDismiss(booking._id)}
+        aria-label={`Dismiss rating for ${booking.cook?.name || "cook"}`}
+        title="Dismiss"
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          width: 30,
+          height: 30,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
+          border: "1px solid var(--slate-200, #e2e8f0)",
+          background: "#fff",
+          cursor: "pointer",
+          color: "var(--slate-500)",
+        }}
+      >
+        <X size={15} />
+      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem", paddingRight: "2rem" }}>
+        <span
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: "50%",
+            background: "var(--primary-gradient)",
+            color: "#fff",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 800,
+            fontSize: "1.1rem",
+            flexShrink: 0,
+          }}
+        >
+          {booking.cook?.name?.[0]?.toUpperCase() || <ChefHat size={18} />}
+        </span>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: "0.98rem" }}>
+            How was {booking.cook?.name || "your cook"}?
+          </div>
+          <div style={{ fontSize: "0.8rem", color: "var(--slate-500)" }}>
+            {(booking.serviceType || "").replace(/_/g, " ")}
+            {booking.date ? ` • ${formatDate(booking.date)}` : ""}
+            {booking.startTime && booking.endTime ? ` • ${booking.startTime}–${booking.endTime}` : ""}
+          </div>
+        </div>
+      </div>
+      <ReviewForm bookingId={booking._id} onSubmitted={() => onRated(booking._id)} />
+    </div>
+  );
+};
+
+// Home section: after service hours end, prompt the customer to rate each
+// unrated cook. Hidden for guests/cooks/admins, after rating (review exists),
+// or after the user taps the cross button (dismiss persisted in localStorage).
+const PendingCookRatings = () => {
+  const user = useSelector((s) => s.auth.user);
+  const [bookings, setBookings] = useState([]);
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(DISMISSED_RATINGS_KEY) || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    if (!user || user.role !== "customer") return;
+    let cancelled = false;
+    API.get("/bookings/my")
+      .then((res) => {
+        if (!cancelled) setBookings(Array.isArray(res.data) ? res.data : []);
+      })
+      .catch(() => {
+        // silent: rating prompt is optional, must never break Home
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  if (!user || user.role !== "customer") return null;
+
+  const persistDismissed = (ids) => {
+    setDismissed(ids);
+    try {
+      localStorage.setItem(DISMISSED_RATINGS_KEY, JSON.stringify(ids));
+    } catch {
+      // storage optional
+    }
+  };
+
+  const rateable = (bookings || []).filter(
+    (b) =>
+      !b.review &&
+      !dismissed.includes(b._id) &&
+      !["cancelled", "rejected", "expired"].includes(b.status) &&
+      serviceHoursEnded(b)
+  );
+
+  const handleDismissOne = (id) => {
+    if (dismissed.includes(id)) return;
+    persistDismissed([...dismissed, id]);
+  };
+
+  const handleDismissAll = () => {
+    persistDismissed([...new Set([...dismissed, ...rateable.map((b) => b._id)])]);
+  };
+
+  const handleRated = (id) => {
+    // Drop the card immediately; the saved review also excludes it on refetch.
+    setBookings((prev) => prev.filter((b) => b._id !== id));
+  };
+
+  if (rateable.length === 0) return null;
+
+  return (
+    <section
+      aria-label="Rate your cook"
+      style={{
+        maxWidth: 1200,
+        margin: "1.5rem auto 0",
+        padding: "0 1.5rem",
+      }}
+    >
+      <div
+        style={{
+          position: "relative",
+          background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
+          border: "1px solid #f59e0b",
+          borderRadius: "16px",
+          padding: "1.25rem 1.25rem 1.35rem",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleDismissAll}
+          aria-label="Dismiss all rating prompts"
+          title="Dismiss"
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            width: 32,
+            height: 32,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+            border: "1px solid #f59e0b",
+            background: "#fff",
+            cursor: "pointer",
+            color: "#92400e",
+          }}
+        >
+          <X size={16} />
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem", paddingRight: "2.2rem" }}>
+          <Star size={20} fill="#f59e0b" color="#f59e0b" />
+          <h2 style={{ margin: 0, fontSize: "1.15rem" }}>Rate your cook</h2>
+        </div>
+        <p style={{ margin: "0 0 1rem", fontSize: "0.88rem", color: "#92400e" }}>
+          Your service hours are complete — tap the stars to rate. A written review is optional.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+          {rateable.map((b) => (
+            <PendingRatingCard key={b._id} booking={b} onRated={handleRated} onDismiss={handleDismissOne} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const Home = () => {
   const user = useSelector((s) => s.auth.user);
@@ -231,6 +455,8 @@ const Home = () => {
     <div className="home-container">
       {/* Sweets & festive dishes carousel, right below the navbar */}
       <DishCarousel />
+      {/* Pending cook ratings: after service hours end, unrated customers rate here */}
+      <PendingCookRatings />
       {/* Hero Section */}
       <section className="hero-v2">
         <div className="hero-v2-glow hero-v2-glow-1" aria-hidden="true" />

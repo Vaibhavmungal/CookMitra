@@ -14,11 +14,12 @@ import {
   Sparkles,
   MessageSquare,
   CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 const CookProfile = () => {
   const { id } = useParams();
-  const { data: cook, loading: loadingCook } = useFetch(`/cooks/${id}`);
+  const { data: cook, loading: loadingCook, error: cookError } = useFetch(`/cooks/${id}`);
   const { data: reviews } = useFetch(`/reviews/cook/${id}`);
   const showToast = useShowToast();
 
@@ -27,6 +28,21 @@ const CookProfile = () => {
       <div className="loading-spinner-wrapper">
         <div className="spinner"></div>
         <p style={{ color: "var(--slate-500)", fontWeight: 600 }}>Loading cook profile...</p>
+      </div>
+    );
+  }
+
+  if (cookError || !cook) {
+    return (
+      <div className="cook-profile-page-container">
+        <div style={{ marginBottom: "1.5rem" }}>
+          <Link to="/cook-on-demand" className="back-link-bar">
+            <ArrowLeft size={16} /> Back to Book a Cook
+          </Link>
+        </div>
+        <div className="error-alert-banner">
+          <XCircle size={18} /> {cookError || "Cook profile not found"}
+        </div>
       </div>
     );
   }

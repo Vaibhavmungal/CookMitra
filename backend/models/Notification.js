@@ -22,7 +22,6 @@ const notificationSchema = new mongoose.Schema(
         "cook_arrived",
         "cooking_hours_completed",
         "review_received",
-        "service_started",
         "profile_approved",
         "profile_rejected",
         "general",

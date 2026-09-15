@@ -16,6 +16,47 @@ const app = express();
 // reflect the real client connection for HTTPS cookie/redirect logic.
 app.set("trust proxy", 1);
 
+// ---- Production config validation (warn loudly, never crash) ----
+if (process.env.NODE_ENV === "production") {
+  const jwt = process.env.JWT_SECRET || "";
+  if (
+    !jwt ||
+    /^your_/i.test(jwt) ||
+    /change_?me|example/i.test(jwt) ||
+    jwt.length < 32
+  ) {
+    console.error(
+      "CONFIG WARNING: JWT_SECRET is missing, a placeholder, or too short (<32 chars). Set a long random secret (e.g. `openssl rand -hex 32`) or all logins will be insecure/unstable."
+    );
+  }
+  if (process.env.ALLOW_TEST_PAYMENTS === "true") {
+    console.error(
+      "CONFIG WARNING: ALLOW_TEST_PAYMENTS=true is set while NODE_ENV=production. Test-mode checkout is now force-disabled in code, but unset this var to remove confusion."
+    );
+  }
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    console.warn(
+      "CONFIG NOTICE: GOOGLE_CLIENT_ID is not set — email/password auth works, but Google sign-in will return 500 until configured."
+    );
+  }
+  try {
+    // Reuse the same placeholder detection as the payments route.
+    const { isConfigured } = require("./config/razorpay");
+    if (!isConfigured) {
+      console.warn(
+        "CONFIG NOTICE: Razorpay keys missing/placeholder — POST /api/payments/order will return 503 until real RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are set."
+      );
+    }
+  } catch {
+    // non-fatal: payments route reports its own status
+  }
+  if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
+    console.warn(
+      "CONFIG NOTICE: RAZORPAY_WEBHOOK_SECRET is not set — POST /api/payments/webhook cannot verify signatures (browser payments still work, webhook reconcile is skipped)."
+    );
+  }
+}
+
 // Background retry loop — never throws, never exits. The API stays up
 // (health reports db status) even while MongoDB is unreachable.
 connectDB();

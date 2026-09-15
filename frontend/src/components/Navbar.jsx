@@ -41,6 +41,14 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   // Cook profile photo lives on CookProfile (not the auth user), so the
   // navbar loads it separately and refreshes on the "cook-photo-updated"
   // event fired by the profile editors after a successful save.
@@ -115,7 +123,7 @@ const Navbar = () => {
         : "/admin";
 
   return (
-    <nav className="navbar">
+    <nav className={`navbar ${scrolled ? "is-scrolled" : ""}`}>
       <div className="navbar-inner">
         {/* Brand Logo */}
         <Link to="/" className="navbar-brand" onClick={closeMobile}>

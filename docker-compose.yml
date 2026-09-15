@@ -1,7 +1,11 @@
 services:
+  # Local MongoDB (dev convenience only). Excluded by default via profiles —
+  # plain `docker compose up` starts only `app` (Atlas mode). Add
+  # `--profile local-mongo` to also start this container for offline dev.
   db:
     image: mongo:7
     restart: unless-stopped
+    profiles: ["local-mongo"]
     volumes:
       - mongo-data:/data/db
     # Not exposed to the host by default; the backend reaches it over the
@@ -17,8 +21,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      # Backend container reaches Mongo via the internal network.
-      MONGODB_URI: mongodb://db:27017/festivecook
+      # Database: Atlas by default. Set MONGODB_URI in the .env file next to
+      # this compose file to your SRV string
+      # (mongodb+srv://<user>:<password>@<cluster>.mongodb.net/<db>?retryWrites=true&w=majority).
+      # For offline dev with the local `db` container instead, run with
+      # `--profile local-mongo` and set MONGODB_URI=mongodb://db:27017/festivecook.
+      MONGODB_URI: ${MONGODB_URI:?set MONGODB_URI in a .env file next to docker-compose.yml}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in a .env file next to docker-compose.yml}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
@@ -27,8 +35,8 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       # Frontend origin for CORS — empty when served same-origin by this app.
       CLIENT_URL: ${CLIENT_URL:-}
-    depends_on:
-      - db
+    # No depends_on: the backend retries the DB connection in the background,
+    # so startup order doesn't matter (Atlas or local mongo alike).
     volumes:
       # Persist uploaded cook verification documents across restarts.
       - uploads:/app/backend/uploads

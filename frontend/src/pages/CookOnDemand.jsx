@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChefHat,
   Users,
@@ -19,11 +19,15 @@ import {
   MessageCircle,
   History,
   ArrowRight,
+  ArrowLeft,
   Minus,
   Plus,
+  ShieldCheck,
+  Sparkles,
+  BadgePercent,
 } from "lucide-react";
 import API from "../api/axios";
-import { formatCurrency, localTodayStr, localTomorrowStr, slabPriceForDuration } from "../utils/constants";
+import { formatCurrency, localTodayStr, localTomorrowStr, slabPriceForDuration, LAUNCH_SLAB_PRICES } from "../utils/constants";
 import CouponApply from "../components/CouponApply";
 import { resolveFileUrl } from "../components/CookDocUploads";
 import { useSelector } from "react-redux";
@@ -83,6 +87,15 @@ const isSlotInPast = (dateStr, startTime) => {
   return s <= now.getHours() * 60 + now.getMinutes();
 };
 
+// Day-part for grouping time slots (Morning / Afternoon / Evening).
+const slotPart = (startTime) => {
+  const m = toMinutes(startTime);
+  if (m == null) return "Slots";
+  if (m < 12 * 60) return "Morning";
+  if (m < 16 * 60) return "Afternoon";
+  return "Evening";
+};
+
 // Friendly date label for summaries ("Today" / "Tomorrow" / 2026-09-12).
 const dateLabel = (dateStr) => {
   if (!dateStr) return "Pick a date";
@@ -123,6 +136,7 @@ const CookOnDemand = () => {
   const showToast = useShowToast();
   const { location: siteLocation } = useSiteLocation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   // Deep links (Home services, Footer) may preselect the service via
@@ -133,6 +147,16 @@ const CookOnDemand = () => {
   })();
 
   const [step, setStep] = useState(1);
+
+  // Every step change opens at the top of the page.
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  }, [step]);
+  // Start each step at the top of the page.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [step]);
   const [form, setForm] = useState({
     serviceType: initialService,
     date: localTomorrowStr(),
@@ -171,6 +195,8 @@ const CookOnDemand = () => {
   // Shorter session lengths the server confirmed free when the requested
   // hours fit nowhere — rendered as one-tap retry chips.
   const [slotSuggestions, setSlotSuggestions] = useState([]);
+  // Cooks offering the chosen service (0 = none exist, vs slots just full).
+  const [totalCooksFound, setTotalCooksFound] = useState(null);
 
   // Header-detected place (GPS / IP / manual) pre-fills address fields when
   // they are still empty — typed or previously-saved input always wins.
@@ -303,6 +329,7 @@ const CookOnDemand = () => {
         setMatches(r.available);
         setSlotOptions(r.options);
         setSlotSuggestions(r.suggestions);
+        setTotalCooksFound(r.totalCooks);
         setSearched(true);
         const stillFree =
           d.selectedSlot &&
@@ -423,18 +450,31 @@ const CookOnDemand = () => {
   // today). Used by the step 1 submit and by post-login draft resume.
   const runSlotSearch = async ({ serviceType, date, durationHours }) => {
     const cooksRes = await API.get(
-      `/cooks${serviceType ? `?serviceType=${serviceType}` : ""}`
+      `/cooks${serviceType ? `?serviceType=${encodeURIComponent(serviceType)}` : ""}`
     );
-    const cooks = cooksRes.data || [];
+    const rawCooks = cooksRes.data;
+    const cooks = Array.isArray(rawCooks) ? rawCooks : rawCooks?.cooks || rawCooks?.data || [];
     const suggested = new Set();
+    let failedCooks = 0;
     const withSlots = await Promise.all(
       cooks.map(async (cook) => {
+        // Cooks list populates `user` as an object, but be tolerant of
+        // string refs or a bare profile id so one shape change can't wipe
+        // every slot result to [].
+        const cookId =
+          cook?.user?._id ||
+          (typeof cook?.user === "string" ? cook.user : null) ||
+          cook?._id;
+        if (!cookId) {
+          failedCooks += 1;
+          return { ...cook, slots: [] };
+        }
         try {
           // Start-time options sized to the entered service hours.
           // suggest=1 asks the server to also name shorter sessions that
           // DO fit, so an empty result becomes a one-tap retry.
           const slotsRes = await API.get(
-            `/availability/${cook.user._id}?date=${date}&durationHours=${durationHours}&suggest=1`
+            `/availability/${cookId}?date=${encodeURIComponent(date)}&durationHours=${encodeURIComponent(durationHours)}&suggest=1`
           );
           const payload = slotsRes.data;
           const list = Array.isArray(payload) ? payload : payload?.slots || [];
@@ -445,6 +485,7 @@ const CookOnDemand = () => {
           }
           return { ...cook, slots: list };
         } catch {
+          failedCooks += 1;
           return { ...cook, slots: [] };
         }
       })
@@ -462,6 +503,8 @@ const CookOnDemand = () => {
       available,
       options: aggregateSlots(available),
       suggestions: [...suggested].sort((a, b) => b - a).slice(0, 3),
+      totalCooks: cooks.length,
+      failedCooks,
     };
   };
 
@@ -477,22 +520,31 @@ const CookOnDemand = () => {
     setSearched(false);
     setSlotSuggestions([]);
     try {
-      const { available, options, suggestions } = await runSlotSearch({
+      const { available, options, suggestions, totalCooks, failedCooks } = await runSlotSearch({
         serviceType: form.serviceType,
         date: form.date,
         durationHours: effDuration,
       });
+      // Every per-cook request failed (backend down / network) — that's a
+      // load error, not "no slots". Stay on step 1 with an error instead of
+      // landing on an empty step 2 with a misleading toast.
+      if (totalCooks > 0 && failedCooks >= totalCooks) {
+        throw new Error("Could not load time slots. Try again.");
+      }
       setMatches(available);
       setSlotOptions(options);
       setSlotSuggestions(suggestions);
+      setTotalCooksFound(totalCooks);
       setSelectedSlot(null);
       setSearched(true);
       setStep(2);
       if (available.length === 0) {
         showToast(
-          suggestions.length > 0
-            ? `No ${effDuration}-hour slots that day — shorter sessions are free below`
-            : "No free slots on this date — try another date or duration",
+          totalCooks === 0
+            ? "No cooks offer this service yet — try another service"
+            : suggestions.length > 0
+              ? `No ${effDuration}-hour slots that day — shorter sessions are free below`
+              : "No free slots on this date — try another date or duration",
           "info"
         );
       }
@@ -502,6 +554,75 @@ const CookOnDemand = () => {
       setSearching(false);
     }
   };
+
+  // Retry after a dead request (cook never responded / declined): the waiting
+  // screen navigates here with the dead booking's plan + slot. Restore the
+  // form, re-check live availability, drop the unresponsive cook from the
+  // list, and land straight on step 3 so the customer picks another chef
+  // without re-typing anything. Runs once per navigation state.
+  const retryHandled = useRef(false);
+  useEffect(() => {
+    const retry = location.state?.retryFromBooking;
+    if (!retry || retryHandled.current) return;
+    retryHandled.current = true;
+    // Clear the navigation state so back/forward doesn't re-apply it.
+    try {
+      window.history.replaceState({}, "");
+    } catch {
+      // ignore
+    }
+    if (!retry.form?.date || !retry.form?.serviceType || !retry.selectedSlot) {
+      return;
+    }
+    autoFilled.current = true;
+    setForm((f) => ({ ...f, ...retry.form }));
+    if (retry.coords?.lat != null) setCoords(retry.coords);
+    setSearching(true);
+    (async () => {
+      try {
+        const r = await runSlotSearch({
+          serviceType: retry.form.serviceType,
+          date: retry.form.date,
+          durationHours: retry.form.durationHours,
+        });
+        // The cook who didn't respond shouldn't be offered again for this retry.
+        const filtered = retry.excludeCookId
+          ? r.available.filter((c) => {
+              const id =
+                c?.user?._id ||
+                (typeof c?.user === "string" ? c.user : null) ||
+                c?._id;
+              return String(id || "") !== String(retry.excludeCookId);
+            })
+          : r.available;
+        setMatches(filtered);
+        setSlotOptions(aggregateSlots(filtered));
+        setSlotSuggestions(r.suggestions);
+        setTotalCooksFound(r.totalCooks);
+        setSearched(true);
+        const stillFree = (aggregateSlots(filtered)).some(
+          (o) =>
+            o.startTime === retry.selectedSlot.startTime &&
+            o.endTime === retry.selectedSlot.endTime
+        );
+        if (stillFree && filtered.length > 0) {
+          setSelectedSlot(retry.selectedSlot);
+          setStep(3);
+          showToast("The last cook didn't respond — pick another chef for the same slot.", "info");
+        } else {
+          setSelectedSlot(null);
+          setStep(2);
+          showToast("Pick a time again — that slot just filled up.", "info");
+        }
+      } catch {
+        setStep(1);
+        showToast("Your details were restored — tap See Time Slots to continue.", "info");
+      } finally {
+        setSearching(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // One-tap retry from a suggestion chip: adopt the shorter hours, then
   // re-run the search immediately with the adopted value.
@@ -567,7 +688,7 @@ const CookOnDemand = () => {
         return;
       }
       const payload = {
-        cook: cook.user._id,
+        cook: cook?.user?._id || (typeof cook?.user === "string" ? cook.user : null) || cook?._id,
         serviceType: form.serviceType,
         date: form.date,
         startTime: slot.startTime,
@@ -599,37 +720,76 @@ const CookOnDemand = () => {
     }
   };
 
-  const steps = ["Plan", "Time Slot", "Venue & Cook"];
+  const steps = [
+    { label: "Plan", desc: "Service, date & hours" },
+    { label: "Time Slot", desc: "Pick when" },
+    { label: "Venue & Cook", desc: "Address & book" },
+  ];
 
   return (
-    <div className={`ondemand-page od-step-${step}`}>
-      <div className="ondemand-hero">
-        <span className="section-eyebrow">Instant Booking</span>
-        <h1 className="section-title">Book a Cook</h1>
-        <p className="section-description" style={{ marginBottom: 0 }}>
-          Plan it, pick a time, add your venue, choose your cook — address comes last, only when cooks are free.
-        </p>
+    <div className={`ondemand-page od-modern od-step-${step}`}>
+      <div className="od-hero">
+        <div className="od-hero-text">
+          <span className="od-eyebrow">
+            <Sparkles size={12} /> Instant booking
+          </span>
+          <h1 className="od-title">Book a Cook</h1>
+          <p className="od-sub">
+            <ShieldCheck size={13} /> Verified home cooks · Same launch price for all · No advance payment
+          </p>
+        </div>
+        {slab != null && (
+          <div className="od-hero-price" aria-live="polite">
+            <span>{form.durationHours || "–"} hr{Number(form.durationHours) === 1 ? "" : "s"}</span>
+            <strong>{formatCurrency(finalPayable)}</strong>
+          </div>
+        )}
       </div>
 
-      <div className="ondemand-steps">
-        {steps.map((label, i) => {
+      <ol className="od-steps-modern" aria-label="Booking progress">
+        {steps.map((s, i) => {
           const n = i + 1;
           const state = step > n ? "done" : step === n ? "active" : "";
           return (
-            <div key={label} className={`ondemand-step ${state}`}>
-              <span className="ondemand-step-dot">
-                {step > n ? <Check size={17} /> : n}
+            <li
+              key={s.label}
+              className={`od-step-item ${state}`}
+              aria-current={step === n ? "step" : undefined}
+            >
+              <span className="od-step-num" aria-hidden="true">
+                {step > n ? <Check size={13} /> : n}
               </span>
-              <span>{n}. {label}</span>
-            </div>
+              <span className="od-step-text">
+                <span className="od-step-name">{s.label}</span>
+                <span className="od-step-desc">{s.desc}</span>
+              </span>
+              {i < steps.length - 1 && <span className="od-step-link" aria-hidden="true" />}
+            </li>
           );
         })}
-      </div>
+      </ol>
+
+      {/* Live recap once planning starts */}
+      {(step > 1 || selectedSlot) && (
+        <div className="od-livebar" aria-live="polite">
+          <span className="od-livechip">{serviceLabel}</span>
+          <span className="od-livechip">{dateLabel(form.date)}</span>
+          <span className="od-livechip">{form.durationHours || "–"} hr · {form.guests || "–"} guests</span>
+          {selectedSlot && (
+            <span className="od-livechip od-livechip-strong">
+              {fmtTime(selectedSlot.startTime)} – {fmtTime(selectedSlot.endTime)}
+            </span>
+          )}
+          {slab != null && <span className="od-livechip od-livechip-price">{formatCurrency(slab)}</span>}
+        </div>
+      )}
 
       {step === 1 && (
         <form onSubmit={handleSeeSlots} className="ondemand-form-card">
           <h3>Step 1 — Plan your session</h3>
           <p className="ondemand-form-sub">Service, date, hours and guests first — no address needed until cooks are free.</p>
+          <SecTitle n="01" icon={<ChefHat size={15} />}>Which service do you need?</SecTitle>
+          <p className="ondemand-form-sub">Same launch price for every service — pick what fits today.</p>
           <div className="service-pick-grid">
             {SERVICE_OPTIONS.map((s) => (
               <button
@@ -676,74 +836,12 @@ const CookOnDemand = () => {
               <input
                 type="date"
                 name="date"
-                className="form-control"
+                className="form-control od-date-input"
                 value={form.date}
                 min={localTodayStr()}
                 onChange={handleChange}
                 required
               />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>
-                <Clock3 size={15} /> Needed for how many hours? *
-              </label>
-              <div
-                className="bk-duration-row"
-                role="group"
-                aria-label="Quick hour presets"
-                style={{ marginBottom: "0.55rem" }}
-              >
-                {DURATION_QUICK.map((h) => {
-                  const active = Number(form.durationHours) === h;
-                  return (
-                    <button
-                      key={h}
-                      type="button"
-                      aria-pressed={active}
-                      className={`bk-dur-chip ${active ? "active" : ""}`}
-                      onClick={() => setForm({ ...form, durationHours: String(h) })}
-                    >
-                      {h} hr{h > 1 ? "s" : ""}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="od-stepper">
-                <button
-                  type="button"
-                  className="od-step-btn"
-                  aria-label="Decrease hours"
-                  onClick={() => adjustNumber("durationHours", -1, { min: 1, max: 4, step: 1 })}
-                >
-                  <Minus size={16} />
-                </button>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  name="durationHours"
-                  className="form-control"
-                  value={form.durationHours}
-                  onChange={handleChange}
-                  min={1}
-                  max={4}
-                  step={1}
-                  required
-                  aria-label="Hours needed"
-                />
-                <button
-                  type="button"
-                  className="od-step-btn"
-                  aria-label="Increase hours"
-                  onClick={() => adjustNumber("durationHours", 1, { min: 1, max: 4, step: 1 })}
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-              <span className="field-hint">Launch pricing: 1 hr ₹199 · 2 hrs ₹349 · 3 hrs ₹499 · 4 hrs ₹649.</span>
             </div>
             <div className="form-group">
               <label>
@@ -783,6 +881,37 @@ const CookOnDemand = () => {
             </div>
           </div>
 
+          <SecTitle n="03" icon={<Clock3 size={15} />}>How long do you need the cook?</SecTitle>
+
+          <div className="form-row">
+            <div className="form-group">
+              <div className="bk-price-strip" aria-label="Launch pricing">
+                <span className="bk-price-badge">
+                  <BadgePercent size={13} /> Launch pricing · flat for every cook
+                </span>
+                <div className="bk-price-cells">
+                  {DURATION_QUICK.map((h) => {
+                    const active = Number(form.durationHours) === h;
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        aria-pressed={active}
+                        className={`bk-price-cell ${active ? "active" : ""}`}
+                        onClick={() => setForm({ ...form, durationHours: String(h) })}
+                        title={`Select ${h} hour${h > 1 ? "s" : ""}`}
+                      >
+                        <span>{h} hr{h > 1 ? "s" : ""}</span>
+                        <strong>{formatCurrency(LAUNCH_SLAB_PRICES[h])}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="bk-price-note">Flat rate · same for every cook &amp; service · no payment now</span>
+              </div>
+            </div>
+          </div>
+
           {formError && <div className="error-message">{formError}</div>}
 
           <div className="od-stickybar">
@@ -790,15 +919,16 @@ const CookOnDemand = () => {
               <span>{serviceLabel}</span>
               <span>{dateLabel(form.date)}</span>
               <span>{form.durationHours || "–"} hr · {form.guests || "–"} guests</span>
-              <span>{slab != null ? formatCurrency(slab) : "—"}</span>
+              <strong className="od-summary-price">{slab != null ? formatCurrency(slab) : "—"}</strong>
             </div>
-            <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={searching}>
-              {searching ? "Loading time slots..." : (
+            <button type="submit" className="btn btn-primary btn-block btn-lg od-cta" disabled={searching}>
+              {searching ? "Finding free cooks..." : (
                 <>
                   <Clock3 size={17} /> See Time Slots <ArrowRight size={17} />
                 </>
               )}
             </button>
+            <p className="od-sticky-note">Free to check · no address needed yet · no payment now</p>
           </div>
         </form>
       )}
@@ -806,21 +936,23 @@ const CookOnDemand = () => {
       {step === 2 && (
         <div className="ondemand-form-card">
           <button className="btn btn-outline btn-sm" onClick={() => setStep(1)}>
-            ← Plan
+            <ArrowLeft size={15} /> Plan
           </button>
           <h3 style={{ marginTop: "0.9rem" }}>Step 2 — Pick a time slot</h3>
           <p className="ondemand-form-sub">
-            {form.date} • {form.durationHours} hr{Number(form.durationHours) === 1 ? "" : "s"} •
-            Slots run 8:00 AM – 8:00 PM{form.date === localTodayStr() ? " • past times hidden" : ""}.
-            Slots are sized to your selected hours.
+            {dateLabel(form.date)} • {form.durationHours} hr{Number(form.durationHours) === 1 ? "" : "s"} · {slab != null ? formatCurrency(slab) : ""} •
+            8:00 AM – 8:00 PM{form.date === localTodayStr() ? " • past times hidden" : ""}.
+            Each slot fits your {form.durationHours}-hour session.
           </p>
           <SummaryBar form={form} serviceLabel={serviceLabel} onEdit={() => setStep(1)} />
           {searched && slotOptions.length === 0 && (
             <div className="no-data">
               <p>
-                {slotSuggestions.length > 0
-                  ? `No ${form.durationHours}-hour slots on this date — but shorter sessions are free.`
-                  : "No free slots on this date — try another date or duration."}
+                {totalCooksFound === 0
+                  ? "No cooks offer this service yet — try another service."
+                  : slotSuggestions.length > 0
+                    ? `No ${form.durationHours}-hour slots on this date — but shorter sessions are free.`
+                    : "No free slots on this date — try another date or duration."}
               </p>
               {slotSuggestions.length > 0 && (
                 <div className="od-suggest-row" role="group" aria-label="Durations with free slots">
@@ -839,51 +971,73 @@ const CookOnDemand = () => {
             </div>
           )}
           {slotOptions.length > 0 && (
-            <div className="slot-list slot-list-pick" role="radiogroup" aria-label="Available time slots">
-              {slotOptions.map((o) => {
-                const active =
-                  selectedSlot &&
-                  selectedSlot.startTime === o.startTime &&
-                  selectedSlot.endTime === o.endTime;
-                return (
-                  <button
-                    key={`${o.startTime}-${o.endTime}`}
-                    type="button"
-                    role="radio"
-                    aria-checked={!!active}
-                    className={`slot-chip slot-chip-pick ${active ? "selected" : ""}`}
-                    onClick={() => {
-                      setSelectedSlot({ startTime: o.startTime, endTime: o.endTime });
-                      setFormError("");
-                    }}
-                  >
-                    <Clock3 size={15} />
-                    {fmtTime(o.startTime)} – {fmtTime(o.endTime)}
-                    <span className="slot-chip-count">
-                      {o.freeCooks} cook{o.freeCooks > 1 ? "s" : ""} free
-                    </span>
-                  </button>
-                );
-              })}
+            <div role="radiogroup" aria-label="Available time slots">
+              {["Morning", "Afternoon", "Evening"]
+                .map((part) => ({
+                  part,
+                  slots: slotOptions.filter((o) => slotPart(o.startTime) === part),
+                }))
+                .filter((g) => g.slots.length > 0)
+                .map((g) => (
+                  <div key={g.part} className="od-slot-group">
+                    <p className="od-slot-group-title">
+                      <Clock3 size={13} /> {g.part}
+                      <span> · {g.slots.length} slot{g.slots.length > 1 ? "s" : ""}</span>
+                    </p>
+                    <div className="slot-list slot-list-pick">
+                      {g.slots.map((o) => {
+                        const active =
+                          selectedSlot &&
+                          selectedSlot.startTime === o.startTime &&
+                          selectedSlot.endTime === o.endTime;
+                        return (
+                          <button
+                            key={`${o.startTime}-${o.endTime}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={!!active}
+                            className={`slot-chip slot-chip-pick ${active ? "selected" : ""}`}
+                            onClick={() => {
+                              setSelectedSlot({ startTime: o.startTime, endTime: o.endTime });
+                              setFormError("");
+                            }}
+                          >
+                            <Clock3 size={15} />
+                            {fmtTime(o.startTime)} – {fmtTime(o.endTime)}
+                            <span className="slot-chip-count">
+                              {o.freeCooks} cook{o.freeCooks > 1 ? "s" : ""} free
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
 
           {formError && <div className="error-message">{formError}</div>}
 
-          <button
-            type="button"
-            className="btn btn-primary btn-block btn-lg"
-            disabled={!selectedSlot}
-            onClick={handleChooseCook}
-            style={{ marginTop: "0.5rem" }}
-          >
-            Choose Cook <ArrowRight size={17} />
-          </button>
-          {!selectedSlot && (
-            <p className="field-hint" style={{ textAlign: "center", marginTop: "0.5rem" }}>
-              Tap a time slot above to continue — the button unlocks once you pick one.
-            </p>
-          )}
+          <div className="od-stickybar">
+            <div className="od-summary" aria-live="polite">
+              {selectedSlot ? (
+                <>
+                  <span>{fmtTime(selectedSlot.startTime)} – {fmtTime(selectedSlot.endTime)}</span>
+                  <strong className="od-summary-price">{slab != null ? formatCurrency(slab) : "—"}</strong>
+                </>
+              ) : (
+                <span className="od-missing">Tap a time slot above to continue</span>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-block btn-lg od-cta"
+              disabled={!selectedSlot}
+              onClick={handleChooseCook}
+            >
+              Choose Cook <ArrowRight size={17} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -891,15 +1045,24 @@ const CookOnDemand = () => {
         <div>
           <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
             <button className="btn btn-outline btn-sm" onClick={() => setStep(2)}>
-              ← Change slot
+              <ArrowLeft size={15} /> Change slot
             </button>
             <button className="btn btn-outline btn-sm" onClick={() => setStep(1)}>
-              ← Plan
+              <ArrowLeft size={15} /> Plan
             </button>
           </div>
           <SummaryBar form={form} serviceLabel={serviceLabel} onEdit={() => setStep(1)} />
+          {selectedSlot && (
+            <div className="od-slot-recap" aria-live="polite">
+              <Clock3 size={15} />
+              <span>
+                {dateLabel(form.date)} · {fmtTime(selectedSlot.startTime)} – {fmtTime(selectedSlot.endTime)} · {form.durationHours} hr{Number(form.durationHours) === 1 ? "" : "s"}
+              </span>
+              {slab != null && <strong>{formatCurrency(slab)}</strong>}
+            </div>
+          )}
           <div className="ondemand-form-card od-venue-card">
-            <SecTitle n="03" icon={<MapPin size={15} />}>Where should the cook come?</SecTitle>
+            <SecTitle n="04" icon={<MapPin size={15} />}>Where should the cook come?</SecTitle>
             <div className="ondemand-locate-box">
               {savedLocations.length > 0 && (
                 <div className="form-group">
@@ -1016,7 +1179,7 @@ const CookOnDemand = () => {
               </div>
             </div>
 
-            <SecTitle n="04" icon={<UtensilsCrossed size={15} />}>What dishes do you need? *</SecTitle>
+            <SecTitle n="05" icon={<UtensilsCrossed size={15} />}>What dishes do you need? *</SecTitle>
             <div className="form-group">
               <label>Dishes <small>(comma separated)</small></label>
               <input
@@ -1044,7 +1207,7 @@ const CookOnDemand = () => {
               />
             </div>
 
-            <SecTitle n="05" icon={<Clock3 size={15} />}>Price &amp; coupon</SecTitle>
+            <SecTitle n="06" icon={<BadgePercent size={15} />}>Price &amp; coupon</SecTitle>
             <div className="price-rows">
               <div className="price-row">
                 <span>Service Price · {form.durationHours} hr{Number(form.durationHours) === 1 ? "" : "s"}</span>

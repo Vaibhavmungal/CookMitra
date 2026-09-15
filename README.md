@@ -17,13 +17,15 @@ MERN monorepo: `backend/` (Express + MongoDB API, serves uploaded docs) and `fro
 1. Create a `.env` file next to `docker-compose.yml` with at least:
    ```
    JWT_SECRET=<long random string>
+   MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/festivecook?retryWrites=true&w=majority
    RAZORPAY_KEY_ID=...
    RAZORPAY_KEY_SECRET=...
    GOOGLE_CLIENT_ID=...
    ```
 2. `docker compose up --build -d`
-3. App on `http://localhost:5000`, Mongo persisted in the `mongo-data` volume.
+3. App on `http://localhost:5000`, data lives in your Atlas cluster.
 4. Optional seed: `docker compose exec app node seeds/seed.js`
+5. Offline dev with local Mongo instead: set `MONGODB_URI=mongodb://db:27017/festivecook` in that `.env` and run `docker compose --profile local-mongo up --build -d` (data persisted in the `mongo-data` volume).
 
 ## Quick deploy (Render / Railway / Fly / any Node host)
 

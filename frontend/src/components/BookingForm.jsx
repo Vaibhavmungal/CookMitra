@@ -4,13 +4,14 @@ import API from "../api/axios";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUser } from "../store/authSlice";
 import { useShowToast, useSiteLocation } from "../store/hooks";
-import { formatCurrency, localTodayStr, slabPriceForDuration } from "../utils/constants";
+import { formatCurrency, localTodayStr, slabPriceForDuration, LAUNCH_SLAB_PRICES } from "../utils/constants";
 import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/bookingDraft";
 import CouponApply from "./CouponApply";
 import {
-  Calendar, Clock, AlertCircle, Navigation,
+  Calendar, CalendarDays, Clock, AlertCircle, Navigation,
   History, Copy, Check, ChefHat, Users, BookOpen, Scissors,
-  MapPin, StickyNote, Send, ArrowRight, ChevronLeft, ChevronRight
+  MapPin, StickyNote, ArrowRight, ChevronLeft,
+  BadgePercent, ShieldCheck, Sparkles
 } from "lucide-react";
 import LoginPromptModal from "./LoginPromptModal";
 
@@ -114,6 +115,17 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
   }));
   const [step, setStep] = useState(0);
 
+  // Every step change opens at the top of the page.
+  useEffect(() => {
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  }, [step]);
+
+  // Start each step at the top of the page.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [step]);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [coords, setCoords] = useState(null);
@@ -199,7 +211,29 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
   })();
 
   const endsAfterServiceDay = derivedEndTime && hmToMinutes(derivedEndTime) > SERVICE_END_MIN;
-  const startInPast = formData.startTime && hmToMinutes(formData.startTime) < hmToMinutes(nowHM);
+  const startInPast = isToday(formData.date) && formData.startTime && hmToMinutes(formData.startTime) < hmToMinutes(nowHM);
+
+  const serviceLabel =
+    (SERVICE_OPTIONS.find((o) => o.value === formData.serviceType) || {}).label || "Service";
+  const scheduleSummary = [
+    formData.date ? fmtDateShort(formData.date) : null,
+    hoursValid ? `${formData.durationHours} hr${Number(formData.durationHours) === 1 ? "" : "s"}` : null,
+    formData.startTime ? `${fmtHour12(formData.startTime)}${derivedEndTime ? ` → ${fmtHour12(derivedEndTime)}` : ""}` : null,
+  ].filter(Boolean).join(" · ");
+
+  const goNext = () => {
+    if (step === 0 && !formData.serviceType) { setError("Select a service type"); scrollToError(); return; }
+    if (step === 1) {
+      if (!formData.date) { setError("Please choose a date"); scrollToError(); return; }
+      if (formData.date < minDateStr) { setError("That date already passed — please pick today or a future date"); scrollToError(); return; }
+      if (!hoursValid) { setError("Please choose 1, 2, 3 or 4 hours"); scrollToError(); return; }
+      if (!formData.startTime) { setError("Select a start time"); scrollToError(); return; }
+      if (!derivedEndTime) { setError("That start + duration ends after 8 PM — pick an earlier start"); scrollToError(); return; }
+      if (startInPast) { setError("That time already passed today — pick a later start"); scrollToError(); return; }
+    }
+    setError("");
+    setStep(step + 1);
+  };
 
   /* ── Map pin ── */
   const pinMapsUrl = coords?.lat != null && coords?.lng != null
@@ -364,6 +398,8 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
       setError("Only customers can book"); scrollToError(); return;
     }
     const fail = (msg) => { setError(msg); scrollToError(); };
+    if (!formData.date) { fail("Please choose a date"); return; }
+    if (formData.date < minDateStr) { fail("That date already passed — please pick today or a future date"); return; }
     const serviceHours = Number(formData.durationHours);
     if (!formData.durationHours || !Number.isInteger(serviceHours) || serviceHours < DURATION_MIN || serviceHours > DURATION_MAX) {
       fail("Please choose 1, 2, 3 or 4 hours"); return;
@@ -417,11 +453,31 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
 
   /* ── Date carousel ── */
   const dateDays = nextNDays(7);
-  const STEP_TITLES = ["Service", "Details", "Confirm"];
+  const STEP_TITLES = ["Service", "Schedule", "Confirm"];
+  const STEP_DESCS = ["What do you need?", "When should we come?", "Where & review"];
 
   /* ════════════════════════════════════════════════════════════════════ */
   return (
-  <div className={`bk bk-step-${step}`}>
+  <div className={`bk bk-modern bk-step-${step}`}>
+
+    {/* Header */}
+    <div className="bk-head">
+      <div className="bk-head-text">
+        <span className="bk-eyebrow">
+          <Sparkles size={12} /> Instant booking
+        </span>
+        <h2 className="bk-title">{cookName ? `Book ${String(cookName).split(" ")[0]}` : "Book your cook"}</h2>
+        <p className="bk-sub">
+          <ShieldCheck size={13} /> Verified home cook · No payment now — slot held 5 min
+        </p>
+      </div>
+      {slab != null && hoursValid && (
+        <div className="bk-head-price" aria-live="polite">
+          <span>{formData.durationHours} hr{Number(formData.durationHours) === 1 ? "" : "s"}</span>
+          <strong>{formatCurrency(finalAmount)}</strong>
+        </div>
+      )}
+    </div>
 
     {/* Error alert */}
     {error && (
@@ -431,18 +487,33 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
     )}
 
     {/* Step progress */}
-    <div className="bk-steps" aria-hidden="true">
-      {STEP_TITLES.map((_, i) => (
-        <span
-          key={STEP_TITLES[i]}
-          className={`bk-step-dot ${i < step ? "done" : i === step ? "active" : ""}`}
-        />
+    <ol className="bk-steps-modern" aria-label="Booking progress">
+      {STEP_TITLES.map((title, i) => (
+        <li
+          key={title}
+          className={`bk-step-item ${i < step ? "done" : i === step ? "active" : ""}`}
+          aria-current={i === step ? "step" : undefined}
+        >
+          <span className="bk-step-num" aria-hidden="true">
+            {i < step ? <Check size={13} /> : i + 1}
+          </span>
+          <span className="bk-step-text">
+            <span className="bk-step-name">{title}</span>
+            <span className="bk-step-desc">{STEP_DESCS[i]}</span>
+          </span>
+          {i < STEP_TITLES.length - 1 && <span className="bk-step-link" aria-hidden="true" />}
+        </li>
       ))}
-    </div>
-    <div className="bk-step-meta" aria-live="polite">
-      <span>Step {step + 1} of {STEP_TITLES.length}</span>
-      <strong>{STEP_TITLES[step]}</strong>
-    </div>
+    </ol>
+
+    {/* Live recap once anything is picked */}
+    {(step > 0 && (scheduleSummary || serviceLabel)) && (
+      <div className="bk-livebar" aria-live="polite">
+        <span className="bk-livechip">{serviceLabel}</span>
+        {scheduleSummary && <span className="bk-livechip bk-livechip-strong">{scheduleSummary}</span>}
+        {slab != null && hoursValid && <span className="bk-livechip bk-livechip-price">{formatCurrency(slab)}</span>}
+      </div>
+    )}
 
     <form onSubmit={handleSubmit} aria-busy={submitting}>
       <div className="bk-step" key={step}>
@@ -450,8 +521,9 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
       {step === 0 && (
         <div className="bk-card">
           <div className="bk-card-label">
-            <ChefHat size={14} /> Service
+            <ChefHat size={14} /> Which service do you need?
           </div>
+          <p className="bk-card-hint">Same launch price for every service — pick what fits today.</p>
           <div className="bk-service-grid">
             {SERVICE_OPTIONS.map((opt) => {
               const Icon = opt.icon;
@@ -474,65 +546,92 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
         </div>
       )}
 
-      {/* ── Step 1: Duration & Start Hour ── */}
+      {/* ── Step 1: Date, Duration & Start Hour ── */}
       {step === 1 && (
         <>
-          {/* Duration chips */}
+          {/* Date carousel */}
           <div className="bk-card">
             <div className="bk-card-label">
-              <Clock size={14} /> Duration
+              <CalendarDays size={14} /> Which date?
             </div>
-            <div className="bk-duration-row">
-              {DURATION_OPTIONS.map((h) => {
-                const active = Number(formData.durationHours) === h;
+            <div className="bk-date-row" role="group" aria-label="Pick a date">
+              {dateDays.map((d) => {
+                const active = formData.date === d;
                 return (
                   <button
-                    key={h}
+                    key={d}
                     type="button"
-                    className={`bk-dur-chip ${active ? "active" : ""}`}
-                    onClick={() => setFormData((p) => ({ ...p, durationHours: String(h) }))}
+                    aria-pressed={active}
+                    className={`bk-date-cell ${active ? "active" : ""} ${isToday(d) ? "today" : ""}`}
+                    onClick={() => setFormData((p) => ({ ...p, date: d }))}
+                    title={fmtDateShort(d)}
                   >
-                    {h} hr{h !== 1 ? "s" : ""}
+                    <span className="bk-date-day">{isToday(d) ? "Today" : fmtDateDay(d)}</span>
+                    <span className="bk-date-num">{fmtDateNum(d)}</span>
+                    <span className="bk-date-mon">{fmtDateMonth(d)}</span>
                   </button>
                 );
               })}
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                name="durationHours"
-                className="bk-dur-custom"
-                placeholder="Other"
-                min={DURATION_MIN}
-                max={DURATION_MAX}
-                step={1}
-                value={
-                  DURATION_OPTIONS.includes(Number(formData.durationHours))
-                    ? ""
-                    : formData.durationHours
-                }
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || (Number.isInteger(Number(v)) && Number(v) >= DURATION_MIN && Number(v) <= DURATION_MAX)) {
-                    setFormData((p) => ({ ...p, durationHours: v }));
-                  }
-                }}
-                aria-label="Custom duration in hours"
-              />
-              {derivedEndTime && (
-                <div className="bk-dur-end">
-                  Ends <strong>{fmtHour12(derivedEndTime)}</strong>
-                </div>
-              )}
-              <span className="bk-pin-msg">Launch pricing: 1 hr ₹199 · 2 hrs ₹349 · 3 hrs ₹499 · 4 hrs ₹649.</span>
             </div>
+            <div className="bk-date-manual">
+              <Calendar size={13} />
+              <input
+                type="date"
+                name="date"
+                className="bk-date-input"
+                value={formData.date}
+                min={minDateStr}
+                onChange={handleChange}
+                aria-label="Or pick another date"
+              />
+              {formData.date && (
+                <span className="bk-date-picked">{fmtDateShort(formData.date)}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Duration — launch pricing cells are the selector */}
+          <div className="bk-card">
+            <div className="bk-card-label">
+              <Clock size={14} /> How long?
+            </div>
+            <div className="bk-price-strip" aria-label="Launch pricing">
+              <span className="bk-price-badge">
+                <BadgePercent size={13} /> Launch pricing
+              </span>
+              <div className="bk-price-cells">
+                {DURATION_OPTIONS.map((h) => {
+                  const active = Number(formData.durationHours) === h;
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      aria-pressed={active}
+                      className={`bk-price-cell ${active ? "active" : ""}`}
+                      onClick={() => setFormData((p) => ({ ...p, durationHours: String(h) }))}
+                      title={`Select ${h} hour${h !== 1 ? "s" : ""}`}
+                    >
+                      <span>{h} hr{h !== 1 ? "s" : ""}</span>
+                      <strong>{formatCurrency(LAUNCH_SLAB_PRICES[h])}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="bk-price-note">Flat rate · same for every cook &amp; service · no payment now</span>
+            </div>
+            {derivedEndTime && (
+              <div className="bk-dur-end">
+                Ends <strong>{fmtHour12(derivedEndTime)}</strong>
+              </div>
+            )}
           </div>
 
           {/* Start hour selector */}
           <div className="bk-card">
             <div className="bk-card-label">
-              <Clock size={14} /> Start Hour
+              <Clock size={14} /> What start time?
             </div>
+            <p className="bk-card-hint">Service hours 8:00 am – 8:00 pm · tap a start, we show the end.</p>
             <div className="bk-hour-select">
               {hourOptions.map((t) => {
                 const active = formData.startTime === t;
@@ -555,6 +654,27 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
       {/* ── Step 2: Address, Notes & Submit ── */}
       {step === 2 && (
         <>
+          {/* Recap */}
+          <div className="bk-card bk-recap">
+            <div className="bk-card-label">
+              <Check size={14} /> Your booking
+            </div>
+            <div className="bk-recap-rows">
+              <div className="bk-recap-row">
+                <span>{serviceLabel}{formData.date ? ` · ${fmtDateShort(formData.date)}` : ""}</span>
+                <button type="button" className="bk-recap-edit" onClick={() => setStep(0)}>Edit</button>
+              </div>
+              <div className="bk-recap-row">
+                <span>
+                  {hoursValid ? `${formData.durationHours} hr${Number(formData.durationHours) === 1 ? "" : "s"}` : "Duration"}
+                  {slab != null && hoursValid ? ` · ${formatCurrency(slab)}` : ""}
+                  {formData.startTime ? ` · ${fmtHour12(formData.startTime)}${derivedEndTime ? ` → ${fmtHour12(derivedEndTime)}` : ""}` : ""}
+                </span>
+                <button type="button" className="bk-recap-edit" onClick={() => setStep(1)}>Edit</button>
+              </div>
+            </div>
+          </div>
+
           {/* Address */}
           <div className="bk-card">
             <div className="bk-card-label">
@@ -689,32 +809,41 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
       )}
       </div>
 
-      {/* Navigation Buttons */}
-      <div className="bk-nav-buttons">
-        {step > 0 && (
-          <button type="button" className="bk-back-btn" onClick={() => setStep(step - 1)} disabled={submitting}>
-            Back
-          </button>
-        )}
-        {step < 2 && (
-          <button
-            type="button"
-            className="bk-next-btn"
-                        onClick={() => {
-              // simple validation before advancing
-              if (step === 0 && !formData.serviceType) { setError("Select a service type"); scrollToError(); return; }
-              if (step === 1) {
-                if (!hoursValid) { setError("Please choose 1, 2, 3 or 4 hours"); scrollToError(); return; }
-                if (!formData.startTime) { setError("Select a start time"); scrollToError(); return; }
-              }
-              setError(""); // clear any previous errors
-              setStep(step + 1);
-            }}
-            disabled={submitting}
-          >
-            Next
-          </button>
-        )}
+      {/* Sticky footer */}
+      <div className="bk-stickybar">
+        <div className="bk-sticky-summary" aria-live="polite">
+          {slab != null && hoursValid ? (
+            <>
+              <span>{scheduleSummary || serviceLabel}</span>
+              <strong>{formatCurrency(finalAmount)}</strong>
+            </>
+          ) : (
+            <>
+              <span>{step === 0 ? serviceLabel : scheduleSummary || "Pick your schedule"}</span>
+              <strong>{slab != null ? formatCurrency(slab) : "₹—"}</strong>
+            </>
+          )}
+        </div>
+        <div className="bk-sticky-actions">
+          {step > 0 && (
+            <button type="button" className="bk-back-btn" onClick={() => setStep(step - 1)} disabled={submitting}>
+              <ChevronLeft size={16} /> Back
+            </button>
+          )}
+          {step < 2 && (
+            <button
+              type="button"
+              className="bk-next-btn"
+              onClick={goNext}
+              disabled={submitting}
+            >
+              Continue <ArrowRight size={16} />
+            </button>
+          )}
+          {step === 2 && (
+            <span className="bk-sticky-hint">Review &amp; tap “Send Request” above</span>
+          )}
+        </div>
       </div>
     </form>
 

@@ -34,10 +34,19 @@ export const openRazorpayCheckout = async ({
   if (!loaded || !window.Razorpay) {
     throw new Error("Payment gateway failed to load. Check your connection and retry.");
   }
-  const key = keyId || process.env.REACT_APP_RAZORPAY_KEY_ID;
-  if (!key) {
-    throw new Error("Payments are not configured (missing key).");
+  const rawKey = keyId || process.env.REACT_APP_RAZORPAY_KEY_ID || "";
+  const looksPlaceholder = (v) =>
+    !v ||
+    /x{4,}/i.test(v) ||
+    /^your_/i.test(v) ||
+    /example/i.test(v) ||
+    /change_?me/i.test(v);
+  if (looksPlaceholder(rawKey)) {
+    throw new Error(
+      "Online payments are not configured yet on this site. Please try cash/UPI on service day or contact support."
+    );
   }
+  const key = rawKey;
   return new Promise((resolve, reject) => {
     const rzp = new window.Razorpay({
       key,

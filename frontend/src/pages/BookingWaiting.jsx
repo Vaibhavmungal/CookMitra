@@ -44,6 +44,46 @@ const SORRY_COPY = {
   },
 };
 
+// Snapshot of the dead request so "Find another cook" can land straight on
+// step 3 (venue + cook list) with the same date/slot, minus the cook who
+// didn't respond. CookOnDemand.jsx consumes this via location.state.
+const toLocalDayStr = (d) => {
+  if (!d) return "";
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+};
+
+const buildRetryState = (b) => {
+  if (!b) return null;
+  const addr = b.addressDetails || {};
+  return {
+    form: {
+      serviceType: b.serviceType,
+      date: toLocalDayStr(b.date),
+      guests: b.guests != null ? String(b.guests) : "4",
+      durationHours: b.durationHours != null ? String(b.durationHours) : "",
+      flatNo: addr.flatNo || "",
+      society: addr.society || "",
+      landmark: addr.landmark || "",
+      city: addr.city || "",
+      customDishes: (b.selectedItems || []).join(", "),
+      notes: b.notes || "",
+    },
+    selectedSlot:
+      b.startTime && b.endTime
+        ? { startTime: b.startTime, endTime: b.endTime }
+        : null,
+    coords:
+      b.location?.lat != null && b.location?.lng != null
+        ? { lat: b.location.lat, lng: b.location.lng }
+        : null,
+    excludeCookId:
+      (typeof b.cook === "string" ? b.cook : b.cook?._id) || null,
+  };
+};
+
 const BookingWaiting = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
@@ -107,7 +147,9 @@ const BookingWaiting = () => {
     };
   }, [load]);
 
-  // Sorry screen auto-redirects back to finding cooks
+  // Sorry screen auto-redirects back to finding cooks — carrying the
+  // booking snapshot so the customer lands on step 3 (pick another cook
+  // for the same slot) instead of starting over on step 1.
   useEffect(() => {
     if (phase !== "sorry") return undefined;
     setRedirectIn(REDIRECT_S);
@@ -115,14 +157,17 @@ const BookingWaiting = () => {
       setRedirectIn((s) => {
         if (s <= 1) {
           clearInterval(iv);
-          navigate("/cook-on-demand", { replace: true });
+          navigate("/cook-on-demand", {
+            replace: true,
+            state: booking ? { retryFromBooking: buildRetryState(booking) } : undefined,
+          });
           return 0;
         }
         return s - 1;
       });
     }, 1000);
     return () => clearInterval(iv);
-  }, [phase, navigate]);
+  }, [phase, navigate, booking]);
 
   const cancelNow = async () => {
     if (cancelling || handledRef.current) return;
@@ -138,6 +183,15 @@ const BookingWaiting = () => {
       setCancelling(false);
     }
   };
+
+  // "Find another cook" — back to step 3 with the same plan/slot, so the
+  // customer picks a different chef without re-typing anything.
+  const goFindAnotherCook = useCallback(() => {
+    navigate("/cook-on-demand", {
+      replace: true,
+      state: booking ? { retryFromBooking: buildRetryState(booking) } : undefined,
+    });
+  }, [navigate, booking]);
 
   // Countdown against the server-set 5-minute acceptance window.
   const createdAtMs = booking?.createdAt ? new Date(booking.createdAt).getTime() : null;
@@ -193,7 +247,7 @@ const BookingWaiting = () => {
           <div className="bf-redirect">
             Taking you to available cooks in <b>{redirectIn}s</b>…
           </div>
-          <button className="btn btn-primary bf-btn" onClick={() => navigate("/cook-on-demand", { replace: true })}>
+          <button className="btn btn-primary bf-btn" onClick={goFindAnotherCook}>
             <Search size={18} /> Find another cook now <ArrowRight size={18} />
           </button>
         </div>

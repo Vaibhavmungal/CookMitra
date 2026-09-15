@@ -7,6 +7,12 @@ REM frontend\devserver.log
 title FestiveCook Dev Launcher
 cd /d "%~dp0"
 
+echo Checking database target...
+findstr /R /C:"mongodb.net" "%~dp0backend\.env" >nul 2>&1
+if not errorlevel 1 (
+  echo Atlas connection string detected in backend\.env - using MongoDB Atlas, no local MongoDB needed.
+  goto :skipmongocheck
+)
 echo Checking MongoDB service...
 sc query MongoDB | find "RUNNING" >nul
 if errorlevel 1 (
@@ -23,6 +29,7 @@ if errorlevel 1 (
 ) else (
   echo MongoDB is running.
 )
+:skipmongocheck
 
 for %%P in (5000 3000) do (
   netstat -ano | find "LISTENING" | find ":%%P " >nul

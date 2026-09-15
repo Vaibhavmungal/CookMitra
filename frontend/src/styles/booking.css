@@ -807,6 +807,12 @@
   margin-bottom: 0.55rem;
 }
 
+/* Compact date picker — small width instead of full-width */
+.od-date-input {
+  width: auto;
+  max-width: 200px;
+}
+
 /* − value + stepper: one joined control */
 .od-stepper { display: flex; align-items: stretch; gap: 0.45rem; }
 .od-stepper .form-control { text-align: center; }
@@ -1244,3 +1250,575 @@
   padding-top: 0.45rem;
 }
 .price-row.total strong { color: var(--primary-700); font-size: 1.2rem; }
+
+/* ==========================================================================
+   Launch pricing strip — 1hr ₹199 · 2hrs ₹349 · 3hrs ₹499 · 4hrs ₹649
+   Priced duration chips + full-rate card under the duration selector.
+   ========================================================================== */
+.bk-dur-chip-priced {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1.2;
+  padding: 0.3rem 0.85rem;
+}
+.bk-dur-hrs { font-size: 0.8rem; font-weight: 700; }
+.bk-dur-price {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  font-variant-numeric: tabular-nums;
+}
+.bk-dur-chip-priced.active .bk-dur-price { color: #fff; }
+
+.bk-price-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1.5px dashed #fdba74;
+  border-radius: 12px;
+  padding: 0.6rem 0.7rem;
+  margin-top: 0.15rem;
+}
+.bk-price-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-radius: 99px;
+  padding: 0.18rem 0.6rem;
+  box-shadow: var(--shadow-brand);
+}
+.bk-price-badge svg { flex-shrink: 0; }
+.bk-price-cells {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.45rem;
+}
+.bk-price-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  background: #fff;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 10px;
+  padding: 0.4rem 0.3rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.bk-price-cell strong {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  font-variant-numeric: tabular-nums;
+}
+.bk-price-cell:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.bk-price-cell.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.bk-price-note {
+  font-size: 0.72rem;
+  color: var(--slate-500);
+  text-align: center;
+  line-height: 1.35;
+}
+
+@media (max-width: 400px) {
+  .bk-price-cells { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ==========================================================================
+   Modern booking redesign — header, numbered stepper, live recap bar,
+   date carousel, sticky summary footer.
+   ========================================================================== */
+.bk-modern { gap: 0.7rem; }
+
+/* Header */
+.bk-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 55%, #fed7aa 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  padding: 0.85rem 0.95rem;
+  box-shadow: var(--shadow-sm);
+}
+.bk-head-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.bk-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary-700);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #fed7aa;
+  border-radius: 99px;
+  padding: 0.15rem 0.55rem;
+}
+.bk-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--slate-900);
+  line-height: 1.2;
+}
+.bk-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  line-height: 1.4;
+}
+.bk-head-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--slate-500);
+}
+.bk-head-price strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numbered stepper */
+.bk-steps-modern {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0.1rem 0.1rem 0;
+}
+.bk-step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 0;
+}
+.bk-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--slate-200);
+  color: var(--slate-500);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.bk-step-item.active .bk-step-num {
+  background: var(--primary-gradient);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--shadow-brand);
+}
+.bk-step-item.done .bk-step-num {
+  background: var(--accent-emerald);
+  border-color: transparent;
+  color: #fff;
+}
+.bk-step-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.bk-step-name { font-size: 0.76rem; font-weight: 800; color: var(--slate-700); }
+.bk-step-item.active .bk-step-name { color: var(--primary-700); }
+.bk-step-desc { font-size: 0.66rem; font-weight: 600; color: var(--slate-400); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-step-link { flex: 1; height: 2px; border-radius: 2px; background: var(--slate-200); margin: 0 0.5rem; min-width: 8px; }
+.bk-step-item.done .bk-step-link { background: var(--accent-emerald); }
+
+/* Live recap bar */
+.bk-livebar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  background: var(--slate-900);
+  border-radius: 12px;
+  padding: 0.5rem 0.6rem;
+}
+.bk-livechip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+.bk-livechip-strong { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.bk-livechip-price {
+  color: #fff;
+  background: var(--primary-gradient);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+/* Card hint text */
+.bk-card-hint { margin: 0; font-size: 0.76rem; color: var(--slate-500); line-height: 1.4; }
+
+/* Date carousel */
+.bk-date-row {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.1rem 0 0.25rem;
+}
+.bk-date-row::-webkit-scrollbar { display: none; }
+.bk-date-cell {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  min-width: 62px;
+  padding: 0.45rem 0.4rem;
+  border: 1.5px solid var(--slate-200);
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.bk-date-cell:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.bk-date-cell.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.bk-date-day { font-size: 0.66rem; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.03em; }
+.bk-date-cell.active .bk-date-day { color: var(--primary-700); }
+.bk-date-num { font-size: 1.05rem; font-weight: 800; color: var(--slate-900); line-height: 1.1; }
+.bk-date-mon { font-size: 0.68rem; font-weight: 700; color: var(--slate-400); }
+.bk-date-manual {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--slate-500);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.bk-date-input {
+  border: 1.5px solid var(--slate-200);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--slate-700);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.6rem;
+  outline: none;
+  max-width: 150px;
+}
+.bk-date-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-glow); }
+.bk-date-picked { color: var(--primary-700); font-weight: 800; }
+
+/* Recap card */
+.bk-recap { background: linear-gradient(180deg, #f8fafc 0%, #fff7ed 100%); }
+.bk-recap-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+.bk-recap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  background: #fff;
+  border: 1px solid var(--slate-200);
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--slate-700);
+}
+.bk-recap-edit {
+  flex-shrink: 0;
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  color: var(--primary-700);
+  font-size: 0.74rem;
+  font-weight: 800;
+  border-radius: 99px;
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+}
+.bk-recap-edit:hover { border-color: var(--primary); background: var(--primary-light); }
+
+/* Sticky footer */
+.bk-stickybar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--slate-200);
+  border-radius: 14px;
+  padding: 0.6rem 0.7rem calc(0.6rem + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-md);
+}
+.bk-sticky-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-600);
+}
+.bk-sticky-summary strong {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  font-variant-numeric: tabular-nums;
+}
+.bk-sticky-actions { display: flex; gap: 0.5rem; align-items: center; }
+.bk-sticky-actions .bk-back-btn { flex: 0 0 auto; }
+.bk-sticky-actions .bk-next-btn { flex: 1; }
+.bk-sticky-hint { flex: 1; text-align: center; font-size: 0.76rem; font-weight: 600; color: var(--slate-400); }
+
+/* Legacy dots kept for compat (no longer rendered) */
+.bk-steps, .bk-step-dot, .bk-step-meta, .bk-nav-buttons { display: none; }
+.bk-steps-modern ~ .bk-step-meta { display: none; }
+
+/* ==========================================================================
+   Book-a-Cook modern redesign (CookOnDemand.jsx — `od-*` namespace).
+   Mirrors the bk-modern language: gradient hero, numbered stepper,
+   live recap bar, grouped slots, sticky summary CTAs.
+   ========================================================================== */
+.od-modern .ondemand-hero { display: none; }
+.od-modern .ondemand-steps { display: none; }
+
+/* Hero */
+.od-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 55%, #fed7aa 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  padding: 0.85rem 0.95rem;
+  margin-bottom: 1.1rem;
+  box-shadow: var(--shadow-sm);
+}
+.od-hero-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.od-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary-700);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #fed7aa;
+  border-radius: 99px;
+  padding: 0.15rem 0.55rem;
+}
+.od-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--slate-900);
+  line-height: 1.2;
+}
+.od-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  line-height: 1.4;
+  flex-wrap: wrap;
+}
+.od-hero-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.05rem;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--slate-500);
+}
+.od-hero-price strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--primary-700);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numbered stepper */
+.od-steps-modern {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+.od-step-item { display: flex; align-items: center; gap: 0.45rem; flex: 1; min-width: 0; }
+.od-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--slate-200);
+  color: var(--slate-500);
+  font-size: 0.74rem;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px var(--slate-200);
+}
+.od-step-item.active .od-step-num {
+  background: var(--primary-gradient);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--shadow-brand), 0 0 0 3px var(--primary-glow);
+}
+.od-step-item.done .od-step-num { background: var(--accent-emerald); border-color: transparent; color: #fff; }
+.od-step-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.od-step-name { font-size: 0.76rem; font-weight: 800; color: var(--slate-700); }
+.od-step-item.active .od-step-name { color: var(--primary-700); }
+.od-step-desc { font-size: 0.66rem; font-weight: 600; color: var(--slate-400); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.od-step-link { flex: 1; height: 2px; border-radius: 2px; background: var(--slate-200); margin: 0 0.5rem; min-width: 8px; }
+.od-step-item.done .od-step-link { background: var(--accent-emerald); }
+
+/* Live recap bar */
+.od-livebar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  background: var(--slate-900);
+  border-radius: 12px;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 1rem;
+}
+.od-livechip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+.od-livechip-strong { color: #fff; background: rgba(255, 255, 255, 0.16); }
+.od-livechip-price { color: #fff; background: var(--primary-gradient); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* Sticky summary upgrades */
+.od-summary-price {
+  color: var(--primary-700);
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+.od-sticky-note { margin: 0; font-size: 0.72rem; font-weight: 600; color: var(--slate-400); text-align: center; }
+.od-cta { position: relative; overflow: hidden; }
+
+/* Slot groups */
+.od-slot-group { margin-bottom: 0.9rem; }
+.od-slot-group:last-of-type { margin-bottom: 0; }
+.od-slot-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--slate-700);
+}
+.od-slot-group-title svg { color: var(--primary); }
+.od-slot-group-title span { font-weight: 600; color: var(--slate-400); }
+
+/* Chosen-slot recap (step 3) */
+.od-slot-recap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #6ee7b7;
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  margin: 0.8rem 0 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #047857;
+}
+.od-slot-recap svg { flex-shrink: 0; }
+.od-slot-recap strong {
+  margin-left: auto;
+  font-size: 1rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 400px) {
+  .od-title { font-size: 1.2rem; }
+  .od-step-desc { display: none; }
+  .od-hero-price strong { font-size: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .od-step-item.active .od-step-num { box-shadow: none; }
+}
+
+@media (max-width: 400px) {
+  .bk-title { font-size: 1.1rem; }
+  .bk-step-desc { display: none; }
+  .bk-head-price strong { font-size: 1rem; }
+}

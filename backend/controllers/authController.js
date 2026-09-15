@@ -202,6 +202,9 @@ exports.updateProfile = async (req, res, next) => {
       { name, phone, address },
       { new: true, runValidators: true }
     );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
     res.json(toUserPayload(user));
   } catch (error) {
     next(error);
@@ -277,6 +280,43 @@ exports.adminAddCook = async (req, res, next) => {
         role: user.role,
       },
       profile,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: register a new admin account. Only an existing logged-in admin can
+// use this (route is auth + authorize("admin")) — the public /register and
+// Google flows can never create admins, so there is no privilege-escalation
+// path. Returns the created admin (no token: the creating admin stays signed
+// in as themselves; the new admin signs in via /login afterwards).
+exports.adminAddAdmin = async (req, res, next) => {
+  try {
+    const { name, email, phone, password } = req.body;
+
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ message: "A user with this email already exists" });
+    }
+
+    const user = await User.create({ name, email, phone, password, role: "admin" });
+
+    const Notification = require("../models/Notification");
+    await Notification.create({
+      user: user._id,
+      type: "general",
+      message: "Welcome to Cook Mitra! Your admin account is ready — sign in to open the Admin Control Panel.",
+    });
+
+    res.status(201).json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
     });
   } catch (error) {
     next(error);

@@ -5,7 +5,34 @@ import { Upload, FileCheck, X, Camera } from "lucide-react";
 
 // Backend serves uploaded files under /uploads; API base ends with /api.
 // Falls back to same-origin so single-service deployments need no build env.
-const API_ORIGIN = (process.env.REACT_APP_API_URL || "/api").replace(/\/api\/?$/, "");
+// Mirrors api/axios resolveBaseURL: a baked localhost URL is discarded when
+// served from a real host, otherwise uploaded photos point at the visitor's
+// own machine and 404 in production.
+const resolveApiOrigin = () => {
+  const configured = process.env.REACT_APP_API_URL || "";
+  if (typeof window !== "undefined" && configured) {
+    try {
+      const parsed = new URL(configured, window.location.origin);
+      const bakedHost = parsed.hostname;
+      const servedHost = window.location.hostname;
+      const isBakedLocal =
+        bakedHost === "localhost" ||
+        bakedHost === "127.0.0.1" ||
+        bakedHost === "[::1]";
+      const isServedLocal =
+        servedHost === "localhost" ||
+        servedHost === "127.0.0.1" ||
+        servedHost === "::1" ||
+        servedHost === "";
+      if (isBakedLocal && !isServedLocal) return "";
+    } catch {
+      return "";
+    }
+  }
+  return (configured || "/api").replace(/\/api\/?$/, "");
+};
+
+const API_ORIGIN = resolveApiOrigin();
 
 export const resolveFileUrl = (url) => {
   if (!url) return "";

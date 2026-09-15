@@ -286,6 +286,10 @@ exports.createBooking = async (req, res, next) => {
       customer: req.user.id,
       cook,
       ...pickBookingCustomerFields(req.body),
+      // billedHours is validated above to match any stated duration, so it is
+      // the authoritative duration — persisting it keeps reschedule/start
+      // working even when the client omits the optional durationHours field.
+      durationHours: billedHours,
       date: parseDay(date),
       amount: expectedAmount,
       slabPrice,
@@ -1190,7 +1194,7 @@ exports.shareCookLocation = async (req, res, next) => {
       await booking.save();
     }
     await CookProfile.findOneAndUpdate(
-      { user: req.user.id },
+      { user: req.user.role === "admin" ? booking.cook : req.user.id },
       {
         liveLocation: {
           lat,
@@ -1203,7 +1207,7 @@ exports.shareCookLocation = async (req, res, next) => {
 
     let customerWhatsappUrl = null;
     try {
-      const cookUser = await User.findById(req.user.id).select("name phone");
+      const cookUser = await User.findById(req.user.role === "admin" ? booking.cook : req.user.id).select("name phone");
       const customer = await User.findById(booking.customer).select("phone");
       customerWhatsappUrl = buildCustomerWhatsAppUrl({
         customerPhone: customer?.phone,
@@ -1510,10 +1514,13 @@ exports.payBooking = async (req, res, next) => {
       }
     }
     // Dev-only test checkout (no real money): allowed solely when the server
-    // explicitly opts in via ALLOW_TEST_PAYMENTS=true. The payment is flagged
-    // testMode so it can never be mistaken for gateway money.
+    // explicitly opts in via ALLOW_TEST_PAYMENTS=true AND is not running in
+    // production. This double-guard means a forgotten env var can never
+    // enable fake payments on the live site.
     const allowTest =
-      req.body?.testMode === true && process.env.ALLOW_TEST_PAYMENTS === "true";
+      req.body?.testMode === true &&
+      process.env.ALLOW_TEST_PAYMENTS === "true" &&
+      process.env.NODE_ENV !== "production";
     if (!hasPayment && !allowTest) {
       return res.status(400).json({
         message:

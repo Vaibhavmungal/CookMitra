@@ -69,7 +69,6 @@ const bookingSchema = new mongoose.Schema(
   serviceOtpGeneratedAt: { type: Date },
   serviceStartedAt: { type: Date },
   serviceEndsAt: { type: Date },
-    serviceEndsAt: { type: Date },
     // Cooking-hours completion: set once the session end time passes while
     // the booking is active. Drives the "cooking hours complete" alarm.
     hoursCompleted: { type: Boolean, default: false },

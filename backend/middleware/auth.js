@@ -36,7 +36,7 @@ const auth = async (req, res, next) => {
   }
 };
 
-const optionalAuth = (req, res, next) => {
+const optionalAuth = async (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
@@ -45,7 +45,23 @@ const optionalAuth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    // Same live-account check as `auth`: a suspended/deleted account's stale
+    // token must not keep its role (e.g. a blocked admin still seeing the
+    // unfiltered cook list). On failure, continue as anonymous.
+    try {
+      const User = require("../models/User");
+      const account = await User.findById(decoded.id).select("role status");
+      if (!account || account.status === "suspended") {
+        return next();
+      }
+      req.user = {
+        id: account._id.toString(),
+        role: account.role,
+        status: account.status,
+      };
+    } catch {
+      req.user = decoded;
+    }
   } catch (error) {
     // Invalid token on public route: continue as anonymous
   }

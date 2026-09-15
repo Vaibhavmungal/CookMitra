@@ -26,11 +26,15 @@ const ReviewForm = ({ bookingId, existingReview, onSubmitted }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!rating) {
+      setError("Please select a star rating");
+      return;
+    }
     setLoading(true);
     setError("");
 
     try {
-      await API.post("/reviews", { booking: bookingId, rating, comment });
+      await API.post("/reviews", { booking: bookingId, rating, comment: comment.trim() });
       setSubmitted(true);
       showToast("Thank you! Your review has been published.", "success");
       onSubmitted?.();
@@ -140,22 +144,21 @@ const ReviewForm = ({ bookingId, existingReview, onSubmitted }) => {
         </div>
       </div>
 
-      {/* Comments Area */}
+      {/* Comments Area — optional written review */}
       <div style={{ marginBottom: "1rem" }}>
         <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, color: "var(--slate-700)", marginBottom: "0.4rem" }}>
-          Share Your Experience
+          Share Your Experience <span style={{ fontWeight: 400, color: "var(--slate-500)" }}>(optional)</span>
         </label>
         <textarea
           rows={3}
           className="form-control"
-          placeholder="How was the flavor, cleanliness, timing, and preparation?"
+          placeholder="How was the flavor, cleanliness, timing, and preparation? (optional)"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          required
         />
       </div>
 
-      <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={loading || !rating}>
         {loading ? "Submitting..." : "Submit Review"}
       </button>
     </form>

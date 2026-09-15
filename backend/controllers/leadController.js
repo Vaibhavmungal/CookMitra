@@ -34,8 +34,14 @@ exports.createLead = async (req, res, next) => {
       location: String(location).trim(),
     };
     const { lat, lng } = req.body.coords || {};
-    if (typeof lat === "number" && typeof lng === "number") {
-      leadData.coords = { lat, lng };
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (
+      lat != null && lng != null &&
+      Number.isFinite(numLat) && Number.isFinite(numLng) &&
+      numLat >= -90 && numLat <= 90 && numLng >= -180 && numLng <= 180
+    ) {
+      leadData.coords = { lat: numLat, lng: numLng };
     }
 
     const lead = await Lead.create(leadData);

@@ -48,9 +48,11 @@ const minutesToTime = (mins) => {
 };
 
 const dayBounds = (dateStr) => {
-  const start = new Date(dateStr);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(dateStr);
+  // Use parseDay so "YYYY-MM-DD" resolves to LOCAL midnight (plain
+  // new Date("YYYY-MM-DD") is UTC midnight and lands on the wrong local day
+  // on non-UTC servers).
+  const start = parseDay(dateStr);
+  const end = new Date(start);
   end.setHours(23, 59, 59, 999);
   return { start, end };
 };

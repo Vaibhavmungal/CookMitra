@@ -13,8 +13,27 @@ exports.createReview = async (req, res, next) => {
     if (booking.customer.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
     }
-    if (booking.status !== "completed") {
-      return res.status(400).json({ message: "Can only review completed bookings" });
+    // Rateable once service hours are over: completed status, the
+    // hours-complete flag, or the session end time has passed (covers legacy
+    // bookings without the OTP clock and cooks who forgot to tap complete).
+    const sessionEnd = (() => {
+      if (booking.serviceEndsAt) {
+        const d = new Date(booking.serviceEndsAt);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (!booking.date || !booking.endTime) return null;
+      const m = String(booking.endTime).match(/^(\d{1,2}):(\d{2})/);
+      if (!m) return null;
+      const d = new Date(booking.date);
+      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+      return d;
+    })();
+    const serviceHoursEnded =
+      booking.status === "completed" ||
+      booking.hoursCompleted === true ||
+      (sessionEnd ? Date.now() >= sessionEnd.getTime() : false);
+    if (!serviceHoursEnded) {
+      return res.status(400).json({ message: "You can rate your cook once the service hours are over" });
     }
 
     const existingReview = await Review.findOne({ booking: bookingId });

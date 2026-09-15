@@ -44,7 +44,11 @@ const CouponApply = ({ amount, serviceType, onApplied }) => {
       setApplied(result);
       onApplied?.(result);
     } catch (err) {
-      const msg = err.response?.data?.message || "This coupon is not valid for this booking.";
+      const status = err.response?.status;
+      const msg =
+        status === 401
+          ? "Please log in as a customer to use coupons."
+          : err.response?.data?.message || "This coupon is not valid for this booking.";
       setError(msg);
       onApplied?.(null);
     } finally {

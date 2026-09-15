@@ -30,6 +30,14 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
+      # Frontend build-time values (Render exposes service env vars during
+      # the build, and Create React App bakes REACT_APP_* into the bundle).
+      # GOOGLE login + Razorpay checkout break without these in production —
+      # frontend/.env is gitignored, so the dashboard is the only source.
+      - key: REACT_APP_GOOGLE_CLIENT_ID
+        sync: false
+      - key: REACT_APP_RAZORPAY_KEY_ID
+        sync: false
       # Same-origin deployment: the backend serves frontend/build, so CORS is
       # not needed. Set this only if you host the frontend elsewhere.
       # - key: CLIENT_URL

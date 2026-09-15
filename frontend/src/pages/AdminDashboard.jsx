@@ -24,6 +24,14 @@ import {
   Plus,
   Ban,
   ShieldCheck,
+  UserPlus,
+  Mail,
+  Lock,
+  User,
+  Phone,
+  Eye,
+  EyeOff,
+  Copy,
 } from "lucide-react";
 
 const AdminDashboard = () => {
@@ -64,6 +72,12 @@ const AdminDashboard = () => {
           <Users size={17} /> User Directory
         </button>
         <button
+          className={`tab-btn ${activeTab === "admins" ? "active" : ""}`}
+          onClick={() => setActiveTab("admins")}
+        >
+          <ShieldCheck size={17} /> Admins
+        </button>
+        <button
           className={`tab-btn ${activeTab === "leads" ? "active" : ""}`}
           onClick={() => setActiveTab("leads")}
         >
@@ -80,6 +94,7 @@ const AdminDashboard = () => {
       {activeTab === "cooks" && <CookManagement />}
       {activeTab === "bookings" && <BookingManagement />}
       {activeTab === "users" && <UserManagement />}
+      {activeTab === "admins" && <AdminManagement />}
       {activeTab === "leads" && <LeadManagement />}
       {activeTab === "coupons" && <CouponManagement />}
     </div>
@@ -568,6 +583,317 @@ const UserManagement = () => {
       ) : (
         <p style={{ color: "var(--slate-500)" }}>No users found.</p>
       )}
+    </div>
+  );
+};
+
+// Admin registration: only an existing logged-in admin reaches this tab, so
+// new admin accounts can only be created by admins (the public /register
+// form and Google sign-in accept customer/cook roles only). The new admin
+// signs in afterwards on the regular /login page.
+const AdminManagement = () => {
+  const { data: users, loading, refetch } = useFetch("/auth/users");
+  const showToast = useShowToast();
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  // Credentials are hashed server-side, so this success banner is the only
+  // place the new admin's password is ever visible — share it once, then it
+  // is gone.
+  const [createdCreds, setCreatedCreds] = useState(null);
+  const [copied, setCopied] = useState("");
+
+  const admins = (users || []).filter((u) => u.role === "admin");
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const copyText = async (text, key) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // clipboard unavailable — select the text manually instead
+      }
+      ta.remove();
+    }
+    setCopied(key);
+    setTimeout(() => setCopied(""), 2000);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    if (form.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const { confirmPassword, ...data } = form;
+      const res = await API.post("/auth/admins", data);
+      setCreatedCreds({
+        name: res.data?.user?.name || data.name,
+        email: res.data?.user?.email || data.email,
+        password: data.password,
+      });
+      setForm({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
+      showToast(`Admin account created for ${res.data?.user?.name || data.name}!`, "success");
+      refetch();
+    } catch (err) {
+      const msg = err.response?.data?.message || "Failed to create admin account";
+      setError(msg);
+      showToast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2 style={{ fontSize: "1.4rem", marginBottom: "0.4rem" }}>Admin Accounts</h2>
+      <p style={{ color: "var(--slate-600)", margin: "0 0 1.5rem", fontSize: "0.92rem" }}>
+        Register a new administrator. They will sign in with these credentials on the
+        regular login page and land on this control panel.
+      </p>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "1.25rem",
+          alignItems: "start",
+        }}
+      >
+        {/* Registration form */}
+        <div className="profile-card-block" style={{ margin: 0 }}>
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <UserPlus size={18} style={{ color: "var(--primary)" }} /> Register New Admin
+          </h3>
+
+          {error && (
+            <div className="error-alert-banner" style={{ marginBottom: "0.75rem" }}>
+              <AlertCircle size={16} /> {error}
+            </div>
+          )}
+
+          {createdCreds && (
+            <div
+              style={{
+                background: "var(--accent-emerald-light, #ecfdf5)",
+                border: "1px solid var(--accent-emerald, #10b981)",
+                borderRadius: "10px",
+                padding: "0.85rem 1rem",
+                marginBottom: "0.9rem",
+                fontSize: "0.88rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontWeight: 800, color: "#065f46", marginBottom: "0.5rem" }}>
+                <CheckCircle2 size={17} /> Admin “{createdCreds.name}” created!
+              </div>
+              <div style={{ color: "var(--slate-600)", marginBottom: "0.5rem" }}>
+                Share these login credentials now — the password is never shown again.
+              </div>
+              {[
+                { key: "email", label: "Email", value: createdCreds.email },
+                { key: "password", label: "Password", value: createdCreds.password },
+              ].map((row) => (
+                <div key={row.key} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                  <span style={{ minWidth: 70, fontWeight: 700, color: "var(--slate-700)" }}>{row.label}:</span>
+                  <code style={{ flex: 1, background: "#fff", border: "1px solid var(--slate-200)", borderRadius: "6px", padding: "0.25rem 0.5rem", overflowWrap: "anywhere" }}>
+                    {row.value}
+                  </code>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => copyText(row.value, row.key)}
+                    title={`Copy ${row.label.toLowerCase()}`}
+                  >
+                    {copied === row.key ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="booking-form-group">
+              <label>Full Name</label>
+              <div className="input-with-icon">
+                <User size={18} className="input-icon-prefix" />
+                <input
+                  type="text"
+                  name="name"
+                  className="form-control"
+                  placeholder="e.g. Admin Sharma"
+                  value={form.name}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="booking-form-group">
+              <label>Email Address</label>
+              <div className="input-with-icon">
+                <Mail size={18} className="input-icon-prefix" />
+                <input
+                  type="email"
+                  name="email"
+                  className="form-control"
+                  placeholder="admin@example.com"
+                  value={form.email}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="booking-form-group">
+              <label>Phone Number</label>
+              <div className="input-with-icon">
+                <Phone size={18} className="input-icon-prefix" />
+                <input
+                  type="tel"
+                  name="phone"
+                  className="form-control"
+                  placeholder="e.g. 9876543210"
+                  value={form.phone}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="booking-form-group">
+              <label>Password</label>
+              <div className="input-with-icon password-input-wrapper">
+                <Lock size={18} className="input-icon-prefix" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  className="form-control"
+                  placeholder="At least 6 characters"
+                  value={form.password}
+                  onChange={handleChange}
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label="Toggle password view"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="booking-form-group">
+              <label>Confirm Password</label>
+              <div className="input-with-icon">
+                <Lock size={18} className="input-icon-prefix" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  className="form-control"
+                  placeholder="Confirm the password"
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={saving}
+              style={{ marginTop: "0.5rem" }}
+            >
+              {saving ? "Creating Admin..." : <><UserPlus size={16} /> Create Admin Account</>}
+            </button>
+          </form>
+        </div>
+
+        {/* Existing admins */}
+        <div className="profile-card-block" style={{ margin: 0 }}>
+          <h3 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <ShieldCheck size={18} style={{ color: "var(--primary)" }} /> Existing Admins ({admins.length})
+          </h3>
+          {loading ? (
+            <div className="loading-spinner-wrapper">
+              <div className="spinner"></div>
+              <p>Loading admins...</p>
+            </div>
+          ) : admins.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              {admins.map((a) => (
+                <div
+                  key={a._id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.7rem",
+                    padding: "0.65rem 0.8rem",
+                    background: "var(--slate-50)",
+                    border: "1px solid var(--slate-200)",
+                    borderRadius: "var(--radius-md)",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: "50%",
+                      background: "var(--primary-gradient)",
+                      color: "#fff",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {a.name?.[0]?.toUpperCase() || "A"}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.92rem" }}>{a.name}</div>
+                    <div style={{ fontSize: "0.82rem", color: "var(--slate-500)", overflowWrap: "anywhere" }}>
+                      {a.email}
+                    </div>
+                  </div>
+                  <span className="badge badge-festive">Admin</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: "var(--slate-500)", fontSize: "0.9rem" }}>No admin accounts found.</p>
+          )}
+          <p style={{ fontSize: "0.82rem", color: "var(--slate-500)", margin: "0.9rem 0 0" }}>
+            Admin accounts are protected — they cannot be blocked or deleted from the User Directory.
+          </p>
+        </div>
+      </div>
     </div>
   );
 };

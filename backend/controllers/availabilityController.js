@@ -1,21 +1,36 @@
 const Availability = require("../models/Availability");
 const CookProfile = require("../models/CookProfile");
-const { getDayWindows, getDayBookings, computeStartOptions, suggestDurations, parseDay, resolveCookAvailability } = require("../utils/slots");
+const { getDayWindows, getDayBookings, computeStartOptions, suggestDurations, parseDay, resolveCookAvailability, timeToMinutes } = require("../utils/slots");
 
 exports.getAvailability = async (req, res, next) => {
   try {
     const { date, durationHours } = req.query;
 
+    // Accept either a User id or a CookProfile id — Availability.cook stores
+    // the user id, so a bare profile id would otherwise match nothing and
+    // every slot search would come back empty ("no slots").
+    let cookId = req.params.cookId;
+    let profile = null;
+    try {
+      profile = await CookProfile.findById(cookId).select(
+        "user availabilityStatus unavailableDate"
+      );
+      if (profile?.user) cookId = profile.user.toString();
+    } catch {
+      // not a profile id — use the param as a user id
+    }
+    if (!profile) {
+      profile = await CookProfile.findOne({ user: cookId }).select(
+        "availabilityStatus unavailableDate"
+      );
+    }
     // A cook who has toggled "unavailable" exposes no slots until they flip
     // back or the next day begins.
-    const profile = await CookProfile.findOne({ user: req.params.cookId }).select(
-      "availabilityStatus unavailableDate"
-    );
     if (profile && !(await resolveCookAvailability(profile))) {
       return res.json([]);
     }
 
-    const filter = { cook: req.params.cookId, status: "available" };
+    const filter = { cook: cookId, status: "available" };
     if (date) {
       // parseDay normalizes "YYYY-MM-DD" to LOCAL midnight, matching how
       // slots are stored (new Date("YYYY-MM-DD") alone is UTC midnight and
@@ -36,8 +51,8 @@ exports.getAvailability = async (req, res, next) => {
         return res.status(400).json({ message: "durationHours must be between 0.5 and 12" });
       }
       // No published windows → the cook's whole day is open by default.
-      const windows = slots.length ? slots : await getDayWindows(req.params.cookId, date);
-      const bookings = await getDayBookings(req.params.cookId, date);
+      const windows = slots.length ? slots : await getDayWindows(cookId, date);
+      const bookings = await getDayBookings(cookId, date);
       const options = computeStartOptions(windows, bookings, dur);
       const shaped = options.map((o) => ({ _id: `${o.startTime}-${o.endTime}`, ...o, derived: true }));
       // Opt-in recovery hint: when nothing fits, name shorter session lengths
@@ -62,6 +77,14 @@ exports.setAvailability = async (req, res, next) => {
     const { date, startTime, endTime } = req.body;
 
     const day = parseDay(date);
+    if (!day || Number.isNaN(day.getTime())) {
+      return res.status(400).json({ message: "Valid date is required" });
+    }
+    const sMin = timeToMinutes(startTime);
+    const eMin = timeToMinutes(endTime);
+    if (sMin == null || eMin == null || eMin <= sMin) {
+      return res.status(400).json({ message: "End time must be after start time" });
+    }
     const existing = await Availability.findOne({
       cook: req.user.id,
       date: day,

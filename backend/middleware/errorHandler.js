@@ -5,6 +5,12 @@ const errorHandler = (err, req, res, next) => {
     return res.status(404).json({ message: "Resource not found" });
   }
 
+  // Client-caused schema failures (bad enum, missing required, etc.) are
+  // 400s, not 500s.
+  if (err.name === "ValidationError") {
+    return res.status(400).json({ message: err.message || "Validation failed" });
+  }
+
   console.error(err.stack);
 
   const statusCode = err.statusCode || 500;

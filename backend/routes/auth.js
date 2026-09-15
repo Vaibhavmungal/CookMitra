@@ -13,6 +13,7 @@ const {
   adminSetUserStatus,
   adminDeleteUser,
   adminAddCook,
+  adminAddAdmin,
 } = require("../controllers/authController");
 
 router.post(
@@ -95,6 +96,24 @@ router.post(
   ],
   validate,
   adminAddCook
+);
+
+// Admin: register a new admin account (admin-gated — the public /register
+// route only accepts customer/cook, so this is the sole way to add admins).
+router.post(
+  "/admins",
+  auth,
+  authorize("admin"),
+  [
+    body("name").trim().notEmpty().withMessage("Name is required"),
+    body("email").isEmail().withMessage("Valid email is required"),
+    body("phone").trim().notEmpty().withMessage("Phone is required"),
+    body("password")
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
+  ],
+  validate,
+  adminAddAdmin
 );
 
 // Admin account management: block/unblock and delete customer/cook accounts.

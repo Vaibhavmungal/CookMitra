@@ -263,8 +263,23 @@ const BookingDetails = () => {
   if (error || !booking) {
     return (
       <div className="dashboard-container">
-        <Link to="/dashboard/my-bookings" className="back-link-bar" style={{ marginBottom: "1rem" }}>
-          <ArrowLeft size={16} /> Back to My Bookings
+        <Link
+          to={
+            user?.role === "cook"
+              ? "/dashboard/cook-bookings"
+              : user?.role === "admin"
+                ? "/admin"
+                : "/dashboard/my-bookings"
+          }
+          className="back-link-bar"
+          style={{ marginBottom: "1rem" }}
+        >
+          <ArrowLeft size={16} />{" "}
+          {user?.role === "cook"
+            ? "Back to Cook Dashboard"
+            : user?.role === "admin"
+              ? "Back to Admin"
+              : "Back to My Bookings"}
         </Link>
         <div className="error-alert-banner">
           <AlertCircle size={18} /> {error || "Booking not found"}
@@ -338,8 +353,23 @@ const BookingDetails = () => {
 
   return (
     <div className="dashboard-container">
-      <Link to="/dashboard/my-bookings" className="back-link-bar" style={{ marginBottom: "1rem" }}>
-        <ArrowLeft size={16} /> Back to My Bookings
+      <Link
+        to={
+          user?.role === "cook"
+            ? "/dashboard/cook-bookings"
+            : user?.role === "admin"
+              ? "/admin"
+              : "/dashboard/my-bookings"
+        }
+        className="back-link-bar"
+        style={{ marginBottom: "1rem" }}
+      >
+        <ArrowLeft size={16} />{" "}
+        {user?.role === "cook"
+          ? "Back to Cook Dashboard"
+          : user?.role === "admin"
+            ? "Back to Admin"
+            : "Back to My Bookings"}
       </Link>
 
       {/* Header */}
