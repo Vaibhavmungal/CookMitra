@@ -27,6 +27,35 @@ MERN monorepo: `backend/` (Express + MongoDB API, serves uploaded docs) and `fro
 4. Optional seed: `docker compose exec app node seeds/seed.js`
 5. Offline dev with local Mongo instead: set `MONGODB_URI=mongodb://db:27017/festivecook` in that `.env` and run `docker compose --profile local-mongo up --build -d` (data persisted in the `mongo-data` volume).
 
+## Quick deploy (AWS EC2 + Docker Compose)
+
+1. Launch an Ubuntu 24.04 EC2 instance (`t3.medium`, open ports 22, 80, 5000 in Security Group).
+2. Install Docker & Git on the server:
+   ```bash
+   sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+   sudo usermod -aG docker ubuntu && newgrp docker
+   ```
+3. Clone the repo and configure `.env`:
+   ```bash
+   git clone https://github.com/bhaveshS8/CookMitra.git
+   cd CookMitra
+   cat << 'EOF' > .env
+   NODE_ENV=production
+   PORT=5000
+   JWT_SECRET=super_secret_production_jwt_key_here
+   ALLOW_TEST_PAYMENTS=true
+   RAZORPAY_KEY_ID=rzp_test_sampleKey123
+   RAZORPAY_KEY_SECRET=sampleSecretKey123
+   RAZORPAY_CURRENCY=INR
+   REACT_APP_API_URL=/api
+   EOF
+   ```
+4. Start the application:
+   ```bash
+   docker compose up --build -d
+   ```
+5. App is live on `http://<YOUR_EC2_PUBLIC_IP>:5000` (health check: `/api/health`).
+
 ## Quick deploy (Render / Railway / Fly / any Node host)
 
 - **Build command**: `cd frontend && npm ci && npm run build && cd ../backend && npm ci`
