@@ -24,6 +24,25 @@ const generateToken = (user) => {
   );
 };
 
+// Greet a brand-new website member with an in-app notification. Best-effort:
+// a notification failure must never block signup, so errors are swallowed.
+const sendWelcomeNotification = async (user) => {
+  try {
+    const Notification = require("../models/Notification");
+    const name = String(user?.name || "").trim().split(" ")[0] || "there";
+    const isCook = user?.role === "cook";
+    await Notification.create({
+      user: user._id,
+      type: "general",
+      message: isCook
+        ? `Welcome to Cook Mitra, ${name}! Your cook account is ready — complete your cook profile to start receiving bookings.`
+        : `Welcome to Cook Mitra, ${name}! Your account is ready — explore verified cooks and book your first service.`,
+    });
+  } catch {
+    // Intentionally ignored — signup succeeds even if notifications are down.
+  }
+};
+
 exports.register = async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
@@ -35,6 +54,8 @@ exports.register = async (req, res, next) => {
 
     const user = await User.create({ name, email, phone, password, role });
     const token = generateToken(user);
+
+    await sendWelcomeNotification(user);
 
     res.status(201).json({
       token,
@@ -129,6 +150,7 @@ exports.googleAuth = async (req, res, next) => {
 
     // 1) Returning Google user.
     let user = await User.findOne({ googleId });
+    let isNewGoogleUser = false;
     if (!user) {
       // 2) Existing email/password account — link Google for future logins.
       user = await User.findOne({ email });
@@ -155,6 +177,7 @@ exports.googleAuth = async (req, res, next) => {
           authProvider: "google",
           role: safeRole,
         });
+        isNewGoogleUser = true;
       }
     } else if (user.status === "suspended") {
       return res.status(403).json({
@@ -173,6 +196,10 @@ exports.googleAuth = async (req, res, next) => {
         changed = true;
       }
       if (changed) await user.save();
+    }
+
+    if (isNewGoogleUser) {
+      await sendWelcomeNotification(user);
     }
 
     const token = generateToken(user);
