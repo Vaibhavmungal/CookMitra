@@ -123,7 +123,7 @@ const CookProfile = () => {
           <div className="profile-card-block">
             <h2>About {cook?.user?.name}</h2>
             <p style={{ lineHeight: 1.7, color: "var(--slate-700)", fontSize: "1rem" }}>
-              {cook?.bio || "A passionate home chef devoted to keeping authentic festive culinary traditions alive. Specializing in traditional recipes prepared with hand-ground spices, pure ghee, and immense dedication."}
+              {cook?.skills || cook?.bio || "A passionate home chef devoted to keeping authentic festive culinary traditions alive. Specializing in traditional recipes prepared with hand-ground spices, pure ghee, and immense dedication."}
             </p>
           </div>
 

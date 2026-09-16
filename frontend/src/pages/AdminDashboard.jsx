@@ -49,6 +49,11 @@ const AdminDashboard = () => {
             Oversee cook verification, monitor marketplace bookings, and audit user accounts.
           </p>
         </div>
+        <div>
+          <Link to="/admin/complaints" className="btn btn-outline btn-sm">
+            <ShieldAlert size={15} /> Cook Complaints
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -200,9 +205,9 @@ const CookManagement = () => {
                 </div>
               </div>
 
-              {cook.bio && (
+              {(cook.skills || cook.bio) && (
                 <p style={{ fontSize: "0.9rem", color: "var(--slate-600)", margin: "0.5rem 0" }}>
-                  {cook.bio}
+                  {cook.skills || cook.bio}
                 </p>
               )}
 

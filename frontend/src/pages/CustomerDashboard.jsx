@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import API from "../api/axios";
 import { useFetch } from "../hooks/useFetch";
 import { useSelector } from "react-redux";
@@ -27,7 +27,9 @@ const CustomerDashboard = () => {
   const { data: bookings, loading, error, refetch } = useFetch("/bookings/my");
   const user = useSelector((s) => s.auth.user);
   const showToast = useShowToast();
+  const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("all");
+  const [cancellingId, setCancellingId] = useState(null);
   const seenArrived = useRef(new Set());
   const seenHoursDone = useRef(new Set());
   const seenCompleted = useRef(new Set());
@@ -156,14 +158,31 @@ const CustomerDashboard = () => {
     }
   };
 
+  // Clicking anywhere on a booking card (except its own buttons/links)
+  // opens that booking's details page.
+  const openBooking = (e, bookingId) => {
+    if (e.target.closest("button, a, input, select, textarea")) return;
+    navigate(`/bookings/${bookingId}`);
+  };
+  const openBookingKey = (e, bookingId) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      navigate(`/bookings/${bookingId}`);
+    }
+  };
+
   const handleCancel = async (id) => {
+    if (cancellingId) return;
     if (!window.confirm("Are you sure you want to cancel this booking session?")) return;
+    setCancellingId(id);
     try {
       await API.patch(`/bookings/${id}/cancel`);
       showToast("Booking cancelled successfully", "info");
       refetch();
     } catch (err) {
       showToast(err.response?.data?.message || "Failed to cancel booking", "error");
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -361,7 +380,15 @@ const CustomerDashboard = () => {
       {filteredBookings.length > 0 ? (
         <div className="bookings-list-modern">
           {filteredBookings.map((booking) => (
-            <div key={booking._id} className="booking-item-card">
+            <div
+              key={booking._id}
+              className="booking-item-card clickable"
+              onClick={(e) => openBooking(e, booking._id)}
+              onKeyDown={(e) => openBookingKey(e, booking._id)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open booking details for ${booking.cook?.name || "booking"}`}
+            >
               <div className="booking-item-top">
                 <div className="booking-party-info">
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -577,8 +604,9 @@ const CustomerDashboard = () => {
                   <button
                     className="btn btn-danger-outline btn-sm"
                     onClick={() => handleCancel(booking._id)}
+                    disabled={cancellingId === booking._id}
                   >
-                    <XCircle size={16} /> Cancel
+                    <XCircle size={16} /> {cancellingId === booking._id ? "Cancelling…" : "Cancel Booking"}
                   </button>
                 )}
 

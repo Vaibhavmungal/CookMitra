@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../hooks/useFetch";
 import API from "../api/axios";
 import { useSelector } from "react-redux";
 import { useShowToast } from "../store/hooks";
-import { formatCurrency, formatDate, playAlarmSound } from "../utils/constants";
+import { formatCurrency, formatDate, playAlarmSound, hasServiceHoursStarted } from "../utils/constants";
 import CookProfileForm from "../components/CookProfileForm";
 import CookAvailabilityToggle from "../components/CookAvailabilityToggle";
-import { Check, X, BellRing, ArrowRight } from "lucide-react";
+import { Check, X, XCircle, BellRing, ArrowRight, Star, MapPin, CalendarDays, Inbox, History, UserRound, Wallet, ChefHat, AlertCircle } from "lucide-react";
 
 const CookDashboard = () => {
   const { data: bookings, loading: loadingBookings, error: bookingError, refetch: refetchBookings } = useFetch("/bookings/cook");
@@ -15,7 +15,9 @@ const CookDashboard = () => {
   const { data: myReviews, loading: loadingReviews } = useFetch("/reviews/cook-me");
   const showToast = useShowToast();
   const user = useSelector((s) => s.auth.user);
+  const navigate = useNavigate();
   const [view, setView] = useState("needs-action");
+  const [cancellingId, setCancellingId] = useState(null);
   const seenHoursDone = useRef(new Set());
   const firstLoadDone = useRef(false);
 
@@ -58,6 +60,19 @@ const CookDashboard = () => {
     });
   }, [bookings, showToast]);
 
+  // Clicking anywhere on a booking card (except its own buttons/links)
+  // opens that booking's details page.
+  const openBooking = (e, bookingId) => {
+    if (e.target.closest("button, a, input, select, textarea")) return;
+    navigate(`/bookings/${bookingId}`);
+  };
+  const openBookingKey = (e, bookingId) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      navigate(`/bookings/${bookingId}`);
+    }
+  };
+
   const handleAction = async (bookingId, action) => {
     try {
       await API.patch(`/bookings/${bookingId}/${action}`);
@@ -68,6 +83,20 @@ const CookDashboard = () => {
       refetchBookings();
     } catch (err) {
       showToast(err.response?.data?.message || `Failed to ${action} booking`, "error");
+    }
+  };
+
+  const handleCancel = async (bookingId) => {    if (cancellingId) return;
+    if (!window.confirm("Are you sure you want to cancel this booking session?")) return;
+    setCancellingId(bookingId);
+    try {
+      await API.patch(`/bookings/${bookingId}/cancel`);
+      showToast("Booking cancelled successfully", "info");
+      refetchBookings();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Failed to cancel booking", "error");
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -113,66 +142,162 @@ const CookDashboard = () => {
     });
   const previousCount = (bookings || []).filter(isPrevious).length;
   const upcomingCount = (bookings || []).length - previousCount;
+  const completedCount = bookings?.filter((b) => b.status === "completed")?.length || 0;
+  // Paid-out earnings (real gateway payments only — mirrors the server rule).
+  const totalEarned = (bookings || []).reduce(
+    (s, b) =>
+      b.payment?.status === "paid" && b.payment?.razorpayPaymentId
+        ? s + Number(b.payment?.paidAmount || 0)
+        : s,
+    0
+  );
+  const ratingCount = cookProfile?.rating?.count ?? myReviews?.length ?? 0;
+  const avgRating =
+    cookProfile?.rating?.average ||
+    (myReviews?.length
+      ? (myReviews.reduce((s, r) => s + Number(r.rating || 0), 0) / myReviews.length).toFixed(1)
+      : null);
+  const firstName = user?.name?.split(" ")[0] || "Chef";
+  const approval = cookProfile?.approvalStatus;
 
   return (
-    <div className="dashboard-container cook-modern">
-      {/* Simple header */}
-      <div className="profile-card-block" style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", marginBottom: "1.25rem" }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <h1 style={{ margin: 0, fontSize: "1.4rem" }}>Hello, {user?.name?.split(" ")[0] || "Chef"}</h1>
-          <p style={{ margin: "0.25rem 0 0", color: "var(--slate-500)", fontSize: "0.9rem" }}>
-            {pendingRequests > 0 ? `${pendingRequests} new request${pendingRequests === 1 ? "" : "s"} waiting` : "You're all caught up"}
-          </p>
+    <div className="dashboard-container cook-dash">
+      {/* Hero — greeting, verification, rating, availability */}
+      <div className="cook-modern-hero cook-hero">
+        <div className="cook-modern-hero-inner">
+          <div className="cook-modern-avatar-wrap">
+            {cookProfile?.photoUrl ? (
+              <img src={cookProfile.photoUrl} alt={user?.name || "Cook"} className="cook-modern-avatar" />
+            ) : (
+              <span className="cook-modern-avatar-fallback">
+                {firstName?.[0]?.toUpperCase() || <ChefHat size={32} />}
+              </span>
+            )}
+            {approval === "approved" && (
+              <span className="verified-dot" title="Verified cook">✓</span>
+            )}
+          </div>
+          <div className="cook-modern-hero-copy">
+            <h1 className="cook-hero-title">Hello, {firstName}</h1>
+            <p className="cook-hero-sub">
+              {pendingRequests > 0
+                ? `${pendingRequests} new request${pendingRequests === 1 ? "" : "s"} waiting for you`
+                : "You're all caught up — relax!"}
+            </p>
+            <div className="cook-hero-badges">
+              {approval === "approved" ? (
+                <span className="hero-pill ok">Verified cook</span>
+              ) : approval === "rejected" ? (
+                <span className="hero-pill bad">Needs attention</span>
+              ) : (
+                <span className="hero-pill warn">{cookProfile ? "Under review" : "No profile yet"}</span>
+              )}
+              {avgRating ? (
+                <span className="hero-pill"><Star size={12} /> {avgRating} ({ratingCount})</span>
+              ) : (
+                <span className="hero-pill">New chef</span>
+              )}
+              {cookProfile?.serviceArea && (
+                <span className="hero-pill"><MapPin size={12} /> {cookProfile.serviceArea}</span>
+              )}
+            </div>
+          </div>
+          <div className="cook-modern-hero-actions">
+            <CookAvailabilityToggle
+              availabilityStatus={cookProfile?.availabilityStatus}
+              onChanged={() => refetchCookProfile()}
+            />
+            <button type="button" className="cook-glass-btn" onClick={() => setView("profile")}>
+              <UserRound size={15} /> Profile
+            </button>
+            <Link className="cook-glass-btn" to="/dashboard/cook-reviews">
+              <Star size={15} /> Reviews
+            </Link>
+          </div>
         </div>
-        <CookAvailabilityToggle
-          availabilityStatus={cookProfile?.availabilityStatus}
-          onChanged={() => refetchCookProfile()}
-        />
       </div>
 
-      {!loadingProfile && (!cookProfile || cookProfile.approvalStatus !== "approved") && (
-        <div className="profile-card-block" style={{ marginBottom: "1.25rem" }}>
-          <p style={{ margin: 0, fontSize: "0.9rem" }}>
+      {/* Stat shortcuts */}
+      <div className="cook-stats-grid">
+        <button type="button" className="cook-stat-card" onClick={() => setView("needs-action")}>
+          <div className="cook-stat-icon amber">
+            <Inbox size={24} />
+          </div>
+          <div>
+            <div className="cook-stat-num">{pendingRequests}</div>
+            <div className="cook-stat-label">New requests</div>
+          </div>
+        </button>
+        <button type="button" className="cook-stat-card" onClick={() => setView("upcoming")}>
+          <div className="cook-stat-icon blue">
+            <CalendarDays size={24} />
+          </div>
+          <div>
+            <div className="cook-stat-num">{upcomingCount}</div>
+            <div className="cook-stat-label">Upcoming</div>
+          </div>
+        </button>
+        <button type="button" className="cook-stat-card" onClick={() => setView("previous")}>
+          <div className="cook-stat-icon emerald">
+            <Wallet size={24} />
+          </div>
+          <div>
+            <div className="cook-stat-num small-amount">{formatCurrency(totalEarned)}</div>
+            <div className="cook-stat-label">Earned · {completedCount} done</div>
+          </div>
+        </button>
+        <Link className="cook-stat-card" to="/dashboard/cook-reviews">
+          <div className="cook-stat-icon brand">
+            <Star size={24} />
+          </div>
+          <div>
+            <div className="cook-stat-num">{avgRating || "—"}</div>
+            <div className="cook-stat-label">{ratingCount ? `${ratingCount} review${ratingCount === 1 ? "" : "s"}` : "No reviews yet"}</div>
+          </div>
+        </Link>
+      </div>
+
+      {!loadingProfile && (!cookProfile || approval !== "approved") && (
+        <div className="cook-notice cook-notice-amber">
+          <AlertCircle size={16} />
+          <span>
             {!cookProfile
               ? "Create your profile to start receiving bookings."
-              : cookProfile.approvalStatus === "rejected"
+              : approval === "rejected"
               ? "Your application needs attention — please update your profile."
-              : "Your profile is under review."}{" "}
-            <button
-              onClick={() => setView("profile")}
-              style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: 700, cursor: "pointer", padding: 0 }}
-            >
-              {cookProfile ? "Review profile" : "Create profile"} →
-            </button>
-          </p>
+              : "Your profile is under review — you'll be bookable once approved."}
+          </span>
+          <button onClick={() => setView("profile")} className="cook-link-btn">
+            {cookProfile ? "Review profile →" : "Create profile →"}
+          </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="tabs-navigation-bar cook-modern-tabs" style={{ marginBottom: "1.25rem" }}>
+      <div className="cook-tabs">
         <button
-          className={`tab-btn ${view === "needs-action" ? "active" : ""}`}
+          className={`cook-tab ${view === "needs-action" ? "active" : ""}`}
           onClick={() => setView("needs-action")}
         >
-          New ({pendingRequests})
+          <Inbox size={15} /> New <span className="cook-tab-count">{pendingRequests}</span>
         </button>
         <button
-          className={`tab-btn ${view === "upcoming" ? "active" : ""}`}
+          className={`cook-tab ${view === "upcoming" ? "active" : ""}`}
           onClick={() => setView("upcoming")}
         >
-          Upcoming ({upcomingCount})
+          <CalendarDays size={15} /> Upcoming <span className="cook-tab-count">{upcomingCount}</span>
         </button>
         <button
-          className={`tab-btn ${view === "previous" ? "active" : ""}`}
+          className={`cook-tab ${view === "previous" ? "active" : ""}`}
           onClick={() => setView("previous")}
         >
-          Past ({previousCount})
+          <History size={15} /> Past <span className="cook-tab-count">{previousCount}</span>
         </button>
         <button
-          className={`tab-btn ${view === "profile" ? "active" : ""}`}
+          className={`cook-tab ${view === "profile" ? "active" : ""}`}
           onClick={() => setView("profile")}
         >
-          Profile
+          <UserRound size={15} /> Profile
         </button>
       </div>
 
@@ -180,53 +305,67 @@ const CookDashboard = () => {
       {view !== "profile" && (
         <div>
 
-          {loadingBookings && <p style={{ color: "var(--slate-500)" }}>Loading bookings...</p>}
+          {loadingBookings && <p className="cook-loading-text">Loading bookings...</p>}
 
-          {bookingError && <p style={{ color: "#dc2626" }}>{bookingError}</p>}
+          {bookingError && <p className="error">{bookingError}</p>}
 
           {!loadingBookings && bookings && bookings.length > 0 ? (
             visibleBookings.length > 0 ? (
             <div className="bookings-list-modern">
               {visibleBookings.map((booking) => (
-                <div key={booking._id} className="booking-item-card">
-                  <div className="booking-item-top">
-                    <div>
-                      <h3 style={{ margin: 0 }}>{booking.customer?.name || "Client"}</h3>
-                      <p style={{ margin: "0.2rem 0 0", fontSize: "0.88rem", color: "var(--slate-600)" }}>
-                        {formatDate(booking.date)} · {booking.startTime} - {booking.endTime}
-                      </p>
-                      {booking.address && (
-                        <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem", color: "var(--slate-500)" }}>
-                          {booking.address}
+                <div
+                  key={booking._id}
+                  className={`booking-item-card cook-booking-card st-${booking.status} clickable`}
+                  onClick={(e) => openBooking(e, booking._id)}
+                  onKeyDown={(e) => openBookingKey(e, booking._id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open booking details for ${booking.customer?.name || "booking"}`}
+                >
+                  <div className="cook-card-top">
+                    <div className="cook-customer-row">
+                      <span className="cook-avatar">
+                        {booking.customer?.name?.[0]?.toUpperCase() || "C"}
+                      </span>
+                      <div className="cook-customer-meta">
+                        <h3>{booking.customer?.name || "Client"}</h3>
+                        <p className="cook-when">
+                          <CalendarDays size={13} />
+                          {formatDate(booking.date)} · {booking.startTime} - {booking.endTime}
                         </p>
-                      )}
+                        {booking.address && (
+                          <p className="cook-addr">
+                            <MapPin size={13} />
+                            <span>{booking.address}</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div>{getStatusLabel(booking.status)}</div>
                   </div>
 
-                  <p style={{ margin: "0 0 0.75rem", fontWeight: 700 }}>
-                    {booking.payment?.status === "paid"
-                      ? formatCurrency(booking.payment.paidAmount || booking.amount || 0)
-                      : `${formatCurrency(booking.amount || 0)} (unpaid)`}
-                  </p>
+                  <div className="cook-money">
+                    <span className="cook-money-amount">
+                      {formatCurrency(booking.payment?.status === "paid"
+                        ? booking.payment.paidAmount || booking.amount || 0
+                        : booking.amount || 0)}
+                    </span>
+                    {booking.payment?.status === "paid" ? (
+                      <span className="cook-pay-pill paid"><Check size={12} /> Paid</span>
+                    ) : (
+                      <span className="cook-pay-pill unpaid">Unpaid</span>
+                    )}
+                  </div>
 
                   {booking.notes && (
-                    <p style={{ fontSize: "0.88rem", color: "var(--slate-600)", margin: "0 0 0.75rem" }}>
+                    <p className="cook-card-note">
                       Note: {booking.notes}
                     </p>
                   )}
 
                   {booking.hoursCompleted && (
-                    <div
-                      style={{
-                        display: "flex", alignItems: "center", gap: "0.5rem",
-                        background: "#fef3c7", border: "1px solid #f59e0b",
-                        borderRadius: "10px", padding: "0.55rem 0.8rem",
-                        marginBottom: "0.75rem", fontSize: "0.85rem", fontWeight: 600,
-                        color: "#92400e",
-                      }}
-                    >
-                      <BellRing size={16} style={{ color: "#b45309", flexShrink: 0 }} />
+                    <div className="cook-hours-done">
+                      <BellRing size={16} />
                       <span>Cooking hours complete — please wrap up the session.</span>
                     </div>
                   )}
@@ -248,27 +387,50 @@ const CookDashboard = () => {
                   {["accepted", "confirmed", "in_progress"].includes(booking.status) && (
                     <div className="booking-actions-row">
                       <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
-                        {booking.serviceStartedAt ? "Manage live" : "Start with OTP"} <ArrowRight size={15} />
+                        {booking.serviceStartedAt ? "View more" : "Start with OTP"} <ArrowRight size={15} />
                       </Link>
                       <button className="btn btn-primary" onClick={() => handleAction(booking._id, "complete")}>
                         <Check size={16} /> Mark Completed
                       </button>
+                      {!hasServiceHoursStarted(booking) && (
+                        <button
+                          className="btn btn-danger-outline btn-sm"
+                          onClick={() => handleCancel(booking._id)}
+                          disabled={cancellingId === booking._id}
+                        >
+                          <XCircle size={16} /> {cancellingId === booking._id ? "Cancelling…" : "Cancel Booking"}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
               ))}
             </div>
             ) : (
-              <div className="empty-state-card">
-                <h3>No bookings here</h3>
-                <p>New requests will appear here.</p>
+              <div className="cook-empty">
+                <div className="cook-empty-icon">
+                  {view === "needs-action" ? <Inbox size={28} /> : view === "upcoming" ? <CalendarDays size={28} /> : <History size={28} />}
+                </div>
+                <h3>
+                  {view === "needs-action" ? "No new requests" : view === "upcoming" ? "Nothing scheduled" : "No past bookings"}
+                </h3>
+                <p>
+                  {view === "needs-action"
+                    ? "You're all caught up — new booking requests will pop up here."
+                    : view === "upcoming"
+                    ? "Accepted bookings will appear here with everything you need for the day."
+                    : "Completed, cancelled and declined bookings will show up here."}
+                </p>
               </div>
             )
           ) : (
             !loadingBookings && (
-              <div className="empty-state-card">
+              <div className="cook-empty">
+                <div className="cook-empty-icon">
+                  <ChefHat size={28} />
+                </div>
                 <h3>No bookings yet</h3>
-                <p>Stay marked Available so customers can book you.</p>
+                <p>Stay marked Available so customers can find and book you.</p>
               </div>
             )
           )}
@@ -289,23 +451,46 @@ const CookDashboard = () => {
 const RecentReviewsPreview = ({ reviews, loading }) => {
   const list = (reviews || []).slice(0, 3);
   const total = (reviews || []).length;
-  if (loading) return <p style={{ color: "var(--slate-500)" }}>Loading reviews...</p>;
+  if (loading) return <p className="cook-loading-text">Loading reviews...</p>;
   if (!list.length) return null;
   return (
-    <div className="profile-card-block" style={{ marginTop: "1.25rem" }}>
-      <h3 style={{ margin: "0 0 0.75rem" }}>Reviews ({total})</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {list.map((rev) => (
-          <p key={rev._id} style={{ margin: 0, fontSize: "0.9rem" }}>
-            <strong>★ {rev.rating}</strong> — {rev.customer?.name || "Customer"}
-            {rev.comment ? ` — "${rev.comment}"` : ""}
-          </p>
-        ))}
+    <div className="cook-card cook-spaced-top">
+      <div className="cook-recent-head">
+        <h3>Recent reviews ({total})</h3>
         {total > 3 && (
-          <Link to="/dashboard/cook-reviews" style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--primary)" }}>
+          <Link to="/dashboard/cook-reviews" className="cook-link-btn">
             See all reviews →
           </Link>
         )}
+      </div>
+      <div className="cook-recent-list">
+        {list.map((rev) => (
+          <div key={rev._id} className="cook-recent-row">
+            <span className="cook-avatar">
+              {rev.customer?.name?.[0]?.toUpperCase() || "C"}
+            </span>
+            <div className="cook-review-who">
+              <div className="cook-recent-row-head">
+                <strong>{rev.customer?.name || "Customer"}</strong>
+                <span className="cook-stars">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      size={13}
+                      fill={s <= Number(rev.rating || 0) ? "#f59e0b" : "none"}
+                      color={s <= Number(rev.rating || 0) ? "#f59e0b" : "#cbd5e1"}
+                    />
+                  ))}
+                </span>
+              </div>
+              {rev.comment ? (
+                <p className="cook-recent-comment">"{rev.comment}"</p>
+              ) : (
+                <p className="cook-recent-nocomment">Rated {rev.rating}/5 with no written feedback.</p>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -315,7 +500,7 @@ const RecentReviewsPreview = ({ reviews, loading }) => {
 // page) so the two can never diverge again.
 const CookProfileManager = ({ onSaved }) => {
   return (
-    <div style={{ maxWidth: 700 }}>
+    <div className="cook-profile-wrap">
       <CookProfileForm
         createTitle="Create Your Cook Profile"
         manageTitle="Edit Your Cook Profile"

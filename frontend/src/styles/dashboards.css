@@ -93,6 +93,11 @@
 }
 .booking-item-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
+/* Clickable cards navigate to the booking details page (inner
+   buttons/links keep their own actions via a closest() guard in JSX). */
+.booking-item-card.clickable { cursor: pointer; }
+.booking-item-card.clickable:focus-visible { outline: 3px solid var(--primary-glow); outline-offset: 2px; }
+
 .booking-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem 1rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
 .booking-item-top > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .booking-party-info { min-width: 0; }

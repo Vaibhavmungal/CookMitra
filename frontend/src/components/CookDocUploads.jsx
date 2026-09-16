@@ -95,7 +95,7 @@ const CookDocUploads = ({
   };
 
   const fileInput = (field, accept, label) => (
-    <label className="btn btn-outline btn-sm" style={{ cursor: "pointer" }}>
+    <label className="btn btn-outline btn-sm cook-file-btn">
       {field === "photo" ? <Camera size={15} /> : <Upload size={15} />}{" "}
       {uploading[field] ? "Uploading..." : label}
       <input
@@ -112,17 +112,17 @@ const CookDocUploads = ({
   );
 
   return (
-    <div className="booking-form-group">
-      <label style={{ marginBottom: "0.75rem" }}>
+    <div className="cook-field">
+      <label className="cook-doc-group-label">
         Identity Verification{" "}
-        {requireDocs && <span style={{ color: "var(--primary)" }}>(Aadhaar & PAN required)</span>}
+        {requireDocs && <span className="cook-required">(Aadhaar & PAN required)</span>}
       </label>
 
       {/* Aadhaar Card */}
-      <div className="cook-doc-box">
+      <div className="cook-doc-card">
         <div className="cook-doc-head">
-          <strong style={{ fontSize: "0.92rem" }}>
-            Aadhaar Card {requireDocs && <span style={{ color: "#dc2626" }}>*</span>}
+          <strong>
+            Aadhaar Card {requireDocs && <span className="cook-required">*</span>}
           </strong>
           {aadharCardUrl && (
             <span className="badge badge-emerald">
@@ -154,10 +154,10 @@ const CookDocUploads = ({
       </div>
 
       {/* PAN Card */}
-      <div className="cook-doc-box">
+      <div className="cook-doc-card">
         <div className="cook-doc-head">
-          <strong style={{ fontSize: "0.92rem" }}>
-            PAN Card {requireDocs && <span style={{ color: "#dc2626" }}>*</span>}
+          <strong>
+            PAN Card {requireDocs && <span className="cook-required">*</span>}
           </strong>
           {panCardUrl && (
             <span className="badge badge-emerald">
@@ -189,10 +189,10 @@ const CookDocUploads = ({
       </div>
 
       {/* Profile Photo (optional) */}
-      <div className="cook-doc-box">
+      <div className="cook-doc-card">
         <div className="cook-doc-head">
-          <strong style={{ fontSize: "0.92rem" }}>
-            Profile Photo <span style={{ color: "var(--slate-400)", fontWeight: 500 }}>(optional)</span>
+          <strong>
+            Profile Photo <span className="cook-optional">(optional)</span>
           </strong>
           {photoUrl && (
             <span className="badge badge-emerald">
@@ -221,7 +221,7 @@ const CookDocUploads = ({
           )}
         </div>
       </div>
-      <p style={{ fontSize: "0.8rem", color: "var(--slate-500)", marginTop: "0.5rem" }}>
+      <p className="cook-doc-hint">
         Your Aadhaar and PAN are visible only to the admin for verification.
       </p>
     </div>

@@ -189,17 +189,48 @@ export const cookLiveMapsUrl = (cookLocation) => {
   return `https://www.google.com/maps?q=${cookLocation.lat},${cookLocation.lng}`;
 };
 
+// Effective service window: once the cook verifies the OTP the scheduled
+// start/end are redefined from the actual clock (serviceStartedAt →
+// serviceEndsAt = start + booked duration). Prefers the live clock so legacy
+// bookings (stored endTime not yet redefined) still display real times.
+const clockHM = (d) => {
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+};
+
+export const effectiveServiceWindow = (obj) => {
+  const start = obj?.serviceStartedAt ? clockHM(obj.serviceStartedAt) : obj?.startTime || null;
+  const end = obj?.serviceEndsAt
+    ? clockHM(obj.serviceEndsAt)
+    : obj?.serviceStartedAt && obj?.durationHours
+      ? (() => {
+          const s = new Date(obj.serviceStartedAt);
+          if (Number.isNaN(s.getTime())) return obj?.endTime || null;
+          return clockHM(new Date(s.getTime() + Math.round(Number(obj.durationHours) * 60) * 60 * 1000));
+        })()
+      : obj?.endTime || null;
+  return { startTime: start, endTime: end };
+};
+
 // Session end datetime. Prefers the live service clock (serviceEndsAt, set
-// when the cook verifies the OTP) over the static schedule, so countdowns
-// and alarms count real cooking time. Accepts a booking or live payload.
+// when the cook verifies the OTP), then the server-resolved `sessionEnd`
+// (both the live-tracking and details endpoints return it, computed by the
+// backend from its own live clock), and only then the static date + endTime
+// slot. `sessionEnd` is a fixed instant so it never goes stale — honoring it
+// keeps every screen on the identical countdown. Accepts a booking or live
+// payload.
 export const sessionEndDate = (obj) => {
   if (obj?.serviceEndsAt) {
     const live = new Date(obj.serviceEndsAt);
     if (!Number.isNaN(live.getTime())) return live;
   }
-  const date = obj?.sessionEnd || obj?.date;
+  if (obj?.sessionEnd) {
+    const resolved = new Date(obj.sessionEnd);
+    if (!Number.isNaN(resolved.getTime())) return resolved;
+  }
+  const date = obj?.date;
   if (!date) return null;
-  if (obj?.sessionEnd && !obj?.endTime) return new Date(obj.sessionEnd);
   const endTime = obj?.endTime;
   if (!endTime) return null;
   const m = String(endTime).match(/^(\d{1,2}):(\d{2})/);
@@ -210,9 +241,14 @@ export const sessionEndDate = (obj) => {
   return d;
 };
 
-// Session start datetime from date + startTime ("HH:MM"). Null when unknown.
-// Mirrors sessionEndDate so the UI can gate actions to "before service hours".
+// Session start datetime: prefers the actual service clock (serviceStartedAt)
+// over the static schedule, mirroring sessionEndDate so the UI gates on real
+// times once the OTP is verified.
 export const sessionStartDate = (obj) => {
+  if (obj?.serviceStartedAt) {
+    const live = new Date(obj.serviceStartedAt);
+    if (!Number.isNaN(live.getTime())) return live;
+  }
   const date = obj?.date;
   if (!date) return null;
   const startTime = obj?.startTime;
@@ -225,9 +261,11 @@ export const sessionStartDate = (obj) => {
   return d;
 };
 
-// True when now ≥ date + startTime — the service hours have begun. Unknown
-// start ⇒ false, matching how hours-complete treats an unknown end.
+// True when the session is under way: the cook verified the OTP
+// (serviceStartedAt set) OR now ≥ date + startTime. Unknown start ⇒ false,
+// matching how hours-complete treats an unknown end.
 export const hasServiceHoursStarted = (obj) => {
+  if (obj?.serviceStartedAt) return true;
   const start = sessionStartDate(obj);
   return !!start && Date.now() >= start.getTime();
 };

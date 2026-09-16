@@ -12,6 +12,12 @@ const cookProfileSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Renamed from "bio" in the cook profile form — new input writes here.
+    // `bio` is kept for backward compat with existing profiles.
+    skills: {
+      type: String,
+      default: "",
+    },
     experienceYears: {
       type: Number,
       default: 0,
@@ -28,9 +34,12 @@ const cookProfileSchema = new mongoose.Schema(
         enum: ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"],
       },
     ],
+    // Legacy hourly rate — no longer collected from cooks (pricing uses
+    // slab pricing). Kept optional with a default so old profiles keep
+    // working and new profiles save without a rate.
     rate: {
       type: Number,
-      required: [true, "Rate is required"],
+      default: 0,
     },
     serviceArea: {
       type: String,

@@ -977,24 +977,33 @@ exports.cancelBooking = async (req, res, next) => {
 
     // No availability flip-back needed (see rejectBooking).
 
-    const notifyUser = isCustomer ? booking.cook : booking.customer;
-    await Notification.create({
-      user: notifyUser,
-      type: "booking_cancelled",
-      message: "A booking has been cancelled.",
-    });
-    // The payer always hears about the refund outcome, even when the other
-    // party cancelled.
-    if (refundNote) {
-      try {
-        await Notification.create({
-          user: booking.customer,
-          type: "booking_cancelled",
-          message: `Booking cancelled.${refundNote}`,
-        });
-      } catch {
-        // non-fatal
-      }
+    // Both parties always hear about the cancellation: each side's
+    // dashboard/details row flips to "cancelled", and EACH side gets a
+    // notification naming who cancelled. (Previously the canceller heard
+    // nothing on unpaid bookings, and the other side got a vague message.)
+    const customerMsg = isCustomer
+      ? `Your booking has been cancelled.${refundNote}`
+      : `Cook cancelled your booking.${refundNote}`;
+    const cookMsg = isCustomer
+      ? "Customer cancelled a booking."
+      : "You cancelled a booking.";
+    try {
+      await Notification.create({
+        user: booking.customer,
+        type: "booking_cancelled",
+        message: customerMsg,
+      });
+    } catch {
+      // non-fatal
+    }
+    try {
+      await Notification.create({
+        user: booking.cook,
+        type: "booking_cancelled",
+        message: cookMsg,
+      });
+    } catch {
+      // non-fatal
     }
 
     res.json(booking);
@@ -1123,12 +1132,20 @@ exports.startService = async (req, res, next) => {
     const startedAt = new Date();
     booking.serviceStartedAt = startedAt;
     booking.serviceEndsAt = new Date(startedAt.getTime() + durMin * 60 * 1000);
+    // Redefine the service window from the actual start: the scheduled
+    // start/end shift to (actual start → actual start + duration) so the
+    // stored endTime always reflects real cooking time, not the slot guess.
+    const fmtClock = (d) =>
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    booking.startTime = fmtClock(startedAt);
+    booking.endTime = fmtClock(booking.serviceEndsAt);
     await markArrivedIfNeeded(booking, "manual");
+    const serviceNote = `Service started (OTP verified) ${booking.startTime}–${booking.endTime}`;
     if (booking.status !== "in_progress") {
       booking.status = "in_progress";
-      booking.statusHistory.push({ status: "in_progress", note: "Service started (OTP verified)" });
+      booking.statusHistory.push({ status: "in_progress", note: serviceNote });
     } else {
-      booking.statusHistory.push({ status: "in_progress", note: "Service started (OTP verified)" });
+      booking.statusHistory.push({ status: "in_progress", note: serviceNote });
     }
     await booking.save();
     try {
@@ -1317,6 +1334,9 @@ exports.getBookingLiveTracking = async (req, res, next) => {
       date: booking.date,
       startTime: booking.startTime,
       endTime: booking.endTime,
+      durationHours: booking.durationHours,
+      serviceStartedAt: booking.serviceStartedAt || null,
+      serviceEndsAt: booking.serviceEndsAt || null,
       sessionEnd: end ? end.toISOString() : null,
       hoursCompleted: !!booking.hoursCompleted,
       hoursCompletedAt: booking.hoursCompletedAt || null,

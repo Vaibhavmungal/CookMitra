@@ -15,6 +15,7 @@ const {
 // or reassign the profile's owner.
 const COOK_EDITABLE_FIELDS = [
   "bio",
+  "skills",
   "experienceYears",
   "specialties",
   "serviceTypes",
@@ -237,12 +238,17 @@ exports.createCookProfile = async (req, res, next) => {
       return res.status(400).json({ message: "Cook profile already exists" });
     }
 
+    const body = pickCookEditable(req.body);
+    // Keep legacy `bio` and renamed `skills` in sync — old clients send only
+    // bio, the new form sends skills.
+    if (body.skills != null && body.bio == null) body.bio = body.skills;
+    if (body.bio != null && body.skills == null) body.skills = body.bio;
     const profile = await CookProfile.create({
       user: req.user.id,
       // New profiles always start "pending" until an admin approves them —
       // approvalStatus can never come from the request body.
       approvalStatus: "pending",
-      ...pickCookEditable(req.body),
+      ...body,
     });
     res.status(201).json(profile);
   } catch (error) {
@@ -271,6 +277,8 @@ exports.updateCookProfile = async (req, res, next) => {
     // the GPS liveLocation (dedicated PATCH /me/location endpoint) can never be
     // written through the generic profile editor.
     const body = pickCookEditable(req.body);
+    if (body.skills != null && body.bio == null) body.bio = body.skills;
+    if (body.bio != null && body.skills == null) body.skills = body.bio;
     const profile = await CookProfile.findOneAndUpdate(
       { user: req.user.id },
       body,

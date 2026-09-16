@@ -1,6 +1,18 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
+// COOKMITRA EVENTS (MVP §17) — canonical roles are UPPERCASE:
+// CUSTOMER, COOK, ADMIN. Lowercase legacy values ("customer"/"cook"/"admin")
+// from the earlier on-demand flow are auto-uppercased by the setter below so
+// old documents, seeds and clients keep working without a data migration.
+const USER_ROLES = ["CUSTOMER", "COOK", "ADMIN"];
+
+const normalizeRole = (v) => {
+  if (v == null) return v;
+  const up = String(v).trim().toUpperCase();
+  return USER_ROLES.includes(up) ? up : v;
+};
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -22,6 +34,14 @@ const userSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    // COOKMITRA EVENTS spec (§17) names this field `mobile`. `phone` above is
+    // the legacy name used across the app — both are kept in sync (see
+    // pre-validate / pre-save hooks) so either one can be used.
+    mobile: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     address: {
       type: String,
       trim: true,
@@ -38,8 +58,10 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["customer", "cook", "admin"],
-      default: "customer",
+      enum: USER_ROLES,
+      default: "CUSTOMER",
+      uppercase: true,
+      set: normalizeRole,
     },
     status: {
       type: String,

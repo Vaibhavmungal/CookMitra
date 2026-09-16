@@ -276,9 +276,9 @@ const AdminCookProfile = () => {
               <span>{(profile.specialties || []).join(", ") || "—"}</span>
             </div>
           </div>
-          {profile.bio && (
+          {(profile.skills || profile.bio) && (
             <p style={{ fontSize: "0.9rem", color: "var(--slate-600)", margin: "0.75rem 0 0" }}>
-              {profile.bio}
+              {profile.skills || profile.bio}
             </p>
           )}
         </div>

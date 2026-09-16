@@ -230,7 +230,7 @@ const Cooks = () => {
                   </div>
 
                   <p className="cook-bio-preview">
-                    {cook.bio || "Passionate about traditional authentic cooking, homemade sweets, and joyful family festival celebrations."}
+                    {cook.skills || cook.bio || "Passionate about traditional authentic cooking, homemade sweets, and joyful family festival celebrations."}
                   </p>
 
                   <div className="cook-specialties-wrap">

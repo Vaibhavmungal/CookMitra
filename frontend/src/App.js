@@ -23,6 +23,7 @@ import CookSetup from "./pages/CookSetup";
 import CookReviews from "./pages/CookReviews";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminCookProfile from "./pages/AdminCookProfile";
+import AdminComplaints from "./pages/AdminComplaints";
 import LiveCookTracking from "./pages/LiveCookTracking";
 import BookingWaiting from "./pages/BookingWaiting";
 import BookingPayment from "./pages/BookingPayment";
@@ -183,6 +184,14 @@ function App() {
                 element={
                   <ProtectedRoute roles={["admin"]}>
                     <AdminCookProfile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/complaints"
+                element={
+                  <ProtectedRoute roles={["admin"]}>
+                    <AdminComplaints />
                   </ProtectedRoute>
                 }
               />

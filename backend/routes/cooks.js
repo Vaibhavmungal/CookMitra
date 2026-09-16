@@ -61,7 +61,8 @@ router.post(
   authorize("cook"),
   [
     body("bio").optional().trim(),
-    body("rate").isNumeric().withMessage("Rate must be a number"),
+    body("skills").optional().trim(),
+    body("rate").optional().isNumeric().withMessage("Rate must be a number"),
     body("serviceTypes")
       .isArray({ min: 1 })
       .withMessage("At least one service type is required"),

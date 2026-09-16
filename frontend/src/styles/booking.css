@@ -1822,3 +1822,401 @@
   .bk-step-desc { display: none; }
   .bk-head-price strong { font-size: 1rem; }
 }
+
+/* ==========================================================================
+   Booking details page (BookingDetails.jsx — `bd-*` namespace). Modern,
+   customer-first layout: gradient hero, journey tracker, fact cards,
+   sticky action bar. Cook/admin share the layout; role-only blocks stay
+   gated in JSX. Pure addition: nothing above is altered.
+   ========================================================================== */
+.bd-wrap {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem 6rem;
+  animation: bkFadeIn 0.3s ease backwards;
+}
+.bd-back { margin-bottom: 1rem; }
+
+/* ---- Hero ---- */
+.bd-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 55%, #fed7aa 100%);
+  border: 1px solid #fed7aa;
+  border-radius: 20px;
+  padding: 1.1rem 1.2rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1rem;
+}
+.bd-hero::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--primary-gradient);
+}
+.bd-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+.bd-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary-700);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #fed7aa;
+  border-radius: 99px;
+  padding: 0.15rem 0.55rem;
+}
+.bd-title { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; color: var(--slate-900); line-height: 1.2; }
+.bd-sub { margin: 0.2rem 0 0; font-size: 0.82rem; font-weight: 600; color: var(--slate-600); }
+.bd-hero-facts { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.bd-fact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #fed7aa;
+  border-radius: 99px;
+  padding: 0.28rem 0.7rem;
+  white-space: nowrap;
+}
+.bd-fact-chip svg { color: var(--primary-700); flex-shrink: 0; }
+.bd-fact-chip.live { background: var(--slate-900); border-color: var(--slate-900); color: #fff; }
+.bd-fact-chip.live svg { color: #fbbf24; }
+
+/* ---- Journey tracker ---- */
+.bd-journey {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.bd-journey-step { display: flex; align-items: center; gap: 0.45rem; flex: 1; min-width: 0; }
+.bd-journey-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--slate-200);
+  color: var(--slate-400);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.bd-journey-step.done .bd-journey-dot { background: var(--accent-emerald); border-color: transparent; color: #fff; }
+.bd-journey-step.current .bd-journey-dot {
+  background: var(--primary-gradient);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--shadow-brand), 0 0 0 3px var(--primary-glow);
+}
+.bd-journey-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.bd-journey-name { font-size: 0.76rem; font-weight: 800; color: var(--slate-500); white-space: nowrap; }
+.bd-journey-step.done .bd-journey-name { color: var(--slate-700); }
+.bd-journey-step.current .bd-journey-name { color: var(--primary-700); }
+.bd-journey-hint { font-size: 0.66rem; font-weight: 600; color: var(--slate-400); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-journey-link { flex: 1; height: 2px; border-radius: 2px; background: var(--slate-200); margin: 13px 0.5rem 0; min-width: 8px; }
+.bd-journey-step.done + .bd-journey-link, .bd-journey-link.done { background: var(--accent-emerald); }
+
+/* ---- Banners ---- */
+.bd-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 12px;
+  padding: 0.7rem 0.95rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+.bd-banner svg { flex-shrink: 0; }
+.bd-banner.ok { background: #ecfdf5; border-color: #6ee7b7; color: #065f46; }
+.bd-banner.ok svg { color: var(--accent-emerald); }
+.bd-banner.warn { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+.bd-banner.warn svg { color: #b45309; }
+.bd-banner.info { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
+.bd-banner.info svg { color: #2563eb; }
+.bd-banner.bad { background: #fef2f2; border-color: #fecaca; color: #9f1239; }
+.bd-banner.bad svg { color: var(--accent-rose); }
+.bd-banner .btn { margin-left: auto; }
+
+/* ---- Cards ---- */
+.bd-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; }
+.bd-card {
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+  padding: 1.15rem 1.2rem;
+  animation: bkFadeIn 0.3s ease backwards;
+}
+.bd-card + .bd-card, .bd-grid-2 + .bd-card, .bd-card + .bd-grid-2, .bd-grid-2 + .bd-grid-2 { margin-top: 1rem; }
+.bd-card-head { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.85rem; font-size: 1.02rem; }
+.bd-card-head.center { justify-content: center; }
+.bd-card-head svg { color: var(--primary); flex-shrink: 0; }
+.bd-card-head .bd-card-action { margin-left: auto; }
+
+/* Fact rows: icon tile + label/value */
+.bd-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.7rem 1rem; }
+.bd-fact { display: flex; gap: 0.6rem; align-items: flex-start; min-width: 0; }
+.bd-fact-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--primary-light);
+  color: var(--primary-700);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bd-fact-body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.bd-fact-body label { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate-400); }
+.bd-fact-body span { font-size: 0.92rem; font-weight: 700; color: var(--slate-800); overflow-wrap: anywhere; }
+.bd-fact-body .bd-pay-amount { font-size: 1.35rem; }
+
+/* Cook identity row */
+.bd-cook { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
+.bd-cook-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary-gradient);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-brand);
+  overflow: hidden;
+}
+.bd-cook-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.bd-cook-name { font-weight: 800; font-size: 1.05rem; color: var(--slate-900); }
+.bd-cook-sub { font-size: 0.85rem; color: var(--slate-500); }
+.bd-cook-phone { font-size: 0.85rem; color: var(--slate-600); display: flex; align-items: center; gap: 0.35rem; margin-top: 0.2rem; }
+.bd-cook-loc { font-size: 0.85rem; display: flex; align-items: center; gap: 0.35rem; margin-top: 0.2rem; font-weight: 600; }
+.bd-cook-loc.live { color: #065f46; }
+.bd-cook-loc.live svg { color: var(--accent-emerald); }
+.bd-cook-loc.idle { color: var(--slate-400); font-weight: 500; }
+.bd-row-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* Venue */
+.bd-venue-addr { margin: 0 0 0.75rem; color: var(--slate-700); font-size: 0.95rem; }
+
+/* Order */
+.bd-dishes { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+.bd-dishes:empty { display: none; }
+.bd-note { font-size: 0.88rem; color: var(--slate-600); background: var(--slate-50); padding: 0.6rem 0.9rem; border-radius: 10px; margin: 0; }
+
+/* Payment */
+.bd-pay-rows { margin-bottom: 0.75rem; }
+.bd-pay-amount { font-size: 1.35rem; font-weight: 800; color: var(--primary-700); font-variant-numeric: tabular-nums; }
+.bd-pay-meta { font-size: 0.82rem; color: var(--slate-500); margin-top: 0.4rem; }
+.bd-refund { margin-top: 0.6rem; font-size: 0.85rem; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.bd-refund-amount { color: var(--slate-600); font-weight: 700; }
+.bd-payout { font-size: 0.85rem; color: var(--slate-600); background: var(--slate-50); padding: 0.55rem 0.85rem; border-radius: 10px; margin-bottom: 0.75rem; }
+.bd-payout strong { color: var(--accent-emerald); }
+
+/* ---- OTP code card (customer shows it) ---- */
+.bd-otp { text-align: center; border: 2px dashed var(--primary); }
+.bd-otp-code {
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  padding-left: 0.35em;
+  color: var(--primary-800);
+  margin: 0.25rem 0 0.5rem;
+}
+.bd-otp-sub { margin: 0; font-size: 0.88rem; color: var(--slate-600); }
+.bd-otp-input {
+  max-width: 150px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.25em;
+}
+.bd-otp-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.bd-otp-desc { margin: 0 0 0.75rem; color: var(--slate-600); font-size: 0.88rem; }
+
+/* ---- Reschedule panel ---- */
+.bd-rs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0.85rem; margin-bottom: 0.75rem; }
+.bd-rs-hint { margin: 0 0 0.75rem; color: var(--slate-600); font-size: 0.88rem; }
+.bd-rs-pick { font-size: 0.88rem; color: var(--slate-600); margin: 0 0 0.75rem; }
+.bd-rs-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.bd-mini-note { font-size: 0.88rem; color: var(--slate-500); font-weight: 600; }
+
+/* ---- Review + rating ---- */
+.bd-rating { margin-top: 1rem; padding: 1rem; background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 14px; font-size: 0.9rem; }
+.bd-rating-comment { margin-top: 0.3rem; color: var(--slate-600); }
+
+/* ---- Sticky action bar ---- */
+.bd-actionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--slate-200);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  padding: 0.65rem 0.75rem calc(0.65rem + env(safe-area-inset-bottom));
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.bd-actionbar-hint { flex: 1 1 100%; font-size: 0.76rem; font-weight: 600; color: var(--slate-400); text-align: center; }
+.bd-actionbar-hint svg { display: inline; vertical-align: -1px; }
+.bd-actionbar + .bd-card { margin-top: 1rem; }
+
+/* ---- Admin timeline rows ---- */
+.bd-tl-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.bd-tl-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.88rem; }
+.bd-tl-meta { color: var(--slate-500); }
+
+/* ---- Loading / error ---- */
+.bd-loading, .bd-error { max-width: 920px; margin: 0 auto; padding: 1.75rem 1.5rem; }
+.bd-error-link { margin-bottom: 1rem; display: inline-flex; }
+
+@media (max-width: 640px) {
+  .bd-wrap { padding: 1.25rem 1rem 6rem; }
+  .bd-title { font-size: 1.3rem; }
+  .bd-hero { padding: 0.95rem 1rem; }
+  .bd-journey { padding: 0.75rem 0.8rem; overflow-x: auto; }
+  .bd-journey-hint { display: none; }
+  .bd-otp-code { font-size: 2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bd-wrap, .bd-card { animation: none; }
+}
+
+/* ==========================================================================
+   Live tracking page (LiveCookTracking.jsx — `lt-*` namespace). Reuses the
+   bd-* hero/banner/card language above; only tracking-specific pieces live
+   here: LIVE pulse, distance readout, map frame, waiting state.
+   ========================================================================== */
+/* Pulsing live dot in the hero eyebrow */
+.lt-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  flex-shrink: 0;
+  animation: ltPulse 1.6s ease-in-out infinite;
+}
+@keyframes ltPulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.45); }
+  50% { opacity: 0.75; transform: scale(0.85); box-shadow: 0 0 0 5px rgba(220, 38, 38, 0); }
+}
+
+/* Hero distance readout: big number + label */
+.lt-hero-distance {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.lt-hero-distance strong {
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--slate-900);
+  font-variant-numeric: tabular-nums;
+}
+.lt-hero-distance span { font-size: 0.82rem; font-weight: 600; color: var(--slate-600); }
+
+/* Map */
+.lt-map-frame {
+  width: 100%;
+  height: 380px;
+  border: 0;
+  border-radius: 14px;
+  display: block;
+  background: var(--slate-100);
+  margin-top: 0.85rem;
+}
+.lt-map-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; }
+.lt-map-head .bd-card-head { margin: 0; }
+.lt-map-refresh { font-size: 0.78rem; color: var(--slate-400); font-weight: 600; }
+.lt-map-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.9rem; }
+.lt-map-actions:empty { display: none; }
+
+/* Waiting-for-location empty state */
+.lt-waiting {
+  text-align: center;
+  padding: 2rem 1.25rem;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+  border: 1.5px dashed #fed7aa;
+  border-radius: 14px;
+  margin-top: 0.85rem;
+  color: var(--slate-500);
+}
+.lt-waiting-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--primary-light);
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.6rem;
+}
+.lt-waiting h3 { margin: 0 0 0.3rem; color: var(--slate-800); font-size: 1.05rem; }
+.lt-waiting p { margin: 0 auto; font-size: 0.88rem; max-width: 46ch; }
+
+/* Slim booking strip under the map */
+.lt-booking-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px dashed var(--slate-200);
+  font-size: 0.85rem;
+  color: var(--slate-600);
+}
+.lt-booking-strip svg { color: var(--primary); flex-shrink: 0; }
+.lt-booking-strip .cook-link-btn { margin-left: auto; }
+
+@media (max-width: 640px) {
+  .lt-map-frame { height: 300px; }
+  .lt-hero-distance strong { font-size: 1.45rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lt-live-dot { animation: none; }
+}
