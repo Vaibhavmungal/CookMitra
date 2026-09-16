@@ -46,8 +46,11 @@ EOF
 
         stage('Build & Deploy') {
             steps {
-                // Build fresh image and restart containers with local mongo profile
-                sh 'docker compose --profile local-mongo up --build -d'
+                // Cleanly stop existing containers and launch fresh deployment
+                sh '''
+                docker compose --profile local-mongo down || true
+                docker compose --profile local-mongo up --build -d --remove-orphans
+                '''
             }
         }
 
