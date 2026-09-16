@@ -1,9 +1,3 @@
-// ==============================================================================
-// CookMitra CI/CD Pipeline
-// Description: Automates build, deployment, and health verification on AWS EC2
-// Engine: Docker Compose
-// ==============================================================================
-
 pipeline {
     agent any
 
