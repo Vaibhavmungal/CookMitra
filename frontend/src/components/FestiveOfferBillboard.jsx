@@ -20,8 +20,9 @@ const STRIP_KEY = "cm-festive-strip-dismissed";
 // Visarjan on Anant Chaturdashi (Sept 25).
 const OFFER_END = new Date("2026-09-26T00:00:00");
 // Promo code shown on the strip + popup. Fetched live from the backend
-// /api/coupons/active list (admin-managed); this is the graceful fallback.
-const OFFER_CODE = "BAPPA20";
+// /api/coupons/active list (admin-managed); this is the graceful fallback and
+// must always name a real code from backend/utils/couponCatalog.js.
+const OFFER_CODE = "FESTIVE20";
 const OFFER_PERCENT = 20;
 
 const MODAK_IMG =

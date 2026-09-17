@@ -7,88 +7,13 @@ const Booking = require("../models/Booking");
 const Review = require("../models/Review");
 const Notification = require("../models/Notification");
 const Coupon = require("../models/Coupon");
+const { INITIAL_COUPONS, RETIRED_COUPON_CODES } = require("../utils/couponCatalog");
 
 dotenv.config();
 
-// Launch promo coupons — WELCOME50 + FESTIVE50 active, future campaign
-// codes seeded inactive. Used both by the full `npm run seed` and the safe
-// `node seeds/seed.js --coupons-only` mode (which only inserts missing codes
-// into an existing database, no wiping). validFrom/validTo are left null =
-// active from now with no expiry.
-const INITIAL_COUPONS = [
-  // Launch-active offers (the only two customers can use today).
-  {
-    code: "WELCOME50",
-    description: "₹50 off your first booking (min order ₹399, one per customer).",
-    discountType: "flat",
-    flatAmount: 50,
-    minOrder: 399,
-    perUserLimit: 1,
-    firstBookingOnly: true,
-    active: true,
-  },
-  {
-    code: "FESTIVE50",
-    description: "₹50 off festive bookings (min order ₹399, one per booking).",
-    discountType: "flat",
-    flatAmount: 50,
-    minOrder: 399,
-    perUserLimit: null,
-    firstBookingOnly: false,
-    active: true,
-  },
-  // Future campaigns — seeded inactive, flip on from the admin panel.
-  {
-    code: "NEWUSER100",
-    description: "₹100 off for new customers.",
-    discountType: "flat",
-    flatAmount: 100,
-    minOrder: 499,
-    perUserLimit: 1,
-    firstBookingOnly: true,
-    active: false,
-  },
-  {
-    code: "REFER50",
-    description: "₹50 off referral bookings.",
-    discountType: "flat",
-    flatAmount: 50,
-    minOrder: 399,
-    perUserLimit: 1,
-    firstBookingOnly: false,
-    active: false,
-  },
-  {
-    code: "REBOOK50",
-    description: "₹50 off repeat bookings.",
-    discountType: "flat",
-    flatAmount: 50,
-    minOrder: 399,
-    perUserLimit: null,
-    firstBookingOnly: false,
-    active: false,
-  },
-  {
-    code: "FESTIVE100",
-    description: "₹100 off festival campaign bookings.",
-    discountType: "flat",
-    flatAmount: 100,
-    minOrder: 799,
-    perUserLimit: 1,
-    firstBookingOnly: false,
-    active: false,
-  },
-  {
-    code: "WEEKDAY50",
-    description: "₹50 off weekday bookings.",
-    discountType: "flat",
-    flatAmount: 50,
-    minOrder: 399,
-    perUserLimit: null,
-    firstBookingOnly: false,
-    active: false,
-  },
-];
+// Promo coupons now live in ../utils/couponCatalog (pure data, so the pricing
+// tests can assert every live code is redeemable against the launch slabs).
+// See that file for the ladder design and the rationale per code.
 
 const seedData = async () => {
   try {
@@ -198,7 +123,9 @@ const seedData = async () => {
     // Initial promo coupons — up to 20% off festive bookings. Admin-managed
     // from the admin dashboard (Coupons tab) at any time afterwards.
     await Coupon.create(INITIAL_COUPONS.map((c) => ({ ...c, createdBy: admin._id })));
-    console.log("Seeded 4 promo coupons (up to 20% off): BAPPA20, FESTIVE15, UTSAV10, MORYA5");
+    console.log(
+      `Seeded ${INITIAL_COUPONS.length} promo coupons (${INITIAL_COUPONS.map((c) => c.code).join(", ")})`
+    );
     process.exit(0);
   } catch (error) {
     console.error("Seeding error:", error);
@@ -206,28 +133,54 @@ const seedData = async () => {
   }
 };
 
-// Safe, non-destructive coupon seeding for an existing database: inserts only
-// the initial up-to-20% coupons whose codes are missing. No data is wiped.
-// Run: node seeds/seed.js --coupons-only
+// Safe, non-destructive coupon sync for an existing database. Three things,
+// none of which ever delete a record or touch usedCount/usedBy history:
+//   1. create catalogue codes that are missing
+//   2. sync the terms of existing catalogue codes (e.g. WELCOME50's min order)
+//   3. deactivate retired codes so dead/false-promise offers stop being served
+// Run: npm run seed:coupons
 const seedCouponsOnly = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log("MongoDB connected for coupon seeding (--coupons-only)");
+    console.log("MongoDB connected for coupon sync (--coupons-only)");
     const admin = await User.findOne({ role: { $in: ["ADMIN", "admin"] } }).select("_id");
+
     let created = 0;
-    for (const t of INITIAL_COUPONS) {
-      const existing = await Coupon.findOne({ code: t.code });
-      if (existing) continue;
-      await Coupon.create({ ...t, createdBy: admin?._id });
-      created += 1;
+    let updated = 0;
+    for (const coupon of INITIAL_COUPONS) {
+      const existing = await Coupon.findOne({ code: coupon.code });
+      if (!existing) {
+        await Coupon.create({ ...coupon, createdBy: admin?._id });
+        created += 1;
+        continue;
+      }
+      // Only the offer terms are synced — usage counters stay append-only.
+      const terms = { ...coupon };
+      delete terms.code;
+      await Coupon.updateOne({ _id: existing._id }, { $set: terms });
+      updated += 1;
     }
-    console.log(
-      `Coupon seeding done: ${created} created, ${INITIAL_COUPONS.length - created} already present.`
+
+    // Retired codes are deactivated, never deleted: bookings reference them.
+    const retired = await Coupon.updateMany(
+      { code: { $in: RETIRED_COUPON_CODES }, active: true },
+      { $set: { active: false } }
     );
+    const alreadyOff = await Coupon.countDocuments({
+      code: { $in: RETIRED_COUPON_CODES },
+      active: false,
+    });
+
+    console.log(
+      `Coupon sync done: ${created} created, ${updated} synced, ` +
+        `${retired.modifiedCount} retired (${alreadyOff} already inactive).`
+    );
+    const live = await Coupon.find({ active: true }).select("code").sort({ code: 1 });
+    console.log(`Live now: ${live.map((c) => c.code).join(", ") || "(none)"}`);
     await mongoose.disconnect();
     process.exit(0);
   } catch (error) {
-    console.error("Coupon seeding error:", error);
+    console.error("Coupon sync error:", error);
     process.exit(1);
   }
 };

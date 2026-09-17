@@ -52,8 +52,8 @@ const HomeCoupons = () => {
         <span className="section-eyebrow">🪔 Ganesh Utsav Specials</span>
         <h2 className="section-title">Festive Offers For You</h2>
         <p className="section-description">
-          Apply a coupon while booking — flat ₹50 off launch offers, fresh
-          from Bappa's kitchen.
+          Apply a coupon while booking — one offer per session, straight off
+          your bill.
         </p>
       </div>
 
