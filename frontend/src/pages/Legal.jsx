@@ -304,7 +304,7 @@ export const ContactUs = () => (
           @contactuscookmitra
         </a>
       </li>
-      <li>Hours: 9:00 AM – 9:00 PM IST, all days</li>
+      <li>Hours: 10:00 AM – 6:00 PM IST, all days</li>
     </ul>
     <h3>What to include</h3>
     <p>
