@@ -3142,6 +3142,11 @@
 }
 
 /* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .bk-v2 .bk-service-grid { grid-template-columns: 1fr; }
+  .bk-v2 .bk-price-cells { grid-template-columns: 1fr 1fr; }
+}
+
 @media (max-width: 640px) {
   .bk-v2 { max-width: 100%; }
   .bk-v2 .bk-shell { border-radius: 20px; }
