@@ -26,8 +26,14 @@ const ALLOWED_MIME = new Set([
   "application/pdf",
 ]);
 
+// MIME types are client-supplied and spoofable, so enforce the file extension
+// too — otherwise an .html/.svg upload passes as image/jpeg and is served
+// back verbatim under /uploads (stored XSS / content spoofing).
+const ALLOWED_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".pdf"]);
+
 const fileFilter = (req, file, cb) => {
-  if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  if (ALLOWED_MIME.has(file.mimetype) && ALLOWED_EXT.has(ext)) return cb(null, true);
   const err = new Error("Only JPG, PNG, WEBP images or PDF files are allowed");
   err.statusCode = 400;
   cb(err);

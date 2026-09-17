@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/axios";
 import { useFetch } from "../hooks/useFetch";
+import { normalizeRole } from "../store/authSlice";
 import { useShowToast } from "../store/hooks";
 import { formatCurrency, formatDate } from "../utils/constants";
 import AddCookModal from "../components/AddCookModal";
 import AdminDocViewer from "../components/AdminDocViewer";
+import AdminDocUpload from "../components/AdminDocUpload";
 import CouponManagement from "../components/CouponManagement";
 import {
   ShieldAlert,
@@ -16,8 +18,6 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  Search,
-  Filter,
   MessageCircle,
   Tag,
   Trash2,
@@ -34,8 +34,7 @@ import {
   Copy,
 } from "lucide-react";
 
-const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState("cooks");
+const AdminDashboard = () => {  const [activeTab, setActiveTab] = useState("cooks");
 
   return (
     <div className="dashboard-container">
@@ -224,6 +223,21 @@ const CookManagement = () => {
                 ]}
               />
 
+              {/* Admin can attach files the cook sent over email/WhatsApp */}
+              <div
+                style={{
+                  marginTop: "0.75rem",
+                  borderTop: "1px dashed var(--slate-200)",
+                  paddingTop: "0.75rem",
+                }}
+              >
+                <AdminDocUpload
+                  cookId={cook._id}
+                  current={cook}
+                  onUploaded={refetch}
+                />
+              </div>
+
               {cook.approvalStatus === "pending" && (
                 <div className="booking-actions-row">
                   <button
@@ -283,6 +297,13 @@ const BookingManagement = () => {
       )
     )
       return;
+    if (
+      action === "cancel" &&
+      !window.confirm(
+        "Cancel this booking as admin? Paid bookings are refunded and the slot is released."
+      )
+    )
+      return;
     try {
       await API.patch(`/bookings/${bookingId}/${action}`);
       showToast(
@@ -290,8 +311,10 @@ const BookingManagement = () => {
           ? "Request accepted on behalf of the cook — the cook has been notified!"
           : action === "complete"
           ? "Service marked completed on behalf of the cook!"
+          : action === "cancel"
+          ? "Booking cancelled — slot released."
           : "Request declined on behalf of the cook — the cook has been notified!",
-        action === "accept" || action === "complete" ? "success" : "info"
+        action === "reject" ? "info" : "success"
       );
       refetch();
     } catch (err) {
@@ -438,6 +461,12 @@ const BookingManagement = () => {
                   >
                     <Check size={16} /> Mark Completed
                   </button>
+                  <button
+                    className="btn btn-danger-outline btn-sm"
+                    onClick={() => handleAction(booking._id, "cancel")}
+                  >
+                    <X size={16} /> Admin Cancel
+                  </button>
                   <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
                     View Details
                   </Link>
@@ -466,6 +495,10 @@ const BookingManagement = () => {
 const UserManagement = () => {
   const { data: users, loading, refetch } = useFetch("/auth/users");
   const showToast = useShowToast();
+
+  // The API stores spec-UPPERCASE roles (ADMIN/COOK/CUSTOMER) — normalize the
+  // whole list so the admin-protection check and role badge below work.
+  const list = (users || []).map((u) => ({ ...u, role: normalizeRole(u.role) }));
 
   const handleStatus = async (user, status) => {
     const blocking = status === "suspended";
@@ -516,6 +549,8 @@ const UserManagement = () => {
   const statusBadge = (status) =>
     status === "suspended" ? (
       <span className="badge badge-rose">Blocked</span>
+    ) : status === "inactive" ? (
+      <span className="badge badge-slate">Inactive</span>
     ) : (
       <span className="badge badge-emerald">{status || "Active"}</span>
     );
@@ -528,7 +563,7 @@ const UserManagement = () => {
           <div className="spinner"></div>
           <p>Loading users...</p>
         </div>
-      ) : users && users.length > 0 ? (
+      ) : list.length > 0 ? (
         <div style={{ background: "white", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-subtle)", overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.95rem" }}>
             <thead style={{ background: "var(--slate-50)", borderBottom: "1px solid var(--slate-200)" }}>
@@ -541,7 +576,7 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {list.map((u) => (
                 <tr key={u._id} style={{ borderBottom: "1px solid var(--slate-100)" }}>
                   <td style={{ padding: "1rem", fontWeight: 700 }}>{u.name}</td>
                   <td style={{ padding: "1rem", color: "var(--slate-600)" }}>{u.email}</td>
@@ -615,7 +650,7 @@ const AdminManagement = () => {
   const [createdCreds, setCreatedCreds] = useState(null);
   const [copied, setCopied] = useState("");
 
-  const admins = (users || []).filter((u) => u.role === "admin");
+  const admins = (users || []).filter((u) => normalizeRole(u.role) === "admin");
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -917,6 +952,17 @@ const LeadManagement = () => {
     }
   };
 
+  const handleDelete = async (lead) => {
+    if (!window.confirm(`Delete enquiry from ${lead.name}? This cannot be undone.`)) return;
+    try {
+      await API.delete(`/leads/${lead._id}`);
+      showToast("Enquiry deleted", "success");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Delete failed", "error");
+    }
+  };
+
   return (
     <div>
       <h2 style={{ fontSize: "1.4rem", marginBottom: "1.5rem" }}>WhatsApp Enquiries</h2>
@@ -983,6 +1029,13 @@ const LeadManagement = () => {
                       <option value="converted">Converted</option>
                       <option value="closed">Closed</option>
                     </select>
+                    <button
+                      className="btn btn-danger-outline btn-sm"
+                      style={{ marginLeft: "0.5rem" }}
+                      onClick={() => handleDelete(lead)}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

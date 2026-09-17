@@ -107,7 +107,9 @@ const CookProfileForm = ({
     const payload = {
       skills: formData.skills,
       bio: formData.skills,
-      experienceYears: Number(formData.experienceYears),
+      experienceYears: Number.isFinite(Number(formData.experienceYears))
+        ? Math.max(0, Number(formData.experienceYears))
+        : 0,
       specialties: formData.specialties
         .split(",")
         .map((s) => s.trim())

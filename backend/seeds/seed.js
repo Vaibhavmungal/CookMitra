@@ -121,7 +121,7 @@ const seedData = async () => {
       email: "admin@festivecook.com",
       phone: "9999999999",
       password: "admin123",
-      role: "admin",
+      role: "ADMIN",
     });
 
     const customer = await User.create({
@@ -129,7 +129,7 @@ const seedData = async () => {
       email: "neha@example.com",
       phone: "9876543210",
       password: "password123",
-      role: "customer",
+      role: "CUSTOMER",
     });
 
     const cook1 = await User.create({
@@ -137,7 +137,7 @@ const seedData = async () => {
       email: "priya@example.com",
       phone: "9123456789",
       password: "password123",
-      role: "cook",
+      role: "COOK",
     });
 
     const cook2 = await User.create({
@@ -145,7 +145,7 @@ const seedData = async () => {
       email: "sunita@example.com",
       phone: "9123456780",
       password: "password123",
-      role: "cook",
+      role: "COOK",
     });
 
     console.log("Seed data created successfully!");
@@ -213,7 +213,7 @@ const seedCouponsOnly = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log("MongoDB connected for coupon seeding (--coupons-only)");
-    const admin = await User.findOne({ role: "admin" }).select("_id");
+    const admin = await User.findOne({ role: { $in: ["ADMIN", "admin"] } }).select("_id");
     let created = 0;
     for (const t of INITIAL_COUPONS) {
       const existing = await Coupon.findOne({ code: t.code });

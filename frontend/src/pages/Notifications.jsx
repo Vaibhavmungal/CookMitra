@@ -25,6 +25,7 @@ const TYPE_META = {
   booking_confirmed: { label: "Booking confirmed", icon: CheckCircle2, color: "var(--accent-blue)" },
   booking_completed: { label: "Booking completed", icon: CheckCheck, color: "var(--accent-emerald)" },
   booking_cancelled: { label: "Booking cancelled", icon: XCircle, color: "var(--slate-500)" },
+  booking_expired: { label: "Booking expired", icon: Clock, color: "var(--slate-500)" },
   service_started: { label: "Service started", icon: ChefHat, color: "var(--accent-emerald)" },
   booking_rescheduled: { label: "Booking rescheduled", icon: Calendar, color: "var(--accent-blue)" },
   cook_arrived: { label: "Cook arrived", icon: ChefHat, color: "var(--accent-emerald)" },

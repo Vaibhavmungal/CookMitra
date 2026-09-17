@@ -7,6 +7,8 @@ const {
   register,
   login,
   googleAuth,
+  forgotPassword,
+  resetPassword,
   getMe,
   updateProfile,
   getAllUsers,
@@ -21,14 +23,21 @@ router.post(
   [
     body("name").trim().notEmpty().withMessage("Name is required"),
     body("email").isEmail().withMessage("Valid email is required"),
-    body("phone").trim().notEmpty().withMessage("Phone is required"),
+    // Spec §17 calls it `mobile`; legacy clients send `phone` — accept either.
+    body("phone").optional().trim(),
+    body("mobile").optional().trim(),
+    body().custom((_, { req }) => {
+      if (!req.body.phone && !req.body.mobile) throw new Error("Phone/mobile is required");
+      return true;
+    }),
     body("password")
       .isLength({ min: 6 })
       .withMessage("Password must be at least 6 characters"),
     body("role")
       .optional()
-      .isIn(["customer", "cook"])
-      .withMessage("Role must be customer or cook"),
+      .customSanitizer((v) => String(v).toUpperCase())
+      .isIn(["CUSTOMER", "COOK"])
+      .withMessage("Role must be CUSTOMER or COOK"),
   ],
   validate,
   register
@@ -44,14 +53,34 @@ router.post(
   login
 );
 
+// Password reset (public, throttled + enumeration-safe in-controller).
+router.post(
+  "/forgot-password",
+  [body("email").isEmail().withMessage("Valid email is required")],
+  validate,
+  forgotPassword
+);
+router.post(
+  "/reset-password",
+  [
+    body("token").trim().notEmpty().withMessage("Reset token is required"),
+    body("password")
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
+  ],
+  validate,
+  resetPassword
+);
+
 router.post(
   "/google",
   [
     body("idToken").notEmpty().withMessage("Google ID token is required"),
     body("role")
       .optional()
-      .isIn(["customer", "cook"])
-      .withMessage("Role must be customer or cook"),
+      .customSanitizer((v) => String(v).toUpperCase())
+      .isIn(["CUSTOMER", "COOK"])
+      .withMessage("Role must be CUSTOMER or COOK"),
   ],
   validate,
   googleAuth
@@ -87,7 +116,12 @@ router.post(
   [
     body("name").trim().notEmpty().withMessage("Name is required"),
     body("email").isEmail().withMessage("Valid email is required"),
-    body("phone").trim().notEmpty().withMessage("Phone is required"),
+    body("phone").optional().trim(),
+    body("mobile").optional().trim(),
+    body().custom((_, { req }) => {
+      if (!req.body.phone && !req.body.mobile) throw new Error("Phone/mobile is required");
+      return true;
+    }),
     body("password")
       .isLength({ min: 6 })
       .withMessage("Password must be at least 6 characters"),
@@ -107,7 +141,12 @@ router.post(
   [
     body("name").trim().notEmpty().withMessage("Name is required"),
     body("email").isEmail().withMessage("Valid email is required"),
-    body("phone").trim().notEmpty().withMessage("Phone is required"),
+    body("phone").optional().trim(),
+    body("mobile").optional().trim(),
+    body().custom((_, { req }) => {
+      if (!req.body.phone && !req.body.mobile) throw new Error("Phone/mobile is required");
+      return true;
+    }),
     body("password")
       .isLength({ min: 6 })
       .withMessage("Password must be at least 6 characters"),

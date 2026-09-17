@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import API from "../api/axios";
 import { useSelector } from "react-redux";
 import { useShowToast } from "../store/hooks";
-import ReviewForm from "../components/ReviewForm";
+import ReviewForm, { ReviewStars } from "../components/ReviewForm";
 import ComplaintForm from "../components/ComplaintForm";
 import {
   formatCurrency,
@@ -17,6 +17,7 @@ import {
   effectiveServiceWindow,
   hasServiceHoursStarted,
   formatRemaining,
+  isReviewable,
   timeAgo,
   localTodayStr,
   SERVICE_DETAILS,
@@ -27,7 +28,6 @@ import {
   Clock,
   MapPin,
   Navigation,
-  ChefHat,
   Phone,
   MessageCircle,
   XCircle,
@@ -39,6 +39,8 @@ import {
   History,
   User,
   ShieldAlert,
+  Star,
+  Quote,
 } from "lucide-react";
 
 const BookingDetails = () => {
@@ -64,7 +66,7 @@ const BookingDetails = () => {
   const [reschedSaving, setReschedSaving] = useState(false);
   const [rsError, setRsError] = useState("");
 
-  const fetchDetails = async () => {
+  const fetchDetails = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -75,11 +77,11 @@ const BookingDetails = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [bookingId]);
 
   useEffect(() => {
     fetchDetails();
-  }, [bookingId]);
+  }, [fetchDetails]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -236,6 +238,11 @@ const BookingDetails = () => {
       case "requested":
         return <span className="badge badge-amber">Awaiting Cook Acceptance</span>;
       case "accepted":
+        return (
+          <span className="badge badge-amber">
+            {booking?.payment?.status === "paid" ? "Confirmed & Scheduled" : "Action Needed — Pay to Confirm"}
+          </span>
+        );
       case "confirmed":
         return <span className="badge badge-blue">Confirmed & Scheduled</span>;
       case "in_progress":
@@ -246,6 +253,8 @@ const BookingDetails = () => {
         return <span className="badge badge-rose">Declined by Cook</span>;
       case "cancelled":
         return <span className="badge badge-slate">Cancelled</span>;
+      case "expired":
+        return <span className="badge badge-slate">Expired — Cook Didn't Respond</span>;
       default:
         return <span className="badge badge-slate">{status}</span>;
     }
@@ -293,19 +302,6 @@ const BookingDetails = () => {
     label: (booking.serviceType || "").replace(/_/g, " "),
   };
   const end = sessionEndDate(booking);
-  // Cook's live position (per-booking snapshot wins, else live profile pin).
-  const cookLoc =
-    booking.cookLocation?.lat != null
-      ? booking.cookLocation
-      : booking.effectiveCookLocation?.lat != null
-        ? booking.effectiveCookLocation
-        : booking.cookLiveLocation?.lat != null
-          ? booking.cookLiveLocation
-          : null;
-  const cookPinUrl =
-    cookLoc?.lat != null && cookLoc?.lng != null
-      ? `https://www.google.com/maps?q=${cookLoc.lat},${cookLoc.lng}`
-      : null;
   // Redefined window: after OTP start this is actual start → actual end.
   const serviceWindow = effectiveServiceWindow(booking);
   const remainingLabel = end ? formatRemaining(end, now) : null;
@@ -330,7 +326,7 @@ const BookingDetails = () => {
   });
   // After payment the cook needs the customer's name, number and location —
   // prefer the server-built job sheet link, fall back to the client builder.
-  const isPaid = booking.payment?.status === "paid";
+  const isPaid = booking?.payment?.status === "paid";
   const jobSheetWa = isPaid
     ? booking.cookWhatsappUrl ||
       bookingCookJobWhatsAppUrl({
@@ -351,10 +347,15 @@ const BookingDetails = () => {
         customerName: user?.name,
       }));
 
-  // Journey tracker: where is this booking in its life?
+  // Journey tracker: where is this booking in its life? Note "accepted"
+  // means the cook said yes but payment may still be pending.
   const journeySteps = [
     { key: "requested", label: "Requested", hint: "Waiting for cook" },
-    { key: "confirmed", label: "Confirmed", hint: "Cook accepted" },
+    {
+      key: "confirmed",
+      label: booking?.status === "accepted" && !isPaid ? "Accepted — Pay to Confirm" : "Confirmed",
+      hint: booking?.status === "accepted" && !isPaid ? "Complete payment" : "Cook accepted",
+    },
     { key: "in_progress", label: "In progress", hint: "Cooking now" },
     { key: "completed", label: "Completed", hint: "Done · rate cook" },
   ];
@@ -404,6 +405,12 @@ const BookingDetails = () => {
         <p className="bd-sub">
           Booking #{booking._id?.substring(18)} • Booked {booking.createdAt ? timeAgo(booking.createdAt) : ""}
         </p>
+        <div className="bd-hero-cookline">
+          <span className="bd-hero-cook-avatar" aria-hidden="true">
+            {booking.cook?.name?.[0]?.toUpperCase() || "C"}
+          </span>
+          <span>Hosted by <strong>{booking.cook?.name || "your assigned cook"}</strong></span>
+        </div>
         <div className="bd-hero-facts">
           <span className="bd-fact-chip"><Calendar size={13} /> {formatDate(booking.date)}</span>
           <span className="bd-fact-chip"><Clock size={13} /> {serviceWindow.startTime} – {serviceWindow.endTime}{booking.serviceStartedAt ? " (actual)" : ""}</span>
@@ -452,18 +459,10 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {/* Arrival / hours banners (arrival is customer-facing — cooks see
-          their own status via the badge, not "Your cook has reached...") */}
-      {booking.cookArrived && user?.role !== "cook" && (
-        <div className="bd-banner ok">
-          <CheckCircle2 size={18} />
-          <span>
-            Your cook {booking.cook?.name ? `${booking.cook.name} ` : ""}has reached your location
-            {booking.cookArrivedAt ? ` • ${timeAgo(booking.cookArrivedAt)}` : ""}!
-          </span>
-        </div>
-      )}
-      {booking.hoursCompleted && (
+      {/* NOTE: no arrival banner here by design — "cook has reached your
+          location" is delivered only as an in-app notification (type
+          "cook_arrived"), not on the booking details page. */}
+      {booking.hoursCompleted && !booking.review && (
         <div className="bd-banner warn">
           <BellRing size={18} />
           <span>Your cooking hours are complete! Please review your session below.</span>
@@ -488,7 +487,7 @@ const BookingDetails = () => {
 
       {/* Reschedule panel (customer moves upcoming bookings; duration fixed) */}
       {reschedOpen && canReschedule && (
-        <div className="bd-card">
+        <div className="bd-card bd-reschedule-card">
           <h3 className="bd-card-head">
             <Calendar size={18} /> Move to a new time
           </h3>
@@ -575,7 +574,7 @@ const BookingDetails = () => {
       {/* Service-start OTP: customer shows it, cook enters it. The hours
           below only start counting once the code is verified. */}
       {showOtpCard && (
-        <div className="bd-card bd-otp">
+        <div className="bd-card bd-otp bd-otp-card">
           <h3 className="bd-card-head center">
             <Clock size={18} /> Your service-start code
           </h3>
@@ -592,18 +591,70 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {booking.serviceStartedAt && sessionLive && (
-        <div className="bd-banner ok">
-          <CheckCircle2 size={18} />
-          <span>
-            Service started {startedAtLabel}
-            {end ? ` • ends ${serviceWindow.endTime || ""} (${formatRemaining(end, now)})` : ""} — hours are being counted.
-          </span>
-        </div>
-      )}
+      {booking.serviceStartedAt && sessionLive && !booking.hoursCompleted && (() => {
+        const remaining = end ? formatRemaining(end, now) : null;
+        const overdue = !!(end && end.getTime() < now);
+        return (
+          <div className={`bd-clock${overdue ? " is-overdue" : " is-live"}`} role="status">
+            <div className="bd-clock-head">
+              <span className="bd-clock-dot" aria-hidden="true" />
+              <strong>{overdue ? "Running over time" : "Service in progress"}</strong>
+              {remaining && <span className="bd-clock-remaining">{remaining}</span>}
+            </div>
+            <div className="bd-clock-meta">
+              <span>Started {startedAtLabel}</span>
+              {serviceWindow.endTime && <span>Ends {serviceWindow.endTime}</span>}
+            </div>
+            <p className="bd-clock-sub">
+              {overdue
+                ? "The booked hours have ended — please wrap up the session."
+                : "Hours are being counted."}
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* Service timings: actual OTP clock when the service started, else
+          the scheduled slot (covers old bookings from before the OTP clock).
+          Hidden for requests that never became a service. */}
+      {(booking.serviceStartedAt ||
+        ["in_progress", "completed"].includes(booking.status) ||
+        booking.hoursCompleted) && (() => {
+        const started = !!booking.serviceStartedAt;
+        const startLabel = started
+          ? startedAtLabel
+          : `${formatDate(booking.date)} • ${booking.startTime || ""}`;
+        const endLabel = started && booking.serviceEndsAt
+          ? new Date(booking.serviceEndsAt).toLocaleString("en-IN", {
+              day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+            })
+          : `${formatDate(booking.date)} • ${booking.endTime || ""}`;
+        return (
+          <div className="bd-card bd-timings-card">
+            <h3 className="bd-card-head">
+              <Clock size={18} /> Service Timings
+            </h3>
+            <div className="bd-facts">
+              <div className="bd-fact">
+                <span className="bd-fact-icon"><Clock size={16} /></span>
+                <div className="bd-fact-body"><label>Service {started ? "started" : "scheduled"}</label><span>{startLabel || "—"}</span></div>
+              </div>
+              <div className="bd-fact">
+                <span className="bd-fact-icon"><CheckCircle2 size={16} /></span>
+                <div className="bd-fact-body"><label>Service {started ? "ended" : "ends"}</label><span>{endLabel || "—"}</span></div>
+              </div>
+            </div>
+            <p className="bd-mini-note">
+              {started
+                ? "Actual clock from OTP verification — not the slot estimate."
+                : "Scheduled slot — actual times appear once the cook verifies your OTP."}
+            </p>
+          </div>
+        );
+      })()}
 
       {showOtpForm && (
-        <div className="bd-card">
+        <div className="bd-card bd-cook-card">
           <h3 className="bd-card-head">
             <Clock size={18} /> Start service with customer OTP
           </h3>
@@ -649,89 +700,54 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {/* Cook card (session facts live in the hero chips above) */}
+      {/* Booking summary: cook + order + payment in one card
+          (session facts live in the hero chips above) */}
       <div className="bd-card">
         <h3 className="bd-card-head">
-          <ChefHat size={18} /> Your Cook
+          <Receipt size={18} /> Booking Summary
         </h3>
-          <div className="bd-cook">
-            <div className="bd-cook-avatar" aria-hidden="true">
-              {booking.cook?.name?.[0]?.toUpperCase() || "C"}
-            </div>
-            <div>
-              <div className="bd-cook-name">{booking.cook?.name || "Assigned Cook"}</div>
-              <div className="bd-cook-sub">
-                {[booking.cookServiceArea && `${booking.cookServiceArea}`, booking.cookRate != null && `${formatCurrency(booking.cookRate)}/hr`]
-                  .filter(Boolean)
-                  .join(" • ") || "Verified cook"}
-              </div>
-              {booking.cook?.phone && (
-                <div className="bd-cook-phone">
-                  <Phone size={13} /> {booking.cook.phone}
-                </div>
-              )}
-              {user?.role !== "cook" && (cookLoc ? (
-                <div className="bd-cook-loc live">
-                  <MapPin size={13} /> Live location{cookLoc.updatedAt ? ` • updated ${timeAgo(cookLoc.updatedAt)}` : ""}{" "}
-                  {cookPinUrl && (
-                    <a href={cookPinUrl} target="_blank" rel="noreferrer">View pin</a>
-                  )}
-                </div>
-              ) : (
-                <div className="bd-cook-loc idle">
-                  <MapPin size={13} /> Cook hasn't shared live location yet
-                </div>
-              ))}
-            </div>
-          </div>
-          {(booking.cook?.phone || user?.role !== "cook" || jobSheetWa || waToCook) && (
-            <div className="bd-row-actions">
-              {user?.role !== "cook" && cookPinUrl && (
-                <a href={cookPinUrl} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
-                  <MapPin size={15} /> Open in Google Maps
-                </a>
-              )}
-              {booking.cook?.phone && (
-                <a href={`tel:${booking.cook.phone}`} className="btn btn-outline btn-sm">
-                  <Phone size={15} /> Call
-                </a>
-              )}
-              {user?.role !== "cook" && (
-                <Link to={`/track/${booking._id}`} className="btn btn-primary btn-sm">
-                  <Navigation size={15} /> Track Cook
-                </Link>
-              )}
-              {(jobSheetWa || waToCook) && (
-                <a href={jobSheetWa || waToCook} target="_blank" rel="noreferrer" className="btn btn-success btn-sm">
-                  <MessageCircle size={15} /> {jobSheetWa ? "Send details to cook" : "WhatsApp Cook"}
-                </a>
-              )}
-            </div>
-          )}
-        </div>
 
-      {/* Venue card */}
-      <div className="bd-card">
-        <h3 className="bd-card-head">
-          <MapPin size={18} /> Venue
-        </h3>
-        <p className="bd-venue-addr">{booking.address}</p>
-        {mapsNavigateUrl(booking) && (
+        {/* Cook */}
+        <div className="bd-cook">
+          <div className="bd-cook-avatar" aria-hidden="true">
+            {booking.cook?.name?.[0]?.toUpperCase() || "C"}
+          </div>
+          <div>
+            <div className="bd-cook-name">{booking.cook?.name || "Assigned Cook"}</div>
+            <div className="bd-cook-sub">
+              {[booking.cookServiceArea && `${booking.cookServiceArea}`, booking.cookRate != null && `${formatCurrency(booking.cookRate)}/hr`]
+                .filter(Boolean)
+                .join(" • ") || "Verified cook"}
+            </div>
+            {booking.cook?.phone && (
+              <div className="bd-cook-phone">
+                <Phone size={13} /> {booking.cook.phone}
+              </div>
+            )}
+          </div>
+        </div>
+        {(booking.cook?.phone || user?.role !== "cook" || jobSheetWa || waToCook) && (
           <div className="bd-row-actions">
-            <a href={mapsNavigateUrl(booking)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
-              <Navigation size={15} /> {user?.role === "cook" ? "Go to Customer Location" : "Open in Google Maps"}
-            </a>
+            {booking.cook?.phone && (
+              <a href={`tel:${booking.cook.phone}`} className="btn btn-outline btn-sm">
+                <Phone size={15} /> Call
+              </a>
+            )}
+            {(jobSheetWa || waToCook) && (
+              <a href={jobSheetWa || waToCook} target="_blank" rel="noreferrer" className="btn btn-success btn-sm">
+                <MessageCircle size={15} /> {jobSheetWa ? "Send details to cook" : "WhatsApp Cook"}
+              </a>
+            )}
           </div>
         )}
-      </div>
 
-      {/* Order + payment (order hides when there is nothing in it) */}
-      <div className="bd-grid-2">
+        {/* Order (only when there is something in it) */}
         {(booking.selectedItems?.length > 0 || booking.notes) && (
-          <div className="bd-card">
-            <h3 className="bd-card-head">
-              <User size={18} /> Your Order
-            </h3>
+          <>
+            <hr className="bd-sec-div" />
+            <h4 className="bd-sec-head">
+              <User size={15} /> Your Order
+            </h4>
             {booking.selectedItems?.length > 0 && (
               <div className="bd-dishes">
                 {booking.selectedItems.map((item, i) => (
@@ -744,85 +760,104 @@ const BookingDetails = () => {
                 <strong>Notes:</strong> {booking.notes}
               </p>
             )}
-          </div>
+          </>
         )}
 
-        <div className="bd-card">
-          <h3 className="bd-card-head">
-            <Receipt size={18} /> Payment
-          </h3>
-          {Number(booking.slabPrice) > 0 && (
-            <div className="price-rows bd-pay-rows">
-              <div className="price-row">
-                <span>Service Price · {booking.durationHours} hr{Number(booking.durationHours) === 1 ? "" : "s"}</span>
-                <span>{formatCurrency(booking.slabPrice)}</span>
+        {/* Payment */}
+        <hr className="bd-sec-div" />
+        <h4 className="bd-sec-head">
+          <Receipt size={15} /> Payment
+        </h4>
+        {Number(booking.slabPrice) > 0 && (
+          <div className="price-rows bd-pay-rows">
+            <div className="price-row">
+              <span>Service Price · {booking.durationHours} hr{Number(booking.durationHours) === 1 ? "" : "s"}</span>
+              <span>{formatCurrency(booking.slabPrice)}</span>
+            </div>
+            {booking.couponCode ? (
+              <div className="price-row discount">
+                <span>Coupon {booking.couponCode}</span>
+                <span>−{formatCurrency(booking.discount)}</span>
               </div>
-              {booking.couponCode ? (
-                <div className="price-row discount">
-                  <span>Coupon {booking.couponCode}</span>
-                  <span>−{formatCurrency(booking.discount)}</span>
-                </div>
-              ) : null}
-            </div>
-          )}
-          {user?.role === "cook" && Number(booking.cookPayout) > 0 && (
-            <div className="bd-payout">
-              Your payout (90%): <strong>{formatCurrency(booking.cookPayout)}</strong>
-            </div>
-          )}
-          <div className="bd-facts">
-            <div className="bd-fact">
-              <span className="bd-fact-icon"><Receipt size={16} /></span>
-              <div className="bd-fact-body"><label>{booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId ? "Total Paid" : "Amount Due"}</label><span className="bd-pay-amount">
-                {booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId
-                  ? formatCurrency(booking.payment.paidAmount || 0)
-                  : `${formatCurrency(booking.amount)} pending`}
-              </span></div>
-            </div>
-            <div className="bd-fact">
-              <span className="bd-fact-icon"><CheckCircle2 size={16} /></span>
-              <div className="bd-fact-body"><label>Status</label><span>
-                {booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId
-                  ? <span className="badge badge-emerald">Paid ✓</span>
-                  : <span className="badge badge-slate">{booking.payment?.status || "—"}</span>}
-              </span></div>
-            </div>
+            ) : null}
           </div>
-          {booking.payment?.razorpayPaymentId && (
-            <div className="bd-pay-meta">
-              Payment ID: {booking.payment.razorpayPaymentId}
-              {booking.payment?.paidAt ? ` • ${timeAgo(booking.payment.paidAt)}` : ""}
-            </div>
-          )}
-          {booking.payment?.refundStatus && booking.payment.refundStatus !== "none" && (
-            <div className="bd-refund">
-              {booking.payment.refundStatus === "processed" && (
-                <span className="badge badge-emerald">Refund processed ✓</span>
-              )}
-              {booking.payment.refundStatus === "pending" && (
-                <span className="badge badge-amber">Refund processing…</span>
-              )}
-              {booking.payment.refundStatus === "failed" && (
-                <span className="badge badge-rose">Refund failed — contact support</span>
-              )}
-              {booking.payment.refundStatus === "manual" && (
-                <span className="badge badge-slate">Refund settled manually</span>
-              )}
-              {booking.payment.refundAmount > 0 && (
-                <span className="bd-refund-amount">
-                  {formatCurrency(booking.payment.refundAmount)}
-                  {booking.payment?.refundedAt ? ` • ${timeAgo(booking.payment.refundedAt)}` : ""}
-                </span>
-              )}
+        )}
+        {user?.role === "cook" && Number(booking.cookPayout) > 0 && (
+          <div className="bd-payout">
+            Your payout (90%): <strong>{formatCurrency(booking.cookPayout)}</strong>
+          </div>
+        )}
+        <div className="bd-facts">
+          <div className="bd-fact">
+            <span className="bd-fact-icon"><Receipt size={16} /></span>
+            <div className="bd-fact-body"><label>{booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId ? "Total Paid" : "Amount Due"}</label><span className="bd-pay-amount">
+              {booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId
+                ? formatCurrency(booking.payment.paidAmount || 0)
+                : `${formatCurrency(booking.amount)} pending`}
+            </span></div>
+          </div>
+          <div className="bd-fact">
+            <span className="bd-fact-icon"><CheckCircle2 size={16} /></span>
+            <div className="bd-fact-body"><label>Status</label><span>
+              {booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId
+                ? <span className="badge badge-emerald">Paid ✓</span>
+                : <span className="badge badge-slate">{booking.payment?.status || "—"}</span>}
+            </span></div>
+          </div>
+        </div>
+        {booking.payment?.razorpayPaymentId && (
+          <div className="bd-pay-meta">
+            Payment ID: {booking.payment.razorpayPaymentId}
+            {booking.payment?.paidAt ? ` • ${timeAgo(booking.payment.paidAt)}` : ""}
+          </div>
+        )}
+        {booking.payment?.refundStatus && booking.payment.refundStatus !== "none" && (
+          <div className="bd-refund">
+            {booking.payment.refundStatus === "processed" && (
+              <span className="badge badge-emerald">Refund processed ✓</span>
+            )}
+            {booking.payment.refundStatus === "pending" && (
+              <span className="badge badge-amber">Refund processing…</span>
+            )}
+            {booking.payment.refundStatus === "failed" && (
+              <span className="badge badge-rose">Refund failed — contact support</span>
+            )}
+            {booking.payment.refundStatus === "manual" && (
+              <span className="badge badge-slate">Refund settled manually</span>
+            )}
+            {booking.payment.refundAmount > 0 && (
+              <span className="bd-refund-amount">
+                {formatCurrency(booking.payment.refundAmount)}
+                {booking.payment?.refundedAt ? ` • ${timeAgo(booking.payment.refundedAt)}` : ""}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Venue card — hidden for customers ("user"): they already know their
+          own address. Cooks (and admins) still see it to navigate to the
+          customer's location. */}
+      {user?.role !== "customer" && (
+        <div className="bd-card bd-summary-card">
+          <h3 className="bd-card-head">
+            <MapPin size={18} /> Venue
+          </h3>
+          <p className="bd-venue-addr">{booking.address}</p>
+          {mapsNavigateUrl(booking) && (
+            <div className="bd-row-actions">
+              <a href={mapsNavigateUrl(booking)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
+                <Navigation size={15} /> {user?.role === "cook" ? "Go to Customer Location" : "Open in Google Maps"}
+              </a>
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* Timeline (admin only — hidden on customer/cook logins; customers
           still see the reschedule banner above when the time was moved) */}
       {booking.statusHistory?.length > 0 && user?.role === "admin" && (
-        <div className="bd-card">
+        <div className="bd-card bd-venue-card">
           <h3 className="bd-card-head">
             <History size={18} /> Status Timeline
           </h3>
@@ -865,14 +900,22 @@ const BookingDetails = () => {
           )}
         </div>
       )}
-      {booking.status === "completed" && user?.role === "customer" && (
-        <div className="bd-card">
-          <ReviewForm bookingId={booking._id} existingReview={booking.review} onSubmitted={fetchDetails} />
+      {(isReviewable(booking) || booking.review) && user?.role === "customer" && (
+        <div className="bd-card bd-timeline-card">
+          <h3 className="bd-card-head">
+            <Star size={18} /> {booking.review ? "Your review" : "Rate your cook"}
+          </h3>
+          <ReviewForm
+            bookingId={booking._id}
+            existingReview={booking.review}
+            onSubmitted={fetchDetails}
+            variant="bare"
+          />
         </div>
       )}
       {/* Cook-only: report an issue about this customer to the admin. */}
       {user?.role === "cook" && booking.customer && (
-        <div className="bd-card">
+        <div className="bd-card bd-review-card">
           <h3 className="bd-card-head">
             <ShieldAlert size={18} /> Report an issue
           </h3>
@@ -883,9 +926,28 @@ const BookingDetails = () => {
         </div>
       )}
       {booking.status === "completed" && booking.review && user?.role !== "customer" && (
-        <div className="bd-rating">
-          <strong>Customer rating: {booking.review.rating}/5</strong>
-          {booking.review.comment && <div className="bd-rating-comment">{booking.review.comment}</div>}
+        <div className="review-card review-card--cook">
+          <div className="review-card-head">
+            <span className="review-card-badge">
+              <Star size={16} />
+            </span>
+            <div className="review-card-headtext">
+              <strong>Customer rating</strong>
+              {booking.review.createdAt && (
+                <span className="review-card-date">{formatDate(booking.review.createdAt)}</span>
+              )}
+            </div>
+          </div>
+          <div className="review-card-score">
+            <ReviewStars value={booking.review.rating} size={20} />
+            <span className="review-card-num">{booking.review.rating}/5</span>
+          </div>
+          {booking.review.comment && (
+            <div className="review-card-comment">
+              <Quote size={14} />
+              <p>“{booking.review.comment}”</p>
+            </div>
+          )}
         </div>
       )}
     </div>

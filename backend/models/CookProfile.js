@@ -97,13 +97,6 @@ const cookProfileSchema = new mongoose.Schema(
       average: { type: Number, default: 0 },
       count: { type: Number, default: 0 },
     },
-    liveLocation: {
-      lat: { type: Number, min: -90, max: 90 },
-      lng: { type: Number, min: -180, max: 180 },
-      // GPS fix radius in metres reported by the browser (null when unknown).
-      accuracy: { type: Number, min: 0, max: 100000 },
-      updatedAt: { type: Date },
-    },
   },
   { timestamps: true }
 );

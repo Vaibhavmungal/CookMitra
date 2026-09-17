@@ -64,7 +64,7 @@ const Register = () => {
 
     try {
       const { confirmPassword, ...data } = formData;
-      const user = await dispatch(registerUser(data)).unwrap();
+      const { user } = await dispatch(registerUser(data)).unwrap();
       showToast(`Welcome to Cook Mitra, ${user.name}!`, "success");
       if (user.role === "cook") {
         navigate("/dashboard/cook-bookings");

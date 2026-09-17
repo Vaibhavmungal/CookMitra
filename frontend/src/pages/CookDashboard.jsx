@@ -4,15 +4,17 @@ import { useFetch } from "../hooks/useFetch";
 import API from "../api/axios";
 import { useSelector } from "react-redux";
 import { useShowToast } from "../store/hooks";
-import { formatCurrency, formatDate, playAlarmSound, hasServiceHoursStarted } from "../utils/constants";
+import { formatCurrency, formatDate, playAlarmSound, hasServiceHoursStarted, localTodayStr } from "../utils/constants";
 import CookProfileForm from "../components/CookProfileForm";
 import CookAvailabilityToggle from "../components/CookAvailabilityToggle";
-import { Check, X, XCircle, BellRing, ArrowRight, Star, MapPin, CalendarDays, Inbox, History, UserRound, Wallet, ChefHat, AlertCircle } from "lucide-react";
+import { resolveFileUrl } from "../components/CookDocUploads";
+import { Check, X, XCircle, BellRing, ArrowRight, Star, MapPin, CalendarDays, Inbox, History, UserRound, Wallet, ChefHat, AlertCircle, ShieldCheck, Clock } from "lucide-react";
 
 const CookDashboard = () => {
   const { data: bookings, loading: loadingBookings, error: bookingError, refetch: refetchBookings } = useFetch("/bookings/cook");
   const { data: cookProfile, loading: loadingProfile, refetch: refetchCookProfile } = useFetch("/cooks/me");
   const { data: myReviews, loading: loadingReviews } = useFetch("/reviews/cook-me");
+  const { data: myComplaints } = useFetch("/complaints/my");
   const showToast = useShowToast();
   const user = useSelector((s) => s.auth.user);
   const navigate = useNavigate();
@@ -125,8 +127,7 @@ const CookDashboard = () => {
   const pendingRequests = bookings?.filter((b) => b.status === "requested")?.length || 0;
 
   // Views: needs-action (new requests) vs upcoming (all live) vs previous.
-  const isPrevious = (b) => ["completed", "cancelled", "rejected"].includes(b.status);
-  // Actionable first: new requests on top, then scheduled, then by date.
+  const isPrevious = (b) => ["completed", "cancelled", "rejected"].includes(b.status);  // Actionable first: new requests on top, then scheduled, then by date.
   const statusRank = (s) =>
     ({ requested: 0, accepted: 1, confirmed: 1, in_progress: 2 }[s] ?? 3);
   const visibleBookings = [...(bookings || [])]
@@ -167,7 +168,7 @@ const CookDashboard = () => {
         <div className="cook-modern-hero-inner">
           <div className="cook-modern-avatar-wrap">
             {cookProfile?.photoUrl ? (
-              <img src={cookProfile.photoUrl} alt={user?.name || "Cook"} className="cook-modern-avatar" />
+              <img src={resolveFileUrl(cookProfile.photoUrl)} alt={user?.name || "Cook"} className="cook-modern-avatar" />
             ) : (
               <span className="cook-modern-avatar-fallback">
                 {firstName?.[0]?.toUpperCase() || <ChefHat size={32} />}
@@ -294,6 +295,19 @@ const CookDashboard = () => {
           <History size={15} /> Past <span className="cook-tab-count">{previousCount}</span>
         </button>
         <button
+          className={`cook-tab ${view === "reports" ? "active" : ""}`}
+          onClick={() => setView("reports")}
+        >
+          <AlertCircle size={15} /> My reports{" "}
+          <span className="cook-tab-count">{(myComplaints || []).length}</span>
+        </button>
+        <button
+          className={`cook-tab ${view === "slots" ? "active" : ""}`}
+          onClick={() => setView("slots")}
+        >
+          <Clock size={15} /> Slots
+        </button>
+        <button
           className={`cook-tab ${view === "profile" ? "active" : ""}`}
           onClick={() => setView("profile")}
         >
@@ -302,7 +316,7 @@ const CookDashboard = () => {
       </div>
 
       {/* BOOKINGS VIEWS */}
-      {view !== "profile" && (
+      {view !== "profile" && view !== "reports" && view !== "slots" && (
         <div>
 
           {loadingBookings && <p className="cook-loading-text">Loading bookings...</p>}
@@ -389,9 +403,8 @@ const CookDashboard = () => {
                       <Link to={`/bookings/${booking._id}`} className="btn btn-outline btn-sm">
                         {booking.serviceStartedAt ? "View more" : "Start with OTP"} <ArrowRight size={15} />
                       </Link>
-                      <button className="btn btn-primary" onClick={() => handleAction(booking._id, "complete")}>
-                        <Check size={16} /> Mark Completed
-                      </button>
+                      {/* No manual complete here by design — bookings complete
+                          automatically once the service hours end. */}
                       {!hasServiceHoursStarted(booking) && (
                         <button
                           className="btn btn-danger-outline btn-sm"
@@ -436,6 +449,66 @@ const CookDashboard = () => {
           )}
         </div>
       )}
+
+      {/* REPORTS TAB: complaints the cook filed — status + admin replies. */}
+      {view === "reports" && (
+        <div>
+          <h3 style={{ fontSize: "1.1rem", marginBottom: "0.25rem" }}>My reports to support</h3>
+          <p style={{ color: "var(--slate-500)", fontSize: "0.9rem", marginBottom: "1rem" }}>
+            Issues you reported about customers. File a new one from the booking details page.
+          </p>
+          {!myComplaints || myComplaints.length === 0 ? (
+            <div className="cook-empty">
+              <div className="cook-empty-icon">
+                <ShieldCheck size={28} />
+              </div>
+              <h3>No reports filed</h3>
+              <p>If a customer causes trouble, report it from the booking and track it here.</p>
+            </div>
+          ) : (
+            <div className="bookings-list-modern">
+              {(myComplaints || []).map((c) => (
+                <div key={c._id} className="booking-item-card">
+                  <div className="cook-card-top">
+                    <div>
+                      <h3 style={{ margin: 0, textTransform: "capitalize" }}>
+                        {(c.category || "other").replace(/_/g, " ")}
+                      </h3>
+                      <p className="cook-when">
+                        {c.booking?.date ? formatDate(c.booking.date) : ""}{" "}
+                        {c.customer?.name ? `· ${c.customer.name}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={`badge ${
+                        c.status === "resolved"
+                          ? "badge-emerald"
+                          : c.status === "rejected"
+                            ? "badge-rose"
+                            : c.status === "in_review"
+                              ? "badge-blue"
+                              : "badge-amber"
+                      }`}
+                      style={{ textTransform: "capitalize" }}
+                    >
+                      {(c.status || "open").replace(/_/g, " ")}
+                    </span>
+                  </div>
+                  <p className="cook-card-note">{c.message}</p>
+                  {c.adminNote && (
+                    <p className="cook-card-note">
+                      <strong>Support reply:</strong> {c.adminNote}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SLOTS TAB: publish/block availability windows per day. */}
+      {view === "slots" && <SlotManager />}
 
       {/* PROFILE TAB: cook profile + recent reviews */}
       {view === "profile" && (
@@ -492,6 +565,137 @@ const RecentReviewsPreview = ({ reviews, loading }) => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+// Slots tab: publish availability windows per day (POST /availability) and
+// remove them (DELETE /availability/:id). Days with no windows stay fully
+// open (08:00–20:00); adding a window restricts that day to listed windows.
+// Existing bookings are unaffected by window changes.
+const SlotManager = () => {
+  const showToast = useShowToast();
+  const { data: mySlots, loading, refetch } = useFetch("/availability/my");
+  const [date, setDate] = useState(localTodayStr());
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("13:00");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const dayKey = (d) => {
+    try {
+      return new Date(d).toLocaleDateString("en-CA");
+    } catch {
+      return "";
+    }
+  };
+  const daySlots = (mySlots || [])
+    .filter((s) => dayKey(s.date) === date)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!date || !startTime || !endTime) {
+      showToast("Pick a date, start and end time", "error");
+      return;
+    }
+    if (startTime >= endTime) {
+      showToast("End time must be after start time", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await API.post("/availability", { date, startTime, endTime });
+      showToast("Availability window added — customers can now book it.", "success");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not add window", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (slot) => {
+    if (!window.confirm(`Remove ${slot.startTime}–${slot.endTime} on ${date}? Existing bookings stay valid.`)) return;
+    setDeletingId(slot._id);
+    try {
+      await API.delete(`/availability/${slot._id}`);
+      showToast("Window removed.", "success");
+      refetch();
+    } catch (err) {
+      showToast(err.response?.data?.message || "Could not remove window", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div>
+      <h3 style={{ fontSize: "1.1rem", marginBottom: "0.25rem" }}>Availability windows</h3>
+      <p style={{ color: "var(--slate-500)", fontSize: "0.9rem", marginBottom: "1rem" }}>
+        Days with no windows stay fully open (8 AM – 8 PM). Add windows to restrict a day,
+        or remove them all to reopen it. Use the Available/Unavailable toggle above for full days off.
+      </p>
+      <form onSubmit={handleAdd} className="bk-card" style={{ marginBottom: "1rem" }}>
+        <div className="bk-addr-grid">
+          <input
+            type="date"
+            className="bk-addr-input"
+            value={date}
+            min={localTodayStr()}
+            onChange={(e) => setDate(e.target.value)}
+            required
+          />
+          <input
+            type="time"
+            className="bk-addr-input"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            required
+          />
+          <input
+            type="time"
+            className="bk-addr-input"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            required
+          />
+        </div>
+        <button type="submit" className="btn btn-primary btn-sm" disabled={saving} style={{ marginTop: "0.6rem" }}>
+          {saving ? "Adding…" : "Add window"}
+        </button>
+      </form>
+      {loading ? (
+        <p className="cook-loading-text">Loading windows…</p>
+      ) : daySlots.length === 0 ? (
+        <div className="cook-empty">
+          <div className="cook-empty-icon">
+            <Clock size={28} />
+          </div>
+          <h3>Whole day open</h3>
+          <p>No windows on {date || "this date"} — customers can book any time 8 AM – 8 PM.</p>
+        </div>
+      ) : (
+        <div className="bookings-list-modern">
+          {daySlots.map((s) => (
+            <div key={s._id} className="booking-item-card">
+              <div className="cook-card-top">
+                <div>
+                  <h3 style={{ margin: 0 }}>{s.startTime} – {s.endTime}</h3>
+                  <p className="cook-when">{date}</p>
+                </div>
+                <button
+                  className="btn btn-danger-outline btn-sm"
+                  onClick={() => handleDelete(s)}
+                  disabled={deletingId === s._id}
+                >
+                  <X size={15} /> {deletingId === s._id ? "Removing…" : "Remove"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

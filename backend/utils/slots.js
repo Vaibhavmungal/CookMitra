@@ -10,16 +10,25 @@ const Booking = require("../models/Booking");
 const CookProfile = require("../models/CookProfile");
 
 // Booking statuses that PERMANENTLY block overlapping re-booking.
+// Verdicts that free the slot (cancelled/rejected/completed/expired) never
+// appear here — including them would block re-booking freed windows forever.
+// NOTE: "requested" is intentionally NOT in this list: pending requests only
+// hold a slot for 5 minutes (second clause of activeSlotMatch). Including it
+// here would let expired requests block the calendar forever.
 const BLOCKING_STATUSES = ["accepted", "confirmed", "in_progress"];
 
 // Mongo $or fragment matching every booking that currently occupies the
-// calendar: permanent blocks (above) plus pending "requested" ones inside
-// their 5-minute hold. When a customer sends a request they land on a waiting
-// page while the cook decides, and during that window the slot must be
-// invisible/unbookable for everyone else. The hold is expiry-aware — a
-// request whose requestExpiresAt has passed no longer blocks anything, so
-// stale requests can never lock the calendar. (Legacy "requested" docs
-// without requestExpiresAt don't match either — they can't hold forever.)
+// calendar: permanent blocks (accepted/confirmed/in_progress) plus pending
+// "requested" ones inside their 5-minute hold. When a customer sends a
+// request they land on a waiting page while the cook decides, and during
+// that window the slot must be invisible/unbookable for everyone else. The
+// hold is expiry-aware — a request whose requestExpiresAt has passed no
+// longer blocks anything, so stale requests can never lock the calendar.
+// (Legacy "requested" docs without requestExpiresAt don't match either —
+// they can't hold forever.) NOTE: callers MUST use getDayBookings (or
+// activeSlotMatch) rather than BLOCKING_STATUSES alone: a bare
+// `status: { $in: BLOCKING_STATUSES }` check misses live "requested" holds,
+// so two "requested" bookings could double-book the same window.
 const activeSlotMatch = () => [
   { status: { $in: BLOCKING_STATUSES } },
   { status: "requested", requestExpiresAt: { $gt: new Date() } },
@@ -38,12 +47,18 @@ const SERVICE_DAY_END_MIN = 20 * 60;
 const timeToMinutes = (t) => {
   const m = String(t || "").match(/^(\d{1,2}):(\d{2})/);
   if (!m) return null;
-  return Number(m[1]) * 60 + Number(m[2]);
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  // Reject out-of-range clocks ("24:99", "99:99") — previously any digits
+  // parsed, so malformed times could slip past prefix-only matching.
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
 };
 
 const minutesToTime = (mins) => {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
+  const normalized = ((Math.round(mins) % 1440) + 1440) % 1440;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 };
 

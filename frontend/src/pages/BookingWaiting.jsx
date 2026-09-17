@@ -46,7 +46,7 @@ const SORRY_COPY = {
 
 // Snapshot of the dead request so "Find another cook" can land straight on
 // step 3 (venue + cook list) with the same date/slot, minus the cook who
-// didn't respond. CookOnDemand.jsx consumes this via location.state.
+// didn't respond. CookBooking.jsx consumes this via location.state.
 const toLocalDayStr = (d) => {
   if (!d) return "";
   const dt = d instanceof Date ? d : new Date(d);

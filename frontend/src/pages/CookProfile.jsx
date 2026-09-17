@@ -51,8 +51,9 @@ const CookProfile = () => {
     showToast(`Booking request sent! Status: ${booking.status.toUpperCase()}`, "success");
   };
 
-  const avgRating = cook?.rating?.average || 5.0;
   const reviewCount = cook?.rating?.count || 0;
+  // Never fabricate a rating: unreviewed cooks show "New".
+  const avgRating = reviewCount > 0 ? Number(cook?.rating?.average) || 0 : null;
 
   return (
     <div className="cook-profile-page-container">
@@ -92,18 +93,24 @@ const CookProfile = () => {
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <div className="star-rating-display">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={16}
-                    fill={i < Math.round(avgRating) ? "#f59e0b" : "none"}
-                    color={i < Math.round(avgRating) ? "#f59e0b" : "#cbd5e1"}
-                  />
-                ))}
-              </div>
-              <strong style={{ color: "var(--slate-800)" }}>{avgRating.toFixed(1)}</strong>
-              <span style={{ color: "var(--slate-500)", fontSize: "0.9rem" }}>({reviewCount} reviews)</span>
+              {avgRating == null ? (
+                <span style={{ color: "var(--slate-500)", fontSize: "0.9rem" }}>New cook — no reviews yet</span>
+              ) : (
+                <>
+                  <div className="star-rating-display">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        size={16}
+                        fill={i < Math.round(avgRating) ? "#f59e0b" : "none"}
+                        color={i < Math.round(avgRating) ? "#f59e0b" : "#cbd5e1"}
+                      />
+                    ))}
+                  </div>
+                  <strong style={{ color: "var(--slate-800)" }}>{avgRating.toFixed(1)}</strong>
+                  <span style={{ color: "var(--slate-500)", fontSize: "0.9rem" }}>({reviewCount} reviews)</span>
+                </>
+              )}
             </div>
           </div>
 

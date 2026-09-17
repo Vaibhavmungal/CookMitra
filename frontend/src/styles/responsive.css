@@ -68,6 +68,16 @@
   .slot-list .slot-chip { font-size: 0.78rem; padding: 0.42rem 0.7rem; }
   .cooks-filter-bar { padding: 0.9rem 1rem; }
   .booking-item-card { padding: 1rem; }
+  .booking-card-modern { padding: 1rem; }
+  .booking-card-header { align-items: flex-start; }
+  .booking-card-status-cluster { width: 100%; justify-content: space-between; }
+  .booking-card-details { gap: 0.7rem; }
+  .booking-card-details .meta-field,
+  .booking-card-details .meta-field:first-child,
+  .booking-card-details .meta-field:last-child {
+    padding: 0;
+    border-left: 0;
+  }
   .bf-wait-head { flex-direction: column; align-items: center; text-align: center; }
   .bf-wait-copy { width: 100%; }
   .bf-card { padding: 1.5rem 1.2rem; }
@@ -159,8 +169,7 @@
   /* Mobile menu improvements */
   .mobile-menu { max-height: calc(100vh - 62px); overflow-y: auto; }
   
-  /* Review form on mobile */
-  .review-form-container { padding: 1rem; }
+  /* Review form mobile rules → styles/review-form.css */
   
   /* Navbar mobile actions */
   .navbar-mobile-actions { gap: 0.4rem; }

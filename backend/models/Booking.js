@@ -48,17 +48,8 @@ const bookingSchema = new mongoose.Schema(
       lat: { type: Number, min: -90, max: 90 },
       lng: { type: Number, min: -180, max: 180 },
     },
-    // Snapshot of the cook's live location shared for this booking, so the
-    // customer can track/navigate to the cook on WhatsApp + Google Maps.
-    cookLocation: {
-      lat: { type: Number, min: -90, max: 90 },
-      lng: { type: Number, min: -180, max: 180 },
-      // GPS fix radius in metres (null when shared from a saved pin).
-      accuracy: { type: Number, min: 0, max: 100000 },
-      updatedAt: { type: Date },
-    },
-    // Arrival: set when the cook reaches the venue (auto-detected from GPS
-    // or marked manually). Drives the "cook has arrived" user notification.
+    // Arrival: set when the cook marks themselves arrived at the venue
+    // (manual tap). Drives the "cook has arrived" user notification.
     cookArrived: { type: Boolean, default: false },
     cookArrivedAt: { type: Date },
     // Service-start OTP: a 4-digit code generated per order. Shown on the
@@ -67,6 +58,10 @@ const bookingSchema = new mongoose.Schema(
     // before verification — always strip from cook-facing serializers.
   serviceOtp: { type: String },
   serviceOtpGeneratedAt: { type: Date },
+  // Brute-force guard for the 4-digit OTP: wrong attempts are counted and
+  // the code locks for 15 minutes after 10 failures (reset on success).
+  serviceOtpAttempts: { type: Number, default: 0, min: 0 },
+  serviceOtpLockedUntil: { type: Date },
   serviceStartedAt: { type: Date },
   serviceEndsAt: { type: Date },
     // Cooking-hours completion: set once the session end time passes while

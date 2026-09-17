@@ -70,7 +70,7 @@ const GoogleSignInButton = ({
     }
     setLoading(true);
     try {
-      const user = await dispatch(googleLoginUser({ idToken, role })).unwrap();
+      const { user } = await dispatch(googleLoginUser({ idToken, role })).unwrap();
       showToast(`Welcome${user?.name ? `, ${user.name}` : ""}!`, "success");
       // Interrupted booking? Customers go straight back to it.
       const resumeTo = user?.role === "customer" ? safeNextPath(next) : null;

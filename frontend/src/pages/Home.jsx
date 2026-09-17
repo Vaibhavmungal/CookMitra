@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useFetch } from "../hooks/useFetch";
 import { useDispatch, useSelector } from "react-redux";
 import { registerUser } from "../store/authSlice";
 import { useShowToast } from "../store/hooks";
-import { formatCurrency, formatDate } from "../utils/constants";
+import { formatDate, isReviewable } from "../utils/constants";
 import API from "../api/axios";
 import heroImg from "../assets/hero.png";
 import DishCarousel from "../components/DishCarousel";
@@ -92,98 +91,39 @@ const TICKER_DISHES = [
 
 const DISMISSED_RATINGS_KEY = "home-rate-dismissed";
 
-// True when the booked service hours have ended: completed status, the
-// hours-complete flag, or the session end time is in the past.
-const serviceHoursEnded = (booking) => {
-  if (!booking) return false;
-  if (booking.status === "completed") return true;
-  if (booking.hoursCompleted) return true;
-  let end = null;
-  if (booking.serviceEndsAt || booking.sessionEnd) {
-    const d = new Date(booking.serviceEndsAt || booking.sessionEnd);
-    if (!Number.isNaN(d.getTime())) end = d;
-  } else if (booking.date && booking.endTime) {
-    const m = String(booking.endTime).match(/^(\d{1,2}):(\d{2})/);
-    if (m) {
-      const d = new Date(booking.date);
-      d.setHours(Number(m[1]), Number(m[2]), 0, 0);
-      if (!Number.isNaN(d.getTime())) end = d;
-    }
-  }
-  return !!end && Date.now() >= end.getTime();
-};
-
 // One rateable booking card: cook info + star rating (comment optional) +
 // per-card cross button to dismiss. Disappears once the rating is submitted.
 const PendingRatingCard = ({ booking, onRated, onDismiss }) => {
   return (
-    <div
-      style={{
-        position: "relative",
-        background: "#fff",
-        border: "1px solid var(--border-subtle, #e2e8f0)",
-        borderRadius: "14px",
-        padding: "1.1rem 1.2rem",
-        boxShadow: "var(--shadow-sm)",
-        minWidth: 280,
-        flex: "1 1 320px",
-        maxWidth: 520,
-      }}
-    >
+    <article className="hrc-card">
       <button
         type="button"
         onClick={() => onDismiss(booking._id)}
         aria-label={`Dismiss rating for ${booking.cook?.name || "cook"}`}
         title="Dismiss"
-        style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          width: 30,
-          height: 30,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: "50%",
-          border: "1px solid var(--slate-200, #e2e8f0)",
-          background: "#fff",
-          cursor: "pointer",
-          color: "var(--slate-500)",
-        }}
+        className="hrc-x"
       >
         <X size={15} />
       </button>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.35rem", paddingRight: "2rem" }}>
-        <span
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: "50%",
-            background: "var(--primary-gradient)",
-            color: "#fff",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 800,
-            fontSize: "1.1rem",
-            flexShrink: 0,
-          }}
-        >
+      <div className="hrc-card-head">
+        <span className="hrc-avatar" aria-hidden="true">
           {booking.cook?.name?.[0]?.toUpperCase() || <ChefHat size={18} />}
         </span>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: "0.98rem" }}>
-            How was {booking.cook?.name || "your cook"}?
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--slate-500)" }}>
-            {(booking.serviceType || "").replace(/_/g, " ")}
-            {booking.date ? ` • ${formatDate(booking.date)}` : ""}
-            {booking.startTime && booking.endTime ? ` • ${booking.startTime}–${booking.endTime}` : ""}
+        <div className="hrc-who">
+          <div className="hrc-name">How was {booking.cook?.name || "your cook"}?</div>
+          <div className="hrc-chips">
+            {(booking.serviceType || "").replace(/_/g, " ") && (
+              <span className="rf-chipmeta">{(booking.serviceType || "").replace(/_/g, " ")}</span>
+            )}
+            {booking.date && <span className="rf-chipmeta">{formatDate(booking.date)}</span>}
+            {booking.startTime && booking.endTime && (
+              <span className="rf-chipmeta">{booking.startTime}–{booking.endTime}</span>
+            )}
           </div>
         </div>
       </div>
-      <ReviewForm bookingId={booking._id} onSubmitted={() => onRated(booking._id)} />
-    </div>
+      <ReviewForm bookingId={booking._id} onSubmitted={() => onRated(booking._id)} variant="bare" />
+    </article>
   );
 };
 
@@ -220,20 +160,18 @@ const PendingCookRatings = () => {
   if (!user || user.role !== "customer") return null;
 
   const persistDismissed = (ids) => {
-    setDismissed(ids);
+    // Cap the list so it can't grow unbounded in localStorage.
+    const capped = [...new Set(ids)].slice(-100);
+    setDismissed(capped);
     try {
-      localStorage.setItem(DISMISSED_RATINGS_KEY, JSON.stringify(ids));
+      localStorage.setItem(DISMISSED_RATINGS_KEY, JSON.stringify(capped));
     } catch {
       // storage optional
     }
   };
 
   const rateable = (bookings || []).filter(
-    (b) =>
-      !b.review &&
-      !dismissed.includes(b._id) &&
-      !["cancelled", "rejected", "expired"].includes(b.status) &&
-      serviceHoursEnded(b)
+    (b) => !b.review && !dismissed.includes(b._id) && isReviewable(b)
   );
 
   const handleDismissOne = (id) => {
@@ -253,59 +191,35 @@ const PendingCookRatings = () => {
   if (rateable.length === 0) return null;
 
   return (
-    <section
-      aria-label="Rate your cook"
-      style={{
-        maxWidth: 1200,
-        margin: "1.5rem auto 0",
-        padding: "0 1.5rem",
-      }}
-    >
-      <div
-        style={{
-          position: "relative",
-          background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
-          border: "1px solid #f59e0b",
-          borderRadius: "16px",
-          padding: "1.25rem 1.25rem 1.35rem",
-          boxShadow: "var(--shadow-sm)",
-        }}
-      >
+    <section aria-label="Rate your cook" className="hrc-section">
+      <span className="hrc-glow hrc-glow-a" aria-hidden="true" />
+      <span className="hrc-glow hrc-glow-b" aria-hidden="true" />
+      <div className="hrc-head">
+        <div>
+          <p className="hrc-eyebrow">
+            <Star size={13} /> Your feedback matters
+          </p>
+          <h2 className="hrc-title">
+            Rate your cook <span className="hrc-count">{rateable.length}</span>
+          </h2>
+          <p className="hrc-sub">
+            Your service hours are complete — tap the stars to rate. A written review is optional.
+          </p>
+        </div>
         <button
           type="button"
           onClick={handleDismissAll}
+          className="hrc-dismiss"
           aria-label="Dismiss all rating prompts"
-          title="Dismiss"
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            width: 32,
-            height: 32,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
-            border: "1px solid #f59e0b",
-            background: "#fff",
-            cursor: "pointer",
-            color: "#92400e",
-          }}
+          title="Dismiss all"
         >
-          <X size={16} />
+          <X size={15} /> Dismiss all
         </button>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem", paddingRight: "2.2rem" }}>
-          <Star size={20} fill="#f59e0b" color="#f59e0b" />
-          <h2 style={{ margin: 0, fontSize: "1.15rem" }}>Rate your cook</h2>
-        </div>
-        <p style={{ margin: "0 0 1rem", fontSize: "0.88rem", color: "#92400e" }}>
-          Your service hours are complete — tap the stars to rate. A written review is optional.
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
-          {rateable.map((b) => (
-            <PendingRatingCard key={b._id} booking={b} onRated={handleRated} onDismiss={handleDismissOne} />
-          ))}
-        </div>
+      </div>
+      <div className="hrc-grid">
+        {rateable.map((b) => (
+          <PendingRatingCard key={b._id} booking={b} onRated={handleRated} onDismiss={handleDismissOne} />
+        ))}
       </div>
     </section>
   );
@@ -482,8 +396,8 @@ const Home = () => {
             </h1>
             <p className="hero-v2-sub hero-enter" style={{ "--d": "0.25s" }}>
               Welcome Bappa home with ukadiche modak, puran poli, chakli & more —
-              cooked fresh in your kitchen by verified home cooks. Live tracking,
-              secure UPI payments, and real-time alerts.
+              cooked fresh in your kitchen by verified home cooks. OTP-verified
+              starts, secure UPI payments, and real-time alerts.
             </p>
 
             <div className="hero-v2-actions hero-enter" style={{ "--d": "0.35s" }}>
@@ -527,7 +441,7 @@ const Home = () => {
             </div>
 
             <div className="hero-v2-perks hero-enter" style={{ "--d": "0.55s" }}>
-              {["100% Verified Cooks", "Live Tracking", "Secure UPI"].map((p) => (
+              {["100% Verified Cooks", "OTP-Verified Start", "Secure UPI"].map((p) => (
                 <span key={p}>
                   <CheckCircle2 size={14} /> {p}
                 </span>
@@ -563,8 +477,8 @@ const Home = () => {
             <div className="hero-v2-float hero-v2-float-live">
               <span className="hero-v2-float-live-dot" />
               <div>
-                <div className="hero-v2-float-live-title">Live Tracking</div>
-                <div className="hero-v2-float-live-sub">Arriving in ~12 min</div>
+                <div className="hero-v2-float-live-title">Cook Arrived</div>
+                <div className="hero-v2-float-live-sub">OTP-verified start</div>
               </div>
             </div>
           </div>

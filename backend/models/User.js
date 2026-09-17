@@ -83,11 +83,34 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google", "local+google"],
       default: "local",
     },
+    // Password-reset (forgot flow): sha256(token) + expiry. The raw token
+    // only ever travels by email (or dev-only response); the hash here is
+    // useless without it.
+    resetPasswordToken: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
+userSchema.pre("validate", function (next) {
+  // Normalize role before enum validation so legacy lowercase passes.
+  if (this.role != null) this.role = normalizeRole(this.role);
+  // Keep phone <-> mobile in sync (spec §17 uses `mobile`).
+  if (!this.mobile && this.phone) this.mobile = this.phone;
+  if (!this.phone && this.mobile) this.phone = this.mobile;
+  next();
+});
+
 userSchema.pre("save", async function (next) {
+  if (this.mobile && !this.phone) this.phone = this.mobile;
+  if (this.phone && !this.mobile) this.mobile = this.phone;
   if (!this.isModified("password") || !this.password) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
@@ -99,4 +122,9 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema);
+
+User.USER_ROLES = USER_ROLES;
+User.normalizeRole = normalizeRole;
+
+module.exports = User;

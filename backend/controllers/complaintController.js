@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const Complaint = require("../models/Complaint");
+const { paginationParams, applyPagination, sendList } = require("../utils/pagination");
 const Booking = require("../models/Booking");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
@@ -25,6 +27,20 @@ exports.createComplaint = async (req, res, next) => {
     if (!customer) {
       return res.status(400).json({ message: "A customer or booking is required" });
     }
+    // Standalone customer ids must belong to someone this cook actually served
+    // — otherwise a cook could file complaints against strangers by guessing
+    // user ids (the booking path above already enforces the link).
+    if (!booking) {
+      if (!mongoose.Types.ObjectId.isValid(String(customer))) {
+        return res.status(400).json({ message: "Invalid customer id" });
+      }
+      const linked = await Booking.exists({ cook: req.user.id, customer });
+      if (!linked) {
+        return res.status(400).json({
+          message: "No booking found with this customer — complaints need a booking",
+        });
+      }
+    }
 
     const complaint = await Complaint.create({
       cook: req.user.id,
@@ -36,7 +52,8 @@ exports.createComplaint = async (req, res, next) => {
 
     // Alert every admin (non-fatal — the complaint itself already succeeded).
     try {
-      const admins = await User.find({ role: "admin" }).select("_id");
+      // Match both UPPERCASE (spec) and legacy lowercase stored roles.
+      const admins = await User.find({ role: { $in: ["ADMIN", "admin"] } }).select("_id");
       const cookUser = await User.findById(req.user.id).select("name");
       await Notification.create(
         admins.map((a) => ({
@@ -58,11 +75,16 @@ exports.createComplaint = async (req, res, next) => {
 // Complaints filed by the logged-in cook.
 exports.getMyComplaints = async (req, res, next) => {
   try {
-    const complaints = await Complaint.find({ cook: req.user.id })
-      .populate("customer", "name phone")
-      .populate("booking", "date serviceType startTime endTime status")
-      .sort({ createdAt: -1 });
-    res.json(complaints);
+    const filter = { cook: req.user.id };
+    const pg = paginationParams(req);
+    const complaints = await applyPagination(
+      Complaint.find(filter)
+        .populate("customer", "name phone")
+        .populate("booking", "date serviceType startTime endTime status")
+        .sort({ createdAt: -1 }),
+      pg
+    );
+    return sendList(res, complaints, pg, () => Complaint.countDocuments(filter));
   } catch (error) {
     next(error);
   }
@@ -75,12 +97,16 @@ exports.getAllComplaints = async (req, res, next) => {
     if (req.query.status && ["open", "in_review", "resolved", "rejected"].includes(req.query.status)) {
       filter.status = req.query.status;
     }
-    const complaints = await Complaint.find(filter)
-      .populate("cook", "name phone")
-      .populate("customer", "name phone")
-      .populate("booking", "date serviceType startTime endTime status address")
-      .sort({ createdAt: -1 });
-    res.json(complaints);
+    const pg = paginationParams(req);
+    const complaints = await applyPagination(
+      Complaint.find(filter)
+        .populate("cook", "name phone")
+        .populate("customer", "name phone")
+        .populate("booking", "date serviceType startTime endTime status address")
+        .sort({ createdAt: -1 }),
+      pg
+    );
+    return sendList(res, complaints, pg, () => Complaint.countDocuments(filter));
   } catch (error) {
     next(error);
   }

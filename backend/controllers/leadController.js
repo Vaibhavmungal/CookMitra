@@ -54,8 +54,10 @@ exports.createLead = async (req, res, next) => {
 
 exports.getLeads = async (req, res, next) => {
   try {
-    const leads = await Lead.find().sort({ createdAt: -1 });
-    res.json(leads);
+    const { paginationParams, applyPagination, sendList } = require("../utils/pagination");
+    const pg = paginationParams(req);
+    const leads = await applyPagination(Lead.find().sort({ createdAt: -1 }), pg);
+    return sendList(res, leads, pg, () => Lead.countDocuments());
   } catch (error) {
     next(error);
   }

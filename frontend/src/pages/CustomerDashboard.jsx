@@ -4,22 +4,17 @@ import API from "../api/axios";
 import { useFetch } from "../hooks/useFetch";
 import { useSelector } from "react-redux";
 import { useShowToast } from "../store/hooks";
-import ReviewForm from "../components/ReviewForm";
-import { formatCurrency, formatDate, bookingCustomerWhatsAppUrl, bookingReviewWhatsAppUrl, sessionEndDate, hasServiceHoursStarted, formatRemaining, hoursCompleteWhatsAppUrl, playAlarmSound } from "../utils/constants";
+import { formatCurrency, formatDate, bookingCustomerWhatsAppUrl, sessionEndDate, hasServiceHoursStarted, formatRemaining, playAlarmSound } from "../utils/constants";
 import {
   Calendar,
   Clock,
-  MapPin,
-  Navigation,
   XCircle,
   CheckCircle2,
   AlertCircle,
   Search,
   MessageCircle,
-  Star,
   Sparkles,
   ChefHat,
-  BellRing,
   Trash2,
 } from "lucide-react";
 
@@ -80,7 +75,7 @@ const CustomerDashboard = () => {
           // optional
         }
       }
-      if (b.hoursCompleted && !seenHoursDone.current.has(b._id)) {
+      if (b.hoursCompleted && !b.review && !seenHoursDone.current.has(b._id)) {
         seenHoursDone.current.add(b._id);
         showToast("Your cooking hours are complete! Please review your session.", "warning", 8000);
         playAlarmSound();
@@ -95,8 +90,8 @@ const CustomerDashboard = () => {
         }
       }
       // Service complete: prompt the customer to rate the cook (website +
-      // WhatsApp via the banner button on the card).
-      if (b.status === "completed" && !seenCompleted.current.has(b._id)) {
+      // WhatsApp via the banner button on the card) — skipped once reviewed.
+      if (b.status === "completed" && !b.review && !seenCompleted.current.has(b._id)) {
         seenCompleted.current.add(b._id);
         showToast(`Service complete! Please rate ${b.cook?.name || "your cook"}.`, "success", 8000);
         try {
@@ -216,8 +211,15 @@ const CustomerDashboard = () => {
   const totalSpent = bookings?.reduce((acc, b) => (b.status === "completed" && b.payment?.status === "paid" && b.payment?.razorpayPaymentId ? acc + Number(b.payment.paidAmount || 0) : acc), 0) || 0;
 
   // Next upcoming active booking (soonest date) highlighted at the top.
+  // Technically-completed services (hours over / flag set) are excluded even
+  // if the status hasn't flipped yet — they are done, not "next".
   const nextUp = (bookings || [])
     .filter((b) => ["requested", "accepted", "confirmed", "in_progress"].includes(b.status))
+    .filter((b) => {
+      if (b.hoursCompleted) return false;
+      const end = sessionEndDate(b);
+      return !end || Date.now() < end.getTime();
+    })
     .slice()
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0] || null;
 
@@ -362,16 +364,9 @@ const CustomerDashboard = () => {
                 ? "Waiting for the cook to accept — no action needed from you."
                 : nextUp.cookArrived
                   ? "Your cook has arrived — enjoy your session."
-                  : "Confirmed — use Track Live on the day to follow your cook."}
+                  : "Confirmed — your cook will arrive on time."}
             </div>
           </div>
-          {/* Track is only meaningful once the cook accepted — for requests that
-              are still waiting, Details is the only useful action. */}
-          {["accepted", "confirmed"].includes(nextUp.status) && (
-            <Link to={`/track/${nextUp._id}`} className="btn btn-primary btn-sm">
-              <Navigation size={15} /> Track
-            </Link>
-          )}
           <Link to={`/bookings/${nextUp._id}`} className="btn btn-outline btn-sm">
             Details
           </Link>
@@ -382,30 +377,32 @@ const CustomerDashboard = () => {
           {filteredBookings.map((booking) => (
             <div
               key={booking._id}
-              className="booking-item-card clickable"
+              className="booking-item-card booking-card-modern clickable"
               onClick={(e) => openBooking(e, booking._id)}
               onKeyDown={(e) => openBookingKey(e, booking._id)}
               role="button"
               tabIndex={0}
               aria-label={`Open booking details for ${booking.cook?.name || "booking"}`}
             >
-              <div className="booking-item-top">
-                <div className="booking-party-info">
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <ChefHat size={20} style={{ color: "var(--primary)" }} />
-                    <h3 style={{ margin: 0 }}>
-                      Cook: {booking.cook?.name || "Assigned Cook"}
-                    </h3>
+              <div className="booking-item-top booking-card-header">
+                <div className="booking-party-info booking-card-cook">
+                  <div className="booking-card-cook-name">
+                    <span className="booking-card-cook-icon" aria-hidden="true">
+                      <ChefHat size={19} />
+                    </span>
+                    <h3>{booking.cook?.name || "Assigned Cook"}</h3>
                   </div>
-                  <span style={{ fontSize: "0.85rem", color: "var(--slate-500)" }}>
-                    Ref #{booking._id?.substring(18).toUpperCase()}
+                  <span className="booking-card-ref">
+                    Cooking session · Ref #{booking._id?.substring(18).toUpperCase()}
                   </span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                <div className="booking-card-status-cluster">
                   <div>{getStatusBadge(booking.status, booking)}</div>
                   {/* Removable bookings (never accepted / cancelled) get a
-                      compact delete control in the card's top-right corner. */}
-                  {["requested", "rejected", "expired", "cancelled"].includes(booking.status) && (
+                      compact delete control — except paid ones, which the
+                      server keeps for the financial trail. */}
+                  {["requested", "rejected", "expired", "cancelled"].includes(booking.status) &&
+                    booking.payment?.status !== "paid" && (
                     <button
                       type="button"
                       className="booking-delete-btn"
@@ -421,21 +418,9 @@ const CustomerDashboard = () => {
 
               {booking.status === "requested" && (
                 <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    background: "#fffbeb",
-                    border: "1px solid #f59e0b",
-                    borderRadius: "10px",
-                    padding: "0.75rem 1rem",
-                    marginBottom: "0.75rem",
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    color: "#92400e",
-                  }}
+                  className="booking-status-message booking-status-message--waiting"
                 >
-                  <Clock size={18} style={{ color: "#b45309", flexShrink: 0 }} />
+                  <Clock size={18} aria-hidden="true" />
                   <span>
                     Request sent to <strong>{booking.cook?.name || "cook"}</strong> — waiting for them to Accept.
                     <br />
@@ -446,21 +431,9 @@ const CustomerDashboard = () => {
 
               {["accepted", "confirmed"].includes(booking.status) && (
                 <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    background: "var(--accent-emerald-light, #ecfdf5)",
-                    border: "1px solid var(--accent-emerald, #10b981)",
-                    borderRadius: "10px",
-                    padding: "0.75rem 1rem",
-                    marginBottom: "0.75rem",
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    color: "#065f46",
-                  }}
+                  className="booking-status-message booking-status-message--confirmed"
                 >
-                  <CheckCircle2 size={18} style={{ color: "var(--accent-emerald, #10b981)", flexShrink: 0 }} />
+                  <CheckCircle2 size={18} aria-hidden="true" />
                   <span>
                     <strong>Booked!</strong> {booking.cook?.name || "Your cook"} accepted your request.
                     {booking.cook?.phone && (
@@ -470,87 +443,29 @@ const CustomerDashboard = () => {
                     )}
                     <br />
                     {booking.status === "confirmed"
-                      ? "Get the confirmation with live tracking on your WhatsApp below."
+                      ? "Get the payment confirmation on your WhatsApp below."
                       : "Complete your payment to confirm the booking."}
                   </span>
                 </div>
               )}
 
-              {booking.cookArrived && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    background: "var(--accent-emerald-light, #ecfdf5)",
-                    border: "1px solid var(--accent-emerald, #10b981)",
-                    borderRadius: "10px",
-                    padding: "0.65rem 0.9rem",
-                    marginBottom: "0.75rem",
-                    fontSize: "0.88rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  <CheckCircle2 size={18} style={{ color: "var(--accent-emerald, #10b981)", flexShrink: 0 }} />
-                  <span>Your cook {booking.cook?.name ? `${booking.cook.name} ` : ""}has reached your location!</span>
-                </div>
-              )}
+              {/* NOTE: no "cook has reached your location" banner on the
+                  booking card by design — arrival is delivered only as an
+                  in-app notification (type "cook_arrived"). */}
 
-{booking.hoursCompleted ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    background: "#fef3c7",
-                    border: "1px solid #f59e0b",
-                    borderRadius: "10px",
-                    padding: "0.75rem 1rem",
-                    marginBottom: "0.75rem",
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    color: "#b45309",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <BellRing size={18} style={{ color: "#b45309", flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 200 }}>Your cooking hours are complete! Please review your session.</span>
-                  {(() => {
-                    const hoursWa =
-                      booking.hoursCompleteWhatsappUrl ||
-                      hoursCompleteWhatsAppUrl({
-                        toPhone: user?.phone,
-                        booking,
-                        cookName: booking.cook?.name,
-                        cookPhone: booking.cook?.phone,
-                        customerName: user?.name,
-                      });
-                    return hoursWa ? (
-                      <a
-                        href={hoursWa}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-success btn-sm"
-                        title="Open WhatsApp with the cooking-hours-complete message"
-                      >
-                        <MessageCircle size={16} /> Get it on WhatsApp
-                      </a>
-                    ) : null;
-                  })()}
-                </div>
-              ) : (
+              {(
                 ["accepted", "confirmed", "in_progress"].includes(booking.status) && (() => {
                   const end = sessionEndDate(booking);
                   const label = end ? formatRemaining(end, now) : null;
                   return label ? (
-                    <div style={{ fontSize: "0.88rem", color: "var(--slate-600)", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <Clock size={14} /> Cooking time: {label} (ends {booking.endTime})
+                    <div className="booking-live-countdown">
+                      <Clock size={14} aria-hidden="true" /> <span>Cooking time</span> {label} <span>(ends {booking.endTime})</span>
                     </div>
                   ) : null;
                 })()
               )}
 
-              <div className="booking-metadata-grid">
+              <div className="booking-metadata-grid booking-card-details">
                 <div className="meta-field">
                   <label>What You Booked</label>
                   <span>{booking.serviceType?.replace(/_/g, " ").toUpperCase()}</span>
@@ -568,21 +483,14 @@ const CustomerDashboard = () => {
 
                 <div className="meta-field">
                   <label>Price</label>
-                  <span style={{ color: "var(--primary)", fontWeight: 800 }}>
+                  <span className="booking-card-price">
                     {formatCurrency(booking.amount)}
                   </span>
                 </div>
               </div>
 
-              {booking.address && (
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", fontSize: "0.88rem", color: "var(--slate-600)", marginBottom: "0.75rem" }}>
-                  <MapPin size={16} style={{ color: "var(--slate-400)", flexShrink: 0, marginTop: 2 }} />
-                  <span>{booking.address}</span>
-                </div>
-              )}
-
                {(booking.guests || booking.durationHours || booking.selectedItems?.length > 0) && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                <div className="booking-card-tags">
                   {booking.guests && <span className="badge badge-slate">{booking.guests} people</span>}
                   {booking.durationHours && <span className="badge badge-slate">{booking.durationHours} hrs</span>}
                   {booking.selectedItems?.map((item, i) => (
@@ -592,7 +500,7 @@ const CustomerDashboard = () => {
               )}
 
               {booking.notes && (
-                <div style={{ fontSize: "0.85rem", color: "var(--slate-600)", background: "var(--slate-50)", padding: "0.6rem 0.9rem", borderRadius: "var(--radius-sm)", marginBottom: "1rem" }}>
+                <div className="booking-card-notes">
                   <strong>Notes:</strong> {booking.notes}
                 </div>
               )}
@@ -619,12 +527,7 @@ const CustomerDashboard = () => {
                     customerPhone: user?.phone,
                     cookName: booking.cook?.name,
                     cookPhone: booking.cook?.phone,
-                    cookLocation: null,
                     booking,
-                    trackingUrl:
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/track/${booking._id}`
-                        : undefined,
                   });
                   return myWaUrl ? (
                     <a
@@ -639,59 +542,6 @@ const CustomerDashboard = () => {
                 })()}
               </div>
 
-              {/* Rating prompt for completed bookings */}
-              {booking.status === "completed" && !booking.review && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    background: "var(--accent-amber-light, #fef3c7)",
-                    border: "1px solid var(--accent-amber, #f59e0b)",
-                    borderRadius: "10px",
-                    padding: "0.75rem 1rem",
-                    marginBottom: "0.75rem",
-                    fontSize: "0.9rem",
-                    fontWeight: 600,
-                    color: "#92400e",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Star size={18} style={{ color: "#b45309", flexShrink: 0 }} />
-                  <span style={{ flex: 1, minWidth: 200 }}>
-                    Service complete! How was {booking.cook?.name || "your cook"}? Please rate below.
-                  </span>
-                  {(() => {
-                    const reviewWa =
-                      booking.reviewWhatsappUrl ||
-                      bookingReviewWhatsAppUrl({
-                        customerPhone: user?.phone,
-                        cookName: booking.cook?.name,
-                        booking,
-                        reviewUrl:
-                          typeof window !== "undefined"
-                            ? `${window.location.origin}/bookings/${booking._id}`
-                            : undefined,
-                      });
-                    return reviewWa ? (
-                      <a
-                        href={reviewWa}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-success btn-sm"
-                        title="Get the rating reminder with review link on your WhatsApp"
-                      >
-                        <MessageCircle size={16} /> Remind me on WhatsApp
-                      </a>
-                    ) : null;
-                  })()}
-                </div>
-              )}
-
-              {/* Review section for completed bookings */}
-              {booking.status === "completed" && (
-                <ReviewForm bookingId={booking._id} existingReview={booking.review} onSubmitted={refetch} />
-              )}
             </div>
           ))}
         </div>

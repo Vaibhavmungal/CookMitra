@@ -38,7 +38,11 @@ const ov = s.findOverlapBooking(
 check("overlap with held request detected", !!ov && ov.status === "requested",
   ov ? "status=" + ov.status : "missed");
 
-// 5. activeSlotMatch: permanent blocks + expiry-bounded pending holds.
+// 5. activeSlotMatch: permanent blocks (accepted/confirmed/in_progress) +
+// expiry-bounded "requested" holds. NOTE: BLOCKING_STATUSES intentionally
+// excludes "requested" — pending requests only hold for 5 minutes via the
+// second clause; including them in the $in list would let expired requests
+// block the calendar forever.
 const m = s.activeSlotMatch();
 const permanentOk = Array.isArray(m[0].status.$in) &&
   m[0].status.$in.join("/") === "accepted/confirmed/in_progress";

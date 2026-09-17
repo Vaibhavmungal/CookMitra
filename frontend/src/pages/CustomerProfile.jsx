@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import API from "../api/axios";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { updateUser } from "../store/authSlice";
 import { useShowToast } from "../store/hooks";
 import { ArrowLeft, User, MapPin, Phone, Save, AlertCircle } from "lucide-react";
 
 const CustomerProfile = () => {
-  const user = useSelector((s) => s.auth.user);
   const dispatch = useDispatch();
   const showToast = useShowToast();
   const [formData, setFormData] = useState({
@@ -41,7 +40,7 @@ const CustomerProfile = () => {
       }
     };
     fetchProfile();
-  }, []);
+  }, [dispatch]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });

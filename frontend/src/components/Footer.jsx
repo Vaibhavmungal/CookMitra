@@ -83,7 +83,7 @@ const Footer = () => {
               </li>
               <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
                 <Phone size={16} />
-                <a href="tel:+917231925496" style={{ color: "inherit" }}>+91 7231925496</a>
+                <a href="tel:+919322321831" style={{ color: "inherit" }}>+91 9322321831</a>
               </li>
               <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
                 <MapPin size={16} /> Pune & Mumbai, India

@@ -29,6 +29,7 @@ import {
 import API from "../api/axios";
 import { formatCurrency, localTodayStr, localTomorrowStr, slabPriceForDuration, LAUNCH_SLAB_PRICES } from "../utils/constants";
 import CouponApply from "../components/CouponApply";
+import CustomCalendar from "../components/CustomCalendar";
 import { resolveFileUrl } from "../components/CookDocUploads";
 import { useSelector } from "react-redux";
 import { useShowToast, useSiteLocation } from "../store/hooks";
@@ -131,7 +132,7 @@ const SummaryBar = ({ form, serviceLabel, onEdit }) => (
   </div>
 );
 
-const CookOnDemand = () => {
+const CookBooking = () => {
   const user = useSelector((s) => s.auth.user);
   const showToast = useShowToast();
   const { location: siteLocation } = useSiteLocation();
@@ -633,12 +634,53 @@ const CookOnDemand = () => {
   };
 
   // Step 2 → 3: a time slot must be picked before cooks are shown.
-  const handleChooseCook = () => {
+  const handleChooseCook = async () => {
     if (!selectedSlot) {
       setFormError("Please pick a time slot first");
       return;
     }
     setFormError("");
+    // Re-verify the picked slot is still free before showing cooks: a slot
+    // listed in step 2 can fill up while the customer is picking (another
+    // customer books the same hours). Drop cooks busy during the exact
+    // [startTime, endTime] so step 3 shows only cooks free for those hours.
+    setSearching(true);
+    try {
+      const verify = await API.get("/cooks", {
+        params: {
+          serviceType: form.serviceType,
+          date: form.date,
+          durationHours: form.durationHours,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+        },
+      });
+      const fresh = Array.isArray(verify.data) ? verify.data : verify.data?.cooks || verify.data?.data || [];
+      const freshIds = new Set(
+        fresh.map((c) => String(c?.user?._id || (typeof c?.user === "string" ? c.user : null) || c?._id || ""))
+      );
+      const stillFree = matches.filter((c) => {
+        const id = String(
+          c?.user?._id || (typeof c?.user === "string" ? c.user : null) || c?._id || ""
+        );
+        if (!freshIds.has(id)) return false;
+        return (c.slots || []).some(
+          (s) => s.startTime === selectedSlot.startTime && s.endTime === selectedSlot.endTime
+        );
+      });
+      setMatches(stillFree);
+      setSlotOptions(aggregateSlots(stillFree));
+      if (stillFree.length === 0) {
+        setFormError("That slot just filled up — please pick another time.");
+        setStep(2);
+        return;
+      }
+    } catch {
+      // Verification is best-effort: on network failure keep the step-2 list
+      // (the server re-checks the exact window at booking creation).
+    } finally {
+      setSearching(false);
+    }
     setStep(3);
   };
 
@@ -678,6 +720,55 @@ const CookOnDemand = () => {
     setFormError("");
     setBookingLoading(slot._id);
     try {
+      // Last-second availability check: the slot card was rendered from the
+      // step-2 search, but another customer may have booked this cook for the
+      // same hours since. Re-verify the exact [startTime, endTime] is still
+      // free so a busy cook can never be booked from a stale card.
+      const cookIdForCheck =
+        cook?.user?._id || (typeof cook?.user === "string" ? cook.user : null) || cook?._id;
+      try {
+        const chk = await API.get(`/availability/${encodeURIComponent(cookIdForCheck)}`, {
+          params: { date: form.date, startTime: slot.startTime, endTime: slot.endTime },
+        });
+        if (chk?.data && typeof chk.data === "object" && "free" in chk.data && chk.data.free !== true) {
+          setFormError(chk.data.reason || "This cook just got booked for those hours — please pick another cook or time.");
+          // Refresh the cook list so the busy cook disappears immediately.
+          try {
+            const verify = await API.get("/cooks", {
+              params: {
+                serviceType: form.serviceType,
+                date: form.date,
+                durationHours: form.durationHours,
+                startTime: selectedSlot.startTime,
+                endTime: selectedSlot.endTime,
+              },
+            });
+            const fresh = Array.isArray(verify.data) ? verify.data : verify.data?.cooks || verify.data?.data || [];
+            const freshIds = new Set(
+              fresh.map((c) => String(c?.user?._id || (typeof c?.user === "string" ? c.user : null) || c?._id || ""))
+            );
+            const stillFree = matches.filter((c) => {
+              const id = String(c?.user?._id || (typeof c?.user === "string" ? c.user : null) || c?._id || "");
+              if (!freshIds.has(id)) return false;
+              return (c.slots || []).some(
+                (s) => s.startTime === selectedSlot.startTime && s.endTime === selectedSlot.endTime
+              );
+            });
+            setMatches(stillFree);
+            setSlotOptions(aggregateSlots(stillFree));
+          } catch {
+            // ignore — the error above already explains the state
+          }
+          return;
+        }
+      } catch (chkErr) {
+        // A 4xx here means the slot is invalid/gone — surface it. Network
+        // failures fall through to the booking attempt (server re-checks).
+        if (chkErr?.response?.status >= 400 && chkErr?.response?.status < 500) {
+          setFormError(chkErr.response?.data?.message || "That slot is no longer free — please pick another time.");
+          return;
+        }
+      }
       // No online payment — create the booking request directly, then take
       // the customer back to the available-cooks listing. Priced from the
       // launch slab (server recomputes + enforces it).
@@ -798,11 +889,9 @@ const CookOnDemand = () => {
                 className={`service-pick-card ${form.serviceType === s.id ? "selected" : ""}`}
                 onClick={() => setForm({ ...form, serviceType: s.id })}
               >
-                {form.serviceType === s.id && (
-                  <span className="service-pick-check">
-                    <CheckCircle2 size={20} />
-                  </span>
-                )}
+                <span className="service-pick-check" aria-hidden="true">
+                  {form.serviceType === s.id && <CheckCircle2 size={18} />}
+                </span>
                 <span className="service-pick-icon">{s.icon}</span>
                 <strong>{s.label}</strong>
                 <span>{s.desc}</span>
@@ -817,31 +906,30 @@ const CookOnDemand = () => {
               <label>
                 <CalendarCheck size={15} /> Preferred Date
               </label>
-              <div className="od-presets" role="group" aria-label="Quick dates">
-                <button
-                  type="button"
-                  className={`bk-dur-chip ${form.date === localTodayStr() ? "active" : ""}`}
-                  onClick={() => setForm({ ...form, date: localTodayStr() })}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  className={`bk-dur-chip ${form.date === localTomorrowStr() ? "active" : ""}`}
-                  onClick={() => setForm({ ...form, date: localTomorrowStr() })}
-                >
-                  Tomorrow
-                </button>
+              <div className="od-date-pick-row">
+                <div className="od-presets" role="group" aria-label="Quick dates">
+                  <button
+                    type="button"
+                    className={`bk-dur-chip ${form.date === localTodayStr() ? "active" : ""}`}
+                    onClick={() => setForm({ ...form, date: localTodayStr() })}
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    className={`bk-dur-chip ${form.date === localTomorrowStr() ? "active" : ""}`}
+                    onClick={() => setForm({ ...form, date: localTomorrowStr() })}
+                  >
+                    Tomorrow
+                  </button>
+                </div>
+                <CustomCalendar
+                  id="cookbooking-date"
+                  value={form.date}
+                  min={localTodayStr()}
+                  onChange={(d) => setForm({ ...form, date: d })}
+                />
               </div>
-              <input
-                type="date"
-                name="date"
-                className="form-control od-date-input"
-                value={form.date}
-                min={localTodayStr()}
-                onChange={handleChange}
-                required
-              />
             </div>
             <div className="form-group">
               <label>
@@ -1032,10 +1120,10 @@ const CookOnDemand = () => {
             <button
               type="button"
               className="btn btn-primary btn-block btn-lg od-cta"
-              disabled={!selectedSlot}
+              disabled={!selectedSlot || searching}
               onClick={handleChooseCook}
             >
-              Choose Cook <ArrowRight size={17} />
+              {searching ? "Checking live availability…" : <>Choose Cook <ArrowRight size={17} /></>}
             </button>
           </div>
         </div>
@@ -1332,4 +1420,4 @@ const CookOnDemand = () => {
   );
 };
 
-export default CookOnDemand;
+export default CookBooking;

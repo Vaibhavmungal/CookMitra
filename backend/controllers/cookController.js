@@ -1,18 +1,23 @@
+const mongoose = require("mongoose");
 const CookProfile = require("../models/CookProfile");
+const Notification = require("../models/Notification");
 const User = require("../models/User");
+const { paginationParams, sendList } = require("../utils/pagination");
 const {
   getDayWindows,
   getDayBookings,
   computeStartOptions,
   localDayString,
   resolveCookAvailability,
+  timeToMinutes,
+  intervalsOverlap,
 } = require("../utils/slots");
 
 // Fields a cook may set on their own profile. Everything else
-// (approvalStatus, rating, user, liveLocation) is admin-managed or updated
-// through a dedicated endpoint and must NOT be writable via the generic create/
-// update handlers — otherwise a cook could self-approve, inflate their rating,
-// or reassign the profile's owner.
+// (approvalStatus, rating, user) is admin-managed and must NOT be writable
+// via the generic create/update handlers — otherwise a cook could
+// self-approve, inflate their rating, or reassign the profile's owner.
+// (Unknown keys like a legacy `liveLocation` are dropped by the whitelist.)
 const COOK_EDITABLE_FIELDS = [
   "bio",
   "skills",
@@ -35,29 +40,46 @@ const pickCookEditable = (obj) => {
   }
   return out;
 };
-
 exports.getCooks = async (req, res, next) => {
   try {
-    const { serviceType, serviceArea, search, date, durationHours } = req.query;
+    const { serviceType, serviceArea, search, date, durationHours, startTime, endTime } = req.query;
     const filter = {};
 
-    if (!req.user || req.user.role !== "admin") {
+    const isAdmin = Boolean(req.user) && String(req.user.role).toUpperCase() === "ADMIN";
+    if (!isAdmin) {
       filter.approvalStatus = "approved";
     }
 
-    if (serviceType) filter.serviceTypes = serviceType;
-    if (serviceArea) filter.serviceArea = { $regex: serviceArea, $options: "i" };
+    // Whitelist service types: raw query values flow into Mongoose, so an
+    // object like ?serviceType[$ne]=x must never become a query operator.
+    const SERVICE_TYPES = ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"];
+    if (serviceType) {
+      const asked = Array.isArray(serviceType) ? serviceType : [serviceType];
+      const clean = asked.map((t) => String(t)).filter((t) => SERVICE_TYPES.includes(t));
+      if (clean.length) filter.serviceTypes = { $in: clean };
+    }
+    // Escape user input before $regex (no ReDoS / pattern injection) + cap.
+    if (serviceArea) {
+      const esc = String(serviceArea)
+        .slice(0, 60)
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.serviceArea = { $regex: esc, $options: "i" };
+    }
 
-    let cooks = await CookProfile.find(filter).populate(
-      "user",
-      "name email phone status"
-    );
+    // Contact PII: guests see discovery fields only; signed-in users see the
+    // phone (needed for booking coordination); admins see email too.
+    const userFields = !req.user
+      ? "name status"
+      : isAdmin
+        ? "name email phone status"
+        : "name phone status";
+    let cooks = await CookProfile.find(filter).populate("user", userFields);
 
     // Hide cooks whose account was blocked or deleted by an admin so they
     // can no longer be discovered or booked by customers. Admins still see
     // everything so they can manage the accounts. Also hide cooks who have
     // toggled themselves "unavailable" (auto-reset the next day).
-    if (!req.user || req.user.role !== "admin") {
+    if (!req.user || String(req.user.role).toUpperCase() !== "ADMIN") {
       const flags = await Promise.all(
         cooks.map(async (cook) => {
           if (cook.user && cook.user.status === "suspended") return false;
@@ -78,11 +100,14 @@ exports.getCooks = async (req, res, next) => {
 
     // Availability filter: hide cooks with nothing bookable on the date.
     // date alone -> at least one open window; date + durationHours -> at
-    // least one free start option after subtracting existing bookings.
+    // least one free start option after subtracting existing bookings;
+    // date + startTime + endTime -> that exact window must be free (so a cook
+    // busy 10:00-13:00 never shows for a 10:00-13:00 search).
     if (date) {
       if (Number.isNaN(new Date(date).getTime())) {
         return res.status(400).json({ message: "Invalid date" });
       }
+      const { startTime: exactStartRaw, endTime: exactEndRaw } = req.query;
       let dur = null;
       if (durationHours != null && durationHours !== "") {
         dur = Number(durationHours);
@@ -90,13 +115,45 @@ exports.getCooks = async (req, res, next) => {
           return res.status(400).json({ message: "durationHours must be between 0.5 and 12" });
         }
       }
+      // Exact-window mode: validate the requested interval up front.
+      let exactStart = null;
+      let exactEnd = null;
+      if (exactStartRaw != null || exactEndRaw != null) {
+        if (!exactStartRaw || !exactEndRaw) {
+          return res.status(400).json({ message: "startTime and endTime are both required" });
+        }
+        exactStart = timeToMinutes(String(exactStartRaw));
+        exactEnd = timeToMinutes(String(exactEndRaw));
+        if (exactStart == null || exactEnd == null || exactEnd <= exactStart) {
+          return res.status(400).json({ message: "Invalid time slot" });
+        }
+        if (dur != null && Math.abs(exactEnd - exactStart - dur * 60) > 0.001) {
+          return res.status(400).json({ message: "durationHours does not match startTime/endTime" });
+        }
+        dur = (exactEnd - exactStart) / 60;
+      }
       const checks = await Promise.all(
         cooks.map(async (cook) => {
           try {
-            const windows = await getDayWindows(cook.user._id, date);
+            const windows = await getDayWindows(cook.user?._id || cook.user, date);
             if (!windows.length) return false;
+            const bookings = await getDayBookings(cook.user?._id || cook.user, date);
+            if (exactStart != null) {
+              // The exact [startTime, endTime] must sit inside one open window
+              // and overlap no existing booking.
+              const inside = windows.some((w) => {
+                const ws = timeToMinutes(w.startTime);
+                const we = timeToMinutes(w.endTime);
+                return ws != null && we != null && ws <= exactStart && exactEnd <= we;
+              });
+              if (!inside) return false;
+              return !bookings.some((b) => {
+                const bs = timeToMinutes(b.startTime);
+                const be = timeToMinutes(b.endTime);
+                return bs != null && be != null && intervalsOverlap(exactStart, exactEnd, bs, be);
+              });
+            }
             if (dur == null) return true;
-            const bookings = await getDayBookings(cook.user._id, date);
             return computeStartOptions(windows, bookings, dur).length > 0;
           } catch {
             return false;
@@ -106,6 +163,14 @@ exports.getCooks = async (req, res, next) => {
       cooks = cooks.filter((_, i) => checks[i]);
     }
 
+    // In-memory paging (after availability/search filtering): opt-in via
+    // ?page=&limit=, otherwise the full array (capped) as before.
+    const pg = paginationParams(req);
+    if (pg.has) {
+      const total = cooks.length;
+      const page = cooks.slice(pg.skip, pg.skip + pg.limit);
+      return sendList(res, page, pg, total);
+    }
     res.json(cooks);
   } catch (error) {
     next(error);
@@ -114,13 +179,16 @@ exports.getCooks = async (req, res, next) => {
 
 exports.getCook = async (req, res, next) => {
   try {
+    const isAdmin = Boolean(req.user) && String(req.user.role).toUpperCase() === "ADMIN";
+    // Guests see discovery fields only (no contact PII); see getCooks.
+    const userFields = !req.user ? "name status" : isAdmin ? "name email phone" : "name phone";
     // Accept either a CookProfile id (/cooks/:id pages) or a User id
     // (e.g. dashboard "View Cook Profile" links over populated cooks).
     let cook = null;
     try {
       cook = await CookProfile.findById(req.params.id).populate(
         "user",
-        "name email phone"
+        userFields
       );
     } catch {
       cook = null;
@@ -128,10 +196,15 @@ exports.getCook = async (req, res, next) => {
     if (!cook) {
       cook = await CookProfile.findOne({ user: req.params.id }).populate(
         "user",
-        "name email phone"
+        userFields
       );
     }
     if (!cook) {
+      return res.status(404).json({ message: "Cook profile not found" });
+    }
+    // Unapproved / suspended cooks are invisible to the public (the listing
+    // filters them too) — the admin dossier endpoint covers admin access.
+    if (!isAdmin && (cook.approvalStatus !== "approved" || cook.user?.status === "suspended")) {
       return res.status(404).json({ message: "Cook profile not found" });
     }
     res.json(cook);
@@ -273,9 +346,8 @@ exports.getMyProfile = async (req, res, next) => {
 
 exports.updateCookProfile = async (req, res, next) => {
   try {
-    // Whitelist-only: admin-managed fields (approvalStatus, rating, user) and
-    // the GPS liveLocation (dedicated PATCH /me/location endpoint) can never be
-    // written through the generic profile editor.
+    // Whitelist-only: admin-managed fields (approvalStatus, rating, user) can
+    // never be written through the generic profile editor.
     const body = pickCookEditable(req.body);
     if (body.skills != null && body.bio == null) body.bio = body.skills;
     if (body.bio != null && body.skills == null) body.skills = body.bio;
@@ -293,49 +365,12 @@ exports.updateCookProfile = async (req, res, next) => {
   }
 };
 
-// Cook pins their current GPS location. Stored on the profile and used as the
-// "cook's live location" shared to the user's WhatsApp on their bookings.
-// Optional `accuracy` (metres) is stored alongside so poor fixes can be flagged.
-exports.updateMyLiveLocation = async (req, res, next) => {
-  try {
-    const { lat, lng, accuracy } = req.body || {};
-    if (typeof lat !== "number" || typeof lng !== "number") {
-      return res.status(400).json({ message: "Valid lat/lng are required" });
-    }
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      return res.status(400).json({ message: "Invalid coordinates" });
-    }
-    const acc =
-      typeof accuracy === "number" && Number.isFinite(accuracy) && accuracy >= 0 && accuracy <= 100000
-        ? Math.round(accuracy)
-        : undefined;
-    const profile = await CookProfile.findOneAndUpdate(
-      { user: req.user.id },
-      {
-        liveLocation: {
-          lat,
-          lng,
-          ...(acc !== undefined ? { accuracy: acc } : {}),
-          updatedAt: new Date(),
-        },
-      },
-      { new: true }
-    );
-    if (!profile) {
-      return res.status(404).json({ message: "Cook profile not found" });
-    }
-    res.json(profile);
-  } catch (error) {
-    next(error);
-  }
-};
-
 exports.updateApprovalStatus = async (req, res, next) => {
   try {
     const profile = await CookProfile.findByIdAndUpdate(
       req.params.id,
       { approvalStatus: req.body.status },
-      { new: true }
+      { new: true, runValidators: true }
     );
     if (!profile) {
       return res.status(404).json({ message: "Cook profile not found" });
@@ -453,6 +488,65 @@ exports.toggleAvailability = async (req, res, next) => {
     if (!profile) {
       return res.status(404).json({ message: "Cook profile not found" });
     }
+    res.json(profile);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin uploads verification docs ON BEHALF of a cook (e.g. files received
+// over email/WhatsApp). Same multipart fields as the cook self-upload
+// (aadhar, pan, photo — at least one), but the files are attached straight
+// onto the cook's profile here instead of being returned as URLs, and the
+// cook is notified. :id may be a CookProfile id OR the cook's User id.
+exports.adminUploadCookDocs = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid cook id" });
+    }
+
+    // Resolve the profile: accept a CookProfile id or the cook's User id.
+    let profile = await CookProfile.findById(id);
+    if (!profile) {
+      const cookUser = await User.findOne({ _id: id, role: "COOK" });
+      if (cookUser) {
+        profile = await CookProfile.findOne({ user: cookUser._id });
+      }
+    }
+    if (!profile) {
+      return res.status(404).json({ message: "Cook profile not found" });
+    }
+
+    const urls = {};
+    if (req.files?.aadhar?.[0]) {
+      urls.aadharCardUrl = `/uploads/cook-docs/${req.files.aadhar[0].filename}`;
+    }
+    if (req.files?.pan?.[0]) {
+      urls.panCardUrl = `/uploads/cook-docs/${req.files.pan[0].filename}`;
+    }
+    if (req.files?.photo?.[0]) {
+      urls.photoUrl = `/uploads/cook-docs/${req.files.photo[0].filename}`;
+    }
+    if (!Object.keys(urls).length) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    // Attach only the fields actually uploaded — never wipe the others.
+    Object.assign(profile, urls);
+    await profile.save();
+
+    // Let the cook know their documents were added by support.
+    try {
+      await Notification.create({
+        user: profile.user,
+        type: "general",
+        message: "An admin added your verification documents. Please check your profile.",
+      });
+    } catch {
+      // A failed notification must not fail the upload.
+    }
+
     res.json(profile);
   } catch (error) {
     next(error);

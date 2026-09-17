@@ -1,10 +1,10 @@
 const Availability = require("../models/Availability");
 const CookProfile = require("../models/CookProfile");
-const { getDayWindows, getDayBookings, computeStartOptions, suggestDurations, parseDay, resolveCookAvailability, timeToMinutes } = require("../utils/slots");
+const { getDayWindows, getDayBookings, computeStartOptions, suggestDurations, parseDay, resolveCookAvailability, timeToMinutes, findContainingWindow, findOverlapBooking } = require("../utils/slots");
 
 exports.getAvailability = async (req, res, next) => {
   try {
-    const { date, durationHours } = req.query;
+    const { date, durationHours, startTime, endTime } = req.query;
 
     // Accept either a User id or a CookProfile id — Availability.cook stores
     // the user id, so a bare profile id would otherwise match nothing and
@@ -36,6 +36,9 @@ exports.getAvailability = async (req, res, next) => {
       // slots are stored (new Date("YYYY-MM-DD") alone is UTC midnight and
       // lands on the wrong local day on non-UTC servers).
       const start = parseDay(date);
+      if (!start || Number.isNaN(start.getTime())) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
       const end = new Date(start);
       end.setHours(23, 59, 59, 999);
       filter.date = { $gte: start, $lte: end };
@@ -45,14 +48,39 @@ exports.getAvailability = async (req, res, next) => {
 
     // Duration-aware mode: derive bookable start times sized to the input
     // service hours (open windows minus already-booked intervals).
+    // Exact-window mode (?startTime=&endTime=): answer whether that single
+    // interval is free — { free, reason } — so the booking flow can
+    // double-check a slot before creating the request.
     const dur = durationHours != null && durationHours !== "" ? Number(durationHours) : null;
-    if (dur != null && date) {
-      if (!Number.isFinite(dur) || dur < 0.5 || dur > 12) {
+    if ((dur != null || startTime != null || endTime != null) && date) {
+      if (dur != null && (!Number.isFinite(dur) || dur < 0.5 || dur > 12)) {
         return res.status(400).json({ message: "durationHours must be between 0.5 and 12" });
       }
       // No published windows → the cook's whole day is open by default.
       const windows = slots.length ? slots : await getDayWindows(cookId, date);
       const bookings = await getDayBookings(cookId, date);
+      if (startTime != null || endTime != null) {
+        if (!startTime || !endTime) {
+          return res.status(400).json({ message: "startTime and endTime are both required" });
+        }
+        const sMin = timeToMinutes(String(startTime));
+        const eMin = timeToMinutes(String(endTime));
+        if (sMin == null || eMin == null || eMin <= sMin) {
+          return res.status(400).json({ message: "Invalid time slot" });
+        }
+        if (!findContainingWindow(windows, String(startTime), String(endTime))) {
+          return res.json({ free: false, reason: "Cook is not available for the selected time" });
+        }
+        if (findOverlapBooking(bookings, String(startTime), String(endTime))) {
+          return res.json({ free: false, reason: "This time is already booked. Please pick another start time." });
+        }
+        return res.json({ free: true });
+      }
+      if (dur == null) {
+        // Exact-window-only query already returned above; without a duration
+        // there are no start options to derive — fall through to raw slots.
+        return res.json(slots);
+      }
       const options = computeStartOptions(windows, bookings, dur);
       const shaped = options.map((o) => ({ _id: `${o.startTime}-${o.endTime}`, ...o, derived: true }));
       // Opt-in recovery hint: when nothing fits, name shorter session lengths

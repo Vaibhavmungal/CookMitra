@@ -1,6 +1,7 @@
 const Review = require("../models/Review");
 const Booking = require("../models/Booking");
 const CookProfile = require("../models/CookProfile");
+const { paginationParams, applyPagination, sendList } = require("../utils/pagination");
 
 exports.createReview = async (req, res, next) => {
   try {
@@ -12,6 +13,11 @@ exports.createReview = async (req, res, next) => {
     }
     if (booking.customer.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
+    }
+    // Only services that actually happened can be rated — never requests the
+    // cook didn't accept or dead bookings (mirrors the Home prompt filter).
+    if (["requested", "rejected", "cancelled", "expired"].includes(booking.status)) {
+      return res.status(400).json({ message: "You can rate your cook once the service is complete" });
     }
     // Rateable once service hours are over: completed status, the
     // hours-complete flag, or the session end time has passed (covers legacy
@@ -75,10 +81,13 @@ exports.getCookReviews = async (req, res, next) => {
     } catch {
       // not a profile id — fall through and use the param as a user id
     }
-    const reviews = await Review.find({ cook: cookId })
-      .populate("customer", "name")
-      .sort({ createdAt: -1 });
-    res.json(reviews);
+    const filter = { cook: cookId };
+    const pg = paginationParams(req);
+    const reviews = await applyPagination(
+      Review.find(filter).populate("customer", "name").sort({ createdAt: -1 }),
+      pg
+    );
+    return sendList(res, reviews, pg, () => Review.countDocuments(filter));
   } catch (error) {
     next(error);
   }
@@ -86,10 +95,13 @@ exports.getCookReviews = async (req, res, next) => {
 
 exports.getMyReviews = async (req, res, next) => {
   try {
-    const reviews = await Review.find({ customer: req.user.id })
-      .populate("cook", "name")
-      .sort({ createdAt: -1 });
-    res.json(reviews);
+    const filter = { customer: req.user.id };
+    const pg = paginationParams(req);
+    const reviews = await applyPagination(
+      Review.find(filter).populate("cook", "name").sort({ createdAt: -1 }),
+      pg
+    );
+    return sendList(res, reviews, pg, () => Review.countDocuments(filter));
   } catch (error) {
     next(error);
   }
@@ -98,11 +110,16 @@ exports.getMyReviews = async (req, res, next) => {
 // Reviews received by the logged-in cook (one per completed service).
 exports.getCookOwnReviews = async (req, res, next) => {
   try {
-    const reviews = await Review.find({ cook: req.user.id })
-      .populate("customer", "name")
-      .populate("booking", "date serviceType startTime endTime")
-      .sort({ createdAt: -1 });
-    res.json(reviews);
+    const filter = { cook: req.user.id };
+    const pg = paginationParams(req);
+    const reviews = await applyPagination(
+      Review.find(filter)
+        .populate("customer", "name")
+        .populate("booking", "date serviceType startTime endTime")
+        .sort({ createdAt: -1 }),
+      pg
+    );
+    return sendList(res, reviews, pg, () => Review.countDocuments(filter));
   } catch (error) {
     next(error);
   }
