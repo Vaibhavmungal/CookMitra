@@ -18,7 +18,10 @@ const LegalShell = ({ icon: Icon, eyebrow, title, intro, children }) => (
     </span>
     <h1>{title}</h1>
     <p className="legal-intro">
-      {intro} Last updated: {UPDATED}.
+      {intro}
+      <span className="legal-date-stamp">
+        Last updated: <strong>{UPDATED}</strong>.
+      </span>
     </p>
     <div className="profile-card-block legal-content">{children}</div>
   </div>
