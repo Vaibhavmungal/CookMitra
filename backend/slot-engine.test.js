@@ -52,9 +52,14 @@ check("permanent block clause", permanentOk, m[0].status.$in.join("/"));
 check("pending-hold clause is expiry-bounded", holdOk,
   JSON.stringify(Object.keys(m[1].requestExpiresAt)[0]));
 
-// 6. Expired hold does NOT match: $gt new Date() must be false for a past date.
+// 6. Hold window semantics: the $gt cutoff is ~now, so an expired hold
+// fails the match while a live hold passes it.
+const cutoff = m[1].requestExpiresAt.$gt;
 const past = new Date(Date.now() - 60 * 1000);
-check("expired hold falls outside $gt now", past < new Date(), "past < now");
+const live = new Date(Date.now() + 60 * 1000);
+check("hold cutoff is ~now", cutoff instanceof Date && Math.abs(cutoff.getTime() - Date.now()) < 5000, String(cutoff));
+check("expired hold falls outside window", past < cutoff, "past < cutoff");
+check("live hold falls inside window", live > cutoff, "live > cutoff");
 
 console.log(failures === 0 ? "ALL TESTS PASSED" : failures + " TEST(S) FAILED");
 process.exit(failures === 0 ? 0 : 1);

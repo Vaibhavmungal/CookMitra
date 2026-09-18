@@ -397,7 +397,7 @@ exports.createBooking = async (req, res, next) => {
       }
       couponCode = redeemed.code;
     }
-    // ~10% platform commission; the cook earns the rest of the final amount.
+    // 25% platform commission; the cook earns 75% of the final amount.
     const { finalAmount, commission, cookPayout } = splitPayout(slabPrice - discount);
     const expectedAmount = finalAmount;
     if (hasPayment) {
@@ -474,6 +474,12 @@ exports.createBooking = async (req, res, next) => {
         return rs != null && re != null && intervalsOverlap(raceStart, raceEnd, rs, re);
       });
       if (rival && String(rival._id) < String(booking._id)) {
+        // Losing the race must not burn a redeemed coupon with no booking.
+        try {
+          await releaseCouponUsage(booking);
+        } catch {
+          // non-fatal: the 409 below is what matters
+        }
         await Booking.findByIdAndDelete(booking._id);
         return res.status(409).json({
           message: "This slot was just claimed by another booking request. Please pick a different start time.",
@@ -861,6 +867,9 @@ exports.acceptBooking = async (req, res, next) => {
     if (acceptClash) {
       booking.status = "requested";
       booking.paymentExpiresAt = null;
+      // Renew the hold from now — rolling back onto the old (possibly
+      // already-expired) requestExpiresAt would revive a dead hold.
+      booking.requestExpiresAt = new Date(Date.now() + REQUEST_WINDOW_MS);
       booking.statusHistory.push({
         status: "requested",
         note: "Accept rolled back — the slot was just confirmed for another request",
@@ -998,8 +1007,11 @@ exports.completeBooking = async (req, res, next) => {
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
     }
-    if (!["accepted", "confirmed", "in_progress"].includes(booking.status)) {
-      return res.status(400).json({ message: "Only active (accepted) bookings can be marked completed" });
+    // Completion requires a paid, live booking — an unpaid `accepted`
+    // request must never jump straight to `completed` without payment,
+    // service start, or hours running.
+    if (!["confirmed", "in_progress"].includes(booking.status)) {
+      return res.status(400).json({ message: "Only paid, live (confirmed) bookings can be marked completed" });
     }
 
     booking.status = "completed";
@@ -1100,6 +1112,13 @@ exports.cancelBooking = async (req, res, next) => {
 
     if (["completed", "cancelled", "rejected", "expired"].includes(booking.status)) {
       return res.status(400).json({ message: "Booking cannot be cancelled" });
+    }
+
+    // Once the service clock is running the session is underway — it can't
+    // be cancelled for a full refund. Partial/no-show settlement goes
+    // through support instead of the self-serve path.
+    if (booking.serviceStartedAt) {
+      return res.status(400).json({ message: "Service has already started — this booking can no longer be cancelled. Please contact support." });
     }
 
     booking.status = "cancelled";
@@ -1225,6 +1244,14 @@ exports.rescheduleBooking = async (req, res, next) => {
     if (localDayString(day) < localDayString()) {
       return res.status(400).json({ message: "That date already passed — please pick today or a future date" });
     }
+    // Same-day guard: the date check above allows today, but a start time
+    // that already passed today must be refused like past dates are.
+    if (localDayString(day) === localDayString()) {
+      const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+      if (startMin <= nowMin) {
+        return res.status(400).json({ message: "That time already passed today — please pick a later start time" });
+      }
+    }
 
     const durMin = Math.round(Number(booking.durationHours || 0) * 60);
     if (!Number.isInteger(Number(booking.durationHours)) || durMin < 60 || durMin > 4 * 60) {
@@ -1260,6 +1287,15 @@ exports.rescheduleBooking = async (req, res, next) => {
       status: booking.status,
       note: `Rescheduled from ${oldLabel} to ${newLabel} by customer`,
     });
+    // A move must not inherit a stale near-expired hold/payment window —
+    // refresh them from the move so an accepted-unpaid booking isn't
+    // instantly cancelled on the next read.
+    if (booking.status === "requested") {
+      booking.requestExpiresAt = new Date(Date.now() + REQUEST_WINDOW_MS);
+    }
+    if (booking.status === "accepted" && booking.payment?.status !== "paid") {
+      booking.paymentExpiresAt = new Date(Date.now() + PAYMENT_WINDOW_MS);
+    }
     await booking.save();
 
     // Post-move race verification (same TOCTOU as accept): two concurrent
@@ -1327,8 +1363,12 @@ exports.startService = async (req, res, next) => {
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
     }
-    if (!["accepted", "confirmed", "in_progress"].includes(booking.status)) {
-      return res.status(400).json({ message: "Only accepted bookings can start service" });
+    // The clock only runs on paid work: confirmed/in_progress, or a legacy
+    // accepted booking whose payment is already recorded. Unpaid requests
+    // must never start the service clock.
+    const prepaid = booking.payment?.status === "paid";
+    if (!["confirmed", "in_progress"].includes(booking.status) && !(booking.status === "accepted" && prepaid)) {
+      return res.status(400).json({ message: "Only paid, confirmed bookings can start service" });
     }
     if (booking.serviceStartedAt) {
       const obj = stripServiceOtp(booking);
@@ -1441,8 +1481,10 @@ exports.markCookArrived = async (req, res, next) => {
     if (!booking) {
       return res.status(404).json({ message: "Booking not found" });
     }
-    if (["completed", "cancelled", "rejected", "expired"].includes(booking.status)) {
-      return res.status(400).json({ message: "Booking is no longer active" });
+    // Arrival only makes sense once the request is accepted — never on a
+    // pending `requested` hold or a terminal booking.
+    if (!["accepted", "confirmed", "in_progress"].includes(booking.status)) {
+      return res.status(400).json({ message: "The booking must be accepted before arrival can be marked" });
     }
     const justArrived = await markArrivedIfNeeded(booking);
     // Cook-facing response: never leak the service-start OTP.
@@ -1579,7 +1621,7 @@ exports.getBookingById = async (req, res, next) => {
 // integration).
 exports.payBooking = async (req, res, next) => {
   try {
-    const booking = await Booking.findOne({
+    let booking = await Booking.findOne({
       _id: req.params.id,
       customer: req.user.id,
     });
@@ -1601,8 +1643,20 @@ exports.payBooking = async (req, res, next) => {
         message: `This booking is not awaiting payment (status: ${booking.status}).`,
       });
     }
+    // Idempotent re-pay: a booking already recorded as paid (webhook or an
+    // earlier attempt) settles into `confirmed` instead of dead-ending,
+    // and repeat calls simply return the confirmed booking.
     if (booking.payment?.status === "paid") {
-      return res.status(400).json({ message: "This booking is already paid." });
+      if (booking.status === "accepted") {
+        booking.status = "confirmed";
+        booking.statusHistory.push({
+          status: "confirmed",
+          note: "Payment already recorded — confirmed on re-check.",
+        });
+        await booking.save();
+      }
+      const paidObj = booking.toObject ? booking.toObject() : booking;
+      return res.json({ ...paidObj, alreadyPaid: true });
     }
 
     // Real money only: a booking is confirmed exclusively on a verified
@@ -1634,9 +1688,11 @@ exports.payBooking = async (req, res, next) => {
       req.body?.testMode === true &&
       process.env.ALLOW_TEST_PAYMENTS === "true" &&
       process.env.NODE_ENV !== "production";
-    if (hasPayment && !allowTest) {
-      // Bind the genuine triple to this booking's stored fee (blocks replay
-      // of a cheaper order's payment onto this booking).
+    // Bind the genuine triple to this booking's stored fee (blocks replay
+    // of a cheaper order's payment onto this booking). Enforced whenever a
+    // real triple is presented — including test mode — so testMode can never
+    // launder a cheap genuine payment onto an expensive booking.
+    if (hasPayment) {
       const orderErr = await assertRazorpayOrderAmount(razorpayOrderId, Number(booking.amount || 0) * 100);
       if (orderErr) {
         return res.status(402).json({ message: orderErr });
@@ -1650,7 +1706,7 @@ exports.payBooking = async (req, res, next) => {
     }
     const method = String(req.body?.method || "upi").toLowerCase();
     const now = new Date();
-    booking.payment = {
+    const paymentDoc = {
       status: "paid",
       paidAmount: booking.amount,
       paidAt: now,
@@ -1663,14 +1719,29 @@ exports.payBooking = async (req, res, next) => {
           }
         : { razorpayOrderId, razorpayPaymentId, razorpaySignature }),
     };
-    booking.status = "confirmed";
-    booking.statusHistory.push({
+    const confirmEntry = {
       status: "confirmed",
       note: allowTest
         ? `Test payment (no real money) via ${method}`
         : `Payment received via ${method}`,
-    });
-    await booking.save();
+    };
+    // Atomic claim: only one concurrent pay attempt flips accepted+unpaid to
+    // confirmed. A lost race re-reads — paid elsewhere means success (the
+    // idempotent path above returns it), anything else is a conflict.
+    const claimed = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: "accepted", "payment.status": { $ne: "paid" } },
+      { $set: { payment: paymentDoc, status: "confirmed" }, $push: { statusHistory: confirmEntry } },
+      { new: true }
+    );
+    if (!claimed) {
+      const fresh = await Booking.findOne({ _id: booking._id, customer: req.user.id });
+      if (fresh?.payment?.status === "paid") {
+        const freshObj = fresh.toObject ? fresh.toObject() : fresh;
+        return res.json({ ...freshObj, alreadyPaid: true });
+      }
+      return res.status(409).json({ message: "Payment is already being processed — please check your bookings." });
+    }
+    booking = claimed;
 
     // Load both parties first — the cook's confirmation notification below
     // carries the full job details (customer, service, guests, venue + pin).

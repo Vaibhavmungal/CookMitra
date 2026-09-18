@@ -90,7 +90,7 @@ const Footer = () => {
               </li>
               <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
                 <Camera size={16} />
-                <a href="https://instagram.com/cookmitra_india" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>Instagram: @cookmitra_india</a>
+                <a href="https://instagram.com/contactuscookmitra" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>Instagram: @contactuscookmitra</a>
               </li>
             </ul>
           </div>

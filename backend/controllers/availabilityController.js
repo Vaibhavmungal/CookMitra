@@ -113,13 +113,24 @@ exports.setAvailability = async (req, res, next) => {
     if (sMin == null || eMin == null || eMin <= sMin) {
       return res.status(400).json({ message: "End time must be after start time" });
     }
-    const existing = await Availability.findOne({
+    // Overlap check, not exact-match: a stored 09:00–12:00 window must also
+    // block a new 10:00–11:00 window (and vice versa), not just an identical
+    // start time.
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+    const sameDay = await Availability.find({
       cook: req.user.id,
-      date: day,
-      startTime,
+      date: { $gte: dayStart, $lte: dayEnd },
+    }).select("startTime endTime");
+    const clash = (sameDay || []).some((s) => {
+      const rs = timeToMinutes(s.startTime);
+      const re = timeToMinutes(s.endTime);
+      return rs != null && re != null && sMin < re && rs < eMin;
     });
-    if (existing) {
-      return res.status(400).json({ message: "Slot already exists" });
+    if (clash) {
+      return res.status(400).json({ message: "This overlaps an existing slot" });
     }
 
     const slot = await Availability.create({

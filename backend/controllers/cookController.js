@@ -8,6 +8,7 @@ const {
   getDayBookings,
   computeStartOptions,
   localDayString,
+  parseDay,
   resolveCookAvailability,
   timeToMinutes,
   intervalsOverlap,
@@ -104,7 +105,10 @@ exports.getCooks = async (req, res, next) => {
     // date + startTime + endTime -> that exact window must be free (so a cook
     // busy 10:00-13:00 never shows for a 10:00-13:00 search).
     if (date) {
-      if (Number.isNaN(new Date(date).getTime())) {
+      // Local-midnight parse like the slot engine — new Date("YYYY-MM-DD")
+      // is UTC midnight and validates/wraps to the wrong local day.
+      const parsedDate = parseDay(date);
+      if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
         return res.status(400).json({ message: "Invalid date" });
       }
       const { startTime: exactStartRaw, endTime: exactEndRaw } = req.query;
@@ -405,14 +409,14 @@ exports.getAvailableSlots = async (req, res, next) => {
     let cookId = req.params.id;
     let profile = null;
     try {
-      profile = await CookProfile.findById(cookId).select("user availabilityStatus unavailableDate");
+      profile = await CookProfile.findById(cookId).select("user availabilityStatus unavailableDate approvalStatus");
       if (profile?.user) cookId = profile.user.toString();
     } catch {
       // not a profile id — fall through and use the param as a user id
     }
     if (!profile) {
       profile = await CookProfile.findOne({ user: cookId }).select(
-        "availabilityStatus unavailableDate"
+        "availabilityStatus unavailableDate approvalStatus"
       );
     }
 
@@ -422,12 +426,32 @@ exports.getAvailableSlots = async (req, res, next) => {
       return res.json([]);
     }
 
+    // Mirror getCook: unapproved / suspended cooks expose no public slots.
+    // The cook themself and admins still see the raw list.
+    const viewerAdmin = req.user && String(req.user.role).toUpperCase() === "ADMIN";
+    const viewerSelf = req.user?.id != null && String(req.user.id) === String(cookId);
+    if (profile && !viewerAdmin && !viewerSelf) {
+      let suspended = false;
+      try {
+        const cookUser = await User.findById(cookId).select("status");
+        suspended = cookUser?.status === "suspended";
+      } catch {
+        suspended = false;
+      }
+      if (profile.approvalStatus !== "approved" || suspended) {
+        return res.json([]);
+      }
+    }
+
     const filter = { cook: cookId, status: "available" };
     if (date) {
       // Match the same LOCAL-midnight day range the booking slot engine uses
       // (parseDay + dayBounds), instead of new Date("YYYY-MM-DD") which is UTC
       // midnight and lands on the wrong local day on non-UTC servers.
       const start = parseDay(date);
+      if (!start || Number.isNaN(start.getTime())) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
       const end = new Date(start);
       end.setHours(23, 59, 59, 999);
       filter.date = { $gte: start, $lte: end };

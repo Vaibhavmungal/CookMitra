@@ -44,7 +44,7 @@ exports.createReview = async (req, res, next) => {
 
     const existingReview = await Review.findOne({ booking: bookingId });
     if (existingReview) {
-      return res.status(400).json({ message: "Review already exists" });
+      return res.status(409).json({ message: "Review already exists" });
     }
 
     const review = await Review.create({

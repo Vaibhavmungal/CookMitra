@@ -92,7 +92,7 @@ const bookingSchema = new mongoose.Schema(
     slabPrice: { type: Number, default: 0 },
     couponCode: { type: String, default: "", trim: true, uppercase: true },
     discount: { type: Number, default: 0 },
-    // Platform ~10% of the final amount; the cook earns the rest.
+    // Platform 25% of the final amount; the cook earns the rest (75%).
     commission: { type: Number, default: 0 },
     cookPayout: { type: Number, default: 0 },
     // Prepaid fee via Razorpay — collected BEFORE booking is created.
@@ -122,6 +122,11 @@ const bookingSchema = new mongoose.Schema(
       // True for dev-gated test checkouts (no real money). Lets test
       // payments be told apart from real gateway payments later.
       testMode: { type: Boolean, default: false },
+      // True when paid via webhook reconciliation (no checkout signature
+      // exists). A real boolean beats a sentinel signature string, which a
+      // future `if (payment.razorpaySignature)` check would misread as proof
+      // of a verified checkout triple.
+      webhookReconciled: { type: Boolean, default: false },
     },
     // 5-minute confirmation windows:
     // - requestExpiresAt: the cook must accept within 5 minutes of the

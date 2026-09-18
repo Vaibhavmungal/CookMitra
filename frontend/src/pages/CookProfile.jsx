@@ -48,7 +48,8 @@ const CookProfile = () => {
   }
 
   const handleBookingSubmit = (booking) => {
-    showToast(`Booking request sent! Status: ${booking.status.toUpperCase()}`, "success");
+    const status = booking?.status ? String(booking.status).toUpperCase() : "";
+    showToast(`Booking request sent!${status ? ` Status: ${status}` : ""}`, "success");
   };
 
   const reviewCount = cook?.rating?.count || 0;

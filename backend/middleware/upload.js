@@ -42,7 +42,9 @@ const fileFilter = (req, file, cb) => {
 const cookDocUpload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB per file
+  // 5 MB per file, at most 3 files / 5 fields per request — a single-file
+  // cap alone still allows disk-fill via many small parts.
+  limits: { fileSize: 5 * 1024 * 1024, files: 3, fields: 5 },
 });
 
 module.exports = { cookDocUpload, cookDocUploadDir: uploadDir };

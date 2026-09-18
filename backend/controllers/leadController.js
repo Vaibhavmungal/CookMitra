@@ -28,10 +28,17 @@ exports.createLead = async (req, res, next) => {
       });
     }
 
+    // Missing fields must not coerce to the literal "undefined" string.
+    if (typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ message: "Name is required" });
+    }
+    if (typeof location !== "string" || !location.trim()) {
+      return res.status(400).json({ message: "Location is required" });
+    }
     const leadData = {
-      name: String(name).trim(),
+      name: name.trim(),
       whatsapp,
-      location: String(location).trim(),
+      location: location.trim(),
     };
     const { lat, lng } = req.body.coords || {};
     const numLat = Number(lat);

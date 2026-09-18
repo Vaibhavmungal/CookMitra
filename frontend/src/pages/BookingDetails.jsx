@@ -784,7 +784,7 @@ const BookingDetails = () => {
         )}
         {user?.role === "cook" && Number(booking.cookPayout) > 0 && (
           <div className="bd-payout">
-            Your payout (90%): <strong>{formatCurrency(booking.cookPayout)}</strong>
+            Your payout (75%): <strong>{formatCurrency(booking.cookPayout)}</strong>
           </div>
         )}
         <div className="bd-facts">

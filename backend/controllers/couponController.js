@@ -72,7 +72,22 @@ exports.listActiveCoupons = async (req, res, next) => {
         .sort({ percent: -1 }),
       pg
     );
-    return sendList(res, coupons, pg);
+    // Total must count the whole active set, not just the returned page.
+    const countActive = () =>
+      Coupon.countDocuments({
+        active: true,
+        $and: [
+          { $or: [{ validFrom: null }, { validFrom: { $lte: now } }] },
+          { $or: [{ validTo: null }, { validTo: { $gte: now } }] },
+          {
+            $or: [
+              { usageLimit: null },
+              { $expr: { $lt: ["$usedCount", "$usageLimit"] } },
+            ],
+          },
+        ],
+      });
+    return sendList(res, coupons, pg, countActive);
   } catch (error) {
     next(error);
   }
@@ -103,7 +118,7 @@ exports.createCoupon = async (req, res, next) => {
     res.status(201).json(coupon);
   } catch (error) {
     if (error?.code === 11000) {
-      return res.status(400).json({ message: "A coupon with this code already exists" });
+      return res.status(409).json({ message: "A coupon with this code already exists" });
     }
     next(error);
   }
@@ -125,7 +140,7 @@ exports.updateCoupon = async (req, res, next) => {
     res.json(coupon);
   } catch (error) {
     if (error?.code === 11000) {
-      return res.status(400).json({ message: "A coupon with this code already exists" });
+      return res.status(409).json({ message: "A coupon with this code already exists" });
     }
     next(error);
   }

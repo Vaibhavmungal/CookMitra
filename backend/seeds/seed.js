@@ -7,6 +7,8 @@ const Booking = require("../models/Booking");
 const Review = require("../models/Review");
 const Notification = require("../models/Notification");
 const Coupon = require("../models/Coupon");
+const Complaint = require("../models/Complaint");
+const Lead = require("../models/Lead");
 const { INITIAL_COUPONS, RETIRED_COUPON_CODES } = require("../utils/couponCatalog");
 
 dotenv.config();
@@ -40,6 +42,10 @@ const seedData = async () => {
     await Review.deleteMany({});
     await Notification.deleteMany({});
     await Coupon.deleteMany({});
+    // Complaints/leads hold cook/customer refs — wiping without them leaves
+    // dangling references after every reseed.
+    await Complaint.deleteMany({});
+    await Lead.deleteMany({});
 
     const admin = await User.create({
       name: "Admin",
@@ -126,6 +132,9 @@ const seedData = async () => {
     console.log(
       `Seeded ${INITIAL_COUPONS.length} promo coupons (${INITIAL_COUPONS.map((c) => c.code).join(", ")})`
     );
+    // Disconnect first so buffered writes flush — exiting mid-flush can
+    // truncate the seed on slow connections.
+    await mongoose.disconnect();
     process.exit(0);
   } catch (error) {
     console.error("Seeding error:", error);

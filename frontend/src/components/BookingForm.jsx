@@ -4,6 +4,7 @@ import API from "../api/axios";
 import { useDispatch, useSelector } from "react-redux";
 import { updateUser } from "../store/authSlice";
 import { useShowToast, useSiteLocation } from "../store/hooks";
+import { AnalyticsEvents, track } from "../utils/analytics";
 import { formatCurrency, localTodayStr, slabPriceForDuration, LAUNCH_SLAB_PRICES } from "../utils/constants";
 import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/bookingDraft";
 import CouponApply from "./CouponApply";
@@ -229,6 +230,12 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
 
   const goNext = () => {
     if (step === 0 && !formData.serviceType) { setError("Select a service type"); scrollToError(); return; }
+    if (step === 0) {
+      track(AnalyticsEvents.BOOKING_START, {
+        service_type: formData.serviceType,
+        ...(cookId ? { cook_id: String(cookId) } : {}),
+      });
+    }
     if (step === 1) {
       if (!formData.date) { setError("Please choose a date"); scrollToError(); return; }
       if (formData.date < minDateStr) { setError("That date already passed — please pick today or a future date"); scrollToError(); return; }
@@ -521,6 +528,14 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
       if (coords) payload.location = coords;
       const res = await API.post("/bookings", payload);
       clearBookingDraft();
+      track(AnalyticsEvents.BOOKING_REQUESTED, {
+        booking_id: String(res.data?._id || ""),
+        service_type: formData.serviceType,
+        duration_hours: serviceHours,
+        amount: Number(finalAmount) || 0,
+        ...(coupon?.code ? { coupon_code: coupon.code } : {}),
+        ...(cookId ? { cook_id: String(cookId) } : {}),
+      });
       showToast("Request sent — slot held for 5 min.", "success", 7000);
       onSubmit?.(res.data);
       navigate(`/bookings/${res.data._id}/wait`);
@@ -838,7 +853,15 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
                             type="button"
                             aria-pressed={active}
                             className={`bk-hour-btn ${active ? "active" : ""}`}
-                            onClick={() => setFormData((p) => ({ ...p, startTime: t }))}
+                            onClick={() => {
+                              setFormData((p) => ({ ...p, startTime: t }));
+                              track(AnalyticsEvents.SLOT_SELECTED, {
+                                date: formData.date,
+                                start_time: t,
+                                duration_hours: Number(formData.durationHours) || null,
+                                ...(cookId ? { cook_id: String(cookId) } : {}),
+                              });
+                            }}
                           >
                             {fmtHour12(t)}
                           </button>

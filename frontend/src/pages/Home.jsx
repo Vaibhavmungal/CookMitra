@@ -225,6 +225,70 @@ const PendingCookRatings = () => {
   );
 };
 
+// Homepage trust stats — live from GET /api/stats/public (see backend
+// routes/stats.js). Hardcoded marketing numbers are a CCPA 2022
+// misleading-ad exposure for a payment merchant, so the hero only renders a
+// stat once it is meaningful, and falls back to honest "growing" copy.
+const STAT_MINIMUMS = { cooks: 5, bookings: 20, ratings: 5 };
+
+const HeroStats = () => {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    API.get("/stats/public")
+      .then((res) => {
+        if (!cancelled) setStats(res.data || null);
+      })
+      .catch(() => {
+        // Stats are decorative — the hero must render without them.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const showCooks = (stats?.cooks ?? 0) >= STAT_MINIMUMS.cooks;
+  const showBookings = (stats?.bookings ?? 0) >= STAT_MINIMUMS.bookings;
+  const showRating =
+    (stats?.ratingCount ?? 0) >= STAT_MINIMUMS.ratings && stats?.ratingAverage != null;
+
+  // Pre-launch: nothing is meaningful yet — render nothing instead of
+  // placeholder stats.
+  if (!showCooks && !showBookings && !showRating) {
+    return null;
+  }
+
+  return (
+    <div className="hero-v2-stats">
+      {showCooks && (
+        <>
+          <div className="hero-v2-stat">
+            <div className="hero-v2-stat-num"><CountUp to={stats.cooks} suffix="+" /></div>
+            <div className="hero-v2-stat-label">Verified Cooks</div>
+          </div>
+          <div className="hero-v2-stat-sep" />
+        </>
+      )}
+      {showBookings && (
+        <>
+          <div className="hero-v2-stat">
+            <div className="hero-v2-stat-num"><CountUp to={stats.bookings} suffix="+" /></div>
+            <div className="hero-v2-stat-label">Sessions Completed</div>
+          </div>
+          <div className="hero-v2-stat-sep" />
+        </>
+      )}
+      {showRating && (
+        <div className="hero-v2-stat">
+          <div className="hero-v2-stat-num"><CountUp to={stats.ratingAverage} decimals={1} suffix=" ★" /></div>
+          <div className="hero-v2-stat-label">Average Rating</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Home = () => {
   const user = useSelector((s) => s.auth.user);
   const dispatch = useDispatch();
@@ -484,27 +548,7 @@ const Home = () => {
           </div>
         </div>
 
-        <div className="hero-v2-stats">
-          <div className="hero-v2-stat">
-            <div className="hero-v2-stat-num"><CountUp to={50} suffix="+" /></div>
-            <div className="hero-v2-stat-label">Heritage Recipes</div>
-          </div>
-          <div className="hero-v2-stat-sep" />
-          <div className="hero-v2-stat">
-            <div className="hero-v2-stat-num"><CountUp to={100} suffix="+" /></div>
-            <div className="hero-v2-stat-label">Verified Cooks</div>
-          </div>
-          <div className="hero-v2-stat-sep" />
-          <div className="hero-v2-stat">
-            <div className="hero-v2-stat-num"><CountUp to={4.9} decimals={1} suffix=" ★" /></div>
-            <div className="hero-v2-stat-label">Average Rating</div>
-          </div>
-          <div className="hero-v2-stat-sep" />
-          <div className="hero-v2-stat">
-            <div className="hero-v2-stat-num"><CountUp to={10} suffix="+" /></div>
-            <div className="hero-v2-stat-label">Cities Served</div>
-          </div>
-        </div>
+        <HeroStats />
       </section>
 
       {/* Scrolling dishes ticker */}
@@ -832,11 +876,13 @@ const Home = () => {
           </span>
           <h2>Are You a Skilled Home Cook?</h2>
           <p>
-            Earn during festive seasons by sharing your traditional culinary recipes and cooking skills with families in your city.
+            Keep 75% of every booking — discounts are on us. Earn during festive
+            seasons by sharing your traditional culinary recipes and cooking skills
+            with families in your city.
           </p>
           <ul className="cta-cook-perks">
             <li>
-              <BadgeIndianRupee size={16} /> Earn per booking
+              <BadgeIndianRupee size={16} /> Keep 75% of every booking
             </li>
             <li>
               <CalendarClock size={16} /> Flexible slots

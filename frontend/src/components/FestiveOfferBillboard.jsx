@@ -6,8 +6,6 @@ import {
   Copy,
   Check,
   ChefHat,
-  PartyPopper,
-  Clock,
   Gift,
   Flame,
   Star,
@@ -15,11 +13,10 @@ import {
 } from "lucide-react";
 
 const SEEN_KEY = "cm-festive-offer-seen";
-const STRIP_KEY = "cm-festive-strip-dismissed";
 // Ganesh Utsav 2026 (Sept 14 – Sept 25) — offer runs till midnight after
 // Visarjan on Anant Chaturdashi (Sept 25).
 const OFFER_END = new Date("2026-09-26T00:00:00");
-// Promo code shown on the strip + popup. Fetched live from the backend
+// Promo code shown on the popup. Fetched live from the backend
 // /api/coupons/active list (admin-managed); this is the graceful fallback and
 // must always name a real code from backend/utils/couponCatalog.js.
 const OFFER_CODE = "FESTIVE20";
@@ -42,29 +39,29 @@ const GULAB_JAMUN_IMG = "https://images.pexels.com/photos/15014919/pexels-photo-
 const FOODS = [
   {
     name: "Modak",
-    tag: "−20%",
-    tagClass: "off",
+    tag: "Festive",
+    tagClass: "hot",
     src: MODAK_IMG,
     alt: "Steamed Ukadiche Modak for Ganesh Chaturthi",
   },
   {
     name: "Puran Poli",
-    tag: "−15%",
-    tagClass: "off",
+    tag: "Classic",
+    tagClass: "hot",
     src: PURAN_POLI_IMG,
     alt: "Sweet Puran Poli flatbread",
   },
   {
     name: "Karanji",
-    tag: "−25%",
-    tagClass: "off",
+    tag: "Festive",
+    tagClass: "hot",
     src: KARANJI_IMG,
     alt: "Fried Karanji sweet pastry",
   },
   {
     name: "Ladoo",
-    tag: "−10%",
-    tagClass: "off",
+    tag: "Popular",
+    tagClass: "hot",
     src: LADOO_IMG,
     alt: "Bite-sized Motichoor Ladoo sweets",
   },
@@ -77,8 +74,8 @@ const FOODS = [
   },
   {
     name: "Gulab Jamun",
-    tag: "−18%",
-    tagClass: "off",
+    tag: "Popular",
+    tagClass: "hot",
     src: GULAB_JAMUN_IMG,
     alt: "Sweet Gulab Jamun",
   },
@@ -107,7 +104,6 @@ const pad = (n) => String(n).padStart(2, "0");
 
 const FestiveOfferBillboard = () => {
   const [showModal, setShowModal] = useState(false);
-  const [showStrip, setShowStrip] = useState(false);
   const [copied, setCopied] = useState(false);
   const { d, h, m, s, expired } = useCountdown();
 
@@ -140,14 +136,11 @@ const FestiveOfferBillboard = () => {
     let timer;
     try {
       const seen = sessionStorage.getItem(SEEN_KEY);
-      const stripOff = localStorage.getItem(STRIP_KEY);
-      if (!stripOff) setShowStrip(true);
       if (!seen) {
         timer = setTimeout(() => setShowModal(true), 900);
       }
     } catch {
       timer = setTimeout(() => setShowModal(true), 900);
-      setShowStrip(true);
     }
     return () => clearTimeout(timer);
   }, []);
@@ -179,15 +172,6 @@ const FestiveOfferBillboard = () => {
     }
   };
 
-  const dismissStrip = () => {
-    setShowStrip(false);
-    try {
-      localStorage.setItem(STRIP_KEY, "1");
-    } catch {
-      /* ignore */
-    }
-  };
-
   const copyCode = async () => {
     try {
       await navigator.clipboard.writeText(heroCode);
@@ -200,31 +184,6 @@ const FestiveOfferBillboard = () => {
 
   return (
     <>
-      {/* Festive billboard strip */}
-      {showStrip && (
-        <div className="festive-strip" role="region" aria-label="Festive offer">
-          <p className="festive-strip-text">
-            <PartyPopper size={15} className="festive-strip-pop" />
-            <span>
-              <strong>Ganesh Utsav — Up to {heroPercent}% OFF</strong>
-              <span className="festive-strip-sub"> on festive cooks</span>{" "}
-              <strong className="festive-strip-code">{heroCode}</strong>
-            </span>{" "}
-            <span className="festive-strip-timer">
-              <Clock size={13} />
-              {expired ? "Ends tonight!" : `Ends in ${d}d : ${pad(h)}h : ${pad(m)}m`}
-            </span>
-          </p>
-          <button
-            className="festive-strip-close"
-            onClick={dismissStrip}
-            aria-label="Dismiss festive offer banner"
-          >
-            <X size={15} />
-          </button>
-        </div>
-      )}
-
       {/* Entry popup billboard */}
       {showModal && (
         <div

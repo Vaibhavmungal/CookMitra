@@ -686,6 +686,15 @@ const CookBooking = () => {
 
   // Cooks free at the step-2 slot, each carrying its matching slot object
   // for one-tap booking.
+  // Slots built by aggregateSlots ({ startTime, endTime, freeCooks }) carry
+  // no _id — key the per-card "Booking…" state by cook + slot time so only
+  // the tapped card disables (keying by slot._id is always undefined, which
+  // makes `undefined === undefined` true for EVERY card).
+  const bookingKey = (cook, slot) => {
+    const cookId =
+      cook?.user?._id || (typeof cook?.user === "string" ? cook.user : null) || cook?._id || "";
+    return `${cookId}_${slot?.startTime || ""}_${slot?.endTime || ""}`;
+  };
   const cooksForSlot = selectedSlot
     ? matches
         .map((c) => ({
@@ -718,7 +727,7 @@ const CookBooking = () => {
       return;
     }
     setFormError("");
-    setBookingLoading(slot._id);
+    setBookingLoading(bookingKey(cook, slot));
     try {
       // Last-second availability check: the slot card was rendered from the
       // step-2 search, but another customer may have booked this cook for the
@@ -1387,11 +1396,11 @@ const CookBooking = () => {
                     <button
                       type="button"
                       className="btn btn-primary btn-block btn-lg od-bookbtn"
-                      disabled={bookingLoading === cook.slot._id}
+                      disabled={bookingLoading === bookingKey(cook, cook.slot)}
                       onClick={() => handleBook(cook, cook.slot)}
                       title={`Book ${cook.user?.name || "this cook"} for ${formatCurrency(fee)}`}
                     >
-                      {bookingLoading === cook.slot._id
+                      {bookingLoading === bookingKey(cook, cook.slot)
                         ? <span className="bk-submit-loading">Booking…</span>
                         : <>Book {(cook.user?.name || "Cook").split(" ")[0]} <ArrowRight size={17} /></>}
                     </button>

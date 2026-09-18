@@ -101,7 +101,12 @@ router.put(
       .trim()
       .notEmpty()
       .withMessage("Phone is required"),
-    body("address").optional().trim(),
+    body("mobile")
+      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage("Mobile is required"),
+    body("address").optional().trim().isLength({ max: 500 }).withMessage("Address is too long"),
   ],
   validate,
   updateProfile

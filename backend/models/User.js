@@ -122,6 +122,9 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
+// Hot-pathed by role directory scans (complaint escalation, admin lists).
+userSchema.index({ role: 1, status: 1 });
+
 const User = mongoose.model("User", userSchema);
 
 User.USER_ROLES = USER_ROLES;

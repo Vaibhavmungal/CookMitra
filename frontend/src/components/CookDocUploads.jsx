@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import API from "../api/axios";
+import API, { getStoredToken } from "../api/axios";
 import { useShowToast } from "../store/hooks";
 import { Upload, FileCheck, X, Camera } from "lucide-react";
 
@@ -37,7 +37,19 @@ const API_ORIGIN = resolveApiOrigin();
 export const resolveFileUrl = (url) => {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
-  return `${API_ORIGIN}${url.startsWith("/") ? url : `/${url}`}`;
+  const full = `${API_ORIGIN}${url.startsWith("/") ? url : `/${url}`}`;
+  // Identity docs (aadhar_*/pan_*) are access-controlled server-side via
+  // ?token= — <img>/<iframe> can't send auth headers. Public profile photos
+  // (photo_*) stay bare so they remain cacheable and shareable.
+  const base = String(url).split("/").pop().split("?")[0];
+  if (!url.startsWith("/uploads") || /^photo_/i.test(base)) return full;
+  try {
+    const token = getStoredToken();
+    if (token) return `${full}${full.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+  } catch {
+    // ignore — the server will answer 401 and the thumb degrades gracefully
+  }
+  return full;
 };
 
 const FIELD_TO_KEY = {

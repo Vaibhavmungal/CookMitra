@@ -6,6 +6,7 @@
 // suspended accounts, expiry, throttle, and password update + token clearing.
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
 delete process.env.SMTP_HOST; // ensure the no-email dev path is exercised
+process.env.ALLOW_DEV_TOKENS = "true"; // opt into the dev token echo (off by default)
 
 const crypto = require("crypto");
 const Types = require("mongoose").Types;

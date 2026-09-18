@@ -20,6 +20,7 @@ import {
 import API from "../api/axios";
 import { useSelector } from "react-redux";
 import { useShowToast } from "../store/hooks";
+import { AnalyticsEvents, track } from "../utils/analytics";
 import { SERVICE_DETAILS, formatCurrency, formatDate } from "../utils/constants";
 
 const WINDOW_MS = 5 * 60 * 1000; // 5-minute payment window
@@ -232,6 +233,11 @@ const BookingPayment = () => {
             setCookWaUrl(res.data?.cookWhatsappUrl || null);
             setSelfWaUrl(res.data?.customerWhatsappUrl || null);
             setPhase("success");
+            track(AnalyticsEvents.PAYMENT_SUCCESS, {
+              booking_id: String(bookingId || ""),
+              amount: Number(booking?.amount) || 0,
+              method,
+            });
             showToast("Payment successful — booking confirmed!", "success");
             // Linger so the customer can use the WhatsApp share buttons.
             setTimeout(() => {

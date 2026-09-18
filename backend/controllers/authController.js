@@ -180,7 +180,8 @@ exports.googleAuth = async (req, res, next) => {
     if (!googleId || !email) {
       return res.status(401).json({ message: "Google account did not return an email" });
     }
-    if (emailVerified === false) {
+    // Strict: a missing claim is treated as unverified, not as verified.
+    if (emailVerified !== true) {
       return res.status(401).json({ message: "Google email is not verified" });
     }
 
@@ -257,14 +258,24 @@ const forgotAllowed = (key) => {
   if (hits.length >= MAX) return false;
   hits.push(now);
   forgotAttempts.set(key, hits);
+  // Bound memory: evict keys whose windows fully expired (prevents slow
+  // unbounded Map growth across a long-lived process).
+  if (forgotAttempts.size > 5000) {
+    for (const [k, v] of forgotAttempts) {
+      if (!v.length || now - v[v.length - 1] >= WINDOW_MS) forgotAttempts.delete(k);
+      if (forgotAttempts.size <= 4000) break;
+    }
+  }
   return true;
 };
 
 // POST /api/auth/forgot-password — request a password-reset token.
 // Always responds 200 with a generic message (no account enumeration).
 // Delivery: SMTP email when configured (utils/mailer); otherwise the raw
-// token is returned ONLY outside production (dev testing) — in production
-// without SMTP the user must contact support / an admin.
+// token is returned ONLY when the server explicitly opts in via
+// ALLOW_DEV_TOKENS=true AND is not production (dev testing) — any other
+// environment answers generic, because "not production" alone would leak
+// reset tokens from staging/test deployments too.
 exports.forgotPassword = async (req, res, next) => {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -301,13 +312,16 @@ exports.forgotPassword = async (req, res, next) => {
     } catch {
       // fall through to the dev/prod handling below
     }
-    if (process.env.NODE_ENV === "production") {
-      console.error(
-        "Password-reset token minted but no email delivery is configured — set SMTP_* (and install nodemailer) to email reset links."
-      );
+    if (process.env.NODE_ENV === "production" || process.env.ALLOW_DEV_TOKENS !== "true") {
+      if (process.env.NODE_ENV === "production") {
+        console.error(
+          "Password-reset token minted but no email delivery is configured — set SMTP_* (and install nodemailer) to email reset links."
+        );
+      }
       return res.json(generic);
     }
-    // Dev/test only: hand the token back so the flow is testable without SMTP.
+    // Explicit dev opt-in only: hand the token back so the flow is testable
+    // without SMTP. Never enabled on staging/test deployments.
     return res.json({ ...generic, resetToken: token, devOnly: true });
   } catch (error) {
     next(error);
@@ -464,12 +478,18 @@ exports.adminAddCook = async (req, res, next) => {
     }
 
     // Welcome notification so the new cook knows their account is ready.
-    const Notification = require("../models/Notification");
-    await Notification.create({
-      user: user._id,
-      type: "general",
-      message: "Welcome to Cook Mitra! Your chef account is approved and ready for bookings.",
-    });
+    // Non-fatal: the account already exists — a notification outage must not
+    // 500 the request (the client would retry into "email exists" confusion).
+    try {
+      const Notification = require("../models/Notification");
+      await Notification.create({
+        user: user._id,
+        type: "general",
+        message: "Welcome to Cook Mitra! Your chef account is approved and ready for bookings.",
+      });
+    } catch {
+      // ignore
+    }
 
     res.status(201).json({
       user: {
@@ -512,12 +532,16 @@ exports.adminAddAdmin = async (req, res, next) => {
       throw error;
     }
 
-    const Notification = require("../models/Notification");
-    await Notification.create({
-      user: user._id,
-      type: "general",
-      message: "Welcome to Cook Mitra! Your admin account is ready — sign in to open the Admin Control Panel.",
-    });
+    try {
+      const Notification = require("../models/Notification");
+      await Notification.create({
+        user: user._id,
+        type: "general",
+        message: "Welcome to Cook Mitra! Your admin account is ready — sign in to open the Admin Control Panel.",
+      });
+    } catch {
+      // non-fatal: the account already exists
+    }
 
     res.status(201).json({
       user: {
