@@ -320,6 +320,17 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
       formData.landmark.trim() ? `, Near ${formData.landmark.trim()}` : ""
     }${formData.city.trim() ? `, ${formData.city.trim()}` : ""}`;
 
+  /* ── Profile address (locked summary card + Edit button) ── */
+  const profileAddress = String(user?.address || "").trim();
+  const [addrEditing, setAddrEditing] = useState(false);
+  // Summary shown while locked: the composed form address (profile/saved/
+  // detected fill), falling back to the raw profile string.
+  const addrSummary =
+    [formData.flatNo, formData.society, formData.landmark ? `Near ${formData.landmark}` : "", formData.city]
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+      .join(", ") || profileAddress;
+
   /* ── Saved locations ── */
   const [savedLoaded, setSavedLoaded] = useState(false);
   useEffect(() => {
@@ -335,7 +346,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
     if (user?.role !== "customer" || user?.address !== undefined) return;
     let cancelled = false;
     API.get("/auth/me")
-      .then((res) => { if (!cancelled) dispatch(updateUser({ name: res.data?.name, phone: res.data?.phone, address: res.data?.address })); })
+      .then((res) => { if (!cancelled) dispatch(updateUser({ name: res.data?.name, phone: res.data?.phone, address: res.data?.address ?? "" })); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [user?.role, user?.address, dispatch]);
@@ -375,33 +386,47 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
     }
   };
 
+  // Auto-fill priority: profile address > most recent saved booking >
+  // (next effect) browser-detected location. A profile address also starts
+  // the form in "locked" mode (summary card + Edit button). An explicit pick
+  // from the saved-places dropdown always wins once made.
   useEffect(() => {
     if (autoFilled.current || !savedLoaded || user?.role !== "customer") return;
-    if (savedLocations.length > 0) {
-      autoFilled.current = true;
+    // Profile is still loading via /auth/me — wait so it can claim priority.
+    if (user?.address === undefined) return;
+    const fill = (src) =>
       setFormData((prev) => {
         if (prev.flatNo || prev.society || prev.landmark || prev.city) return prev;
-        const d = savedLocations[0].addressDetails || {};
-        return { ...prev, flatNo: d.flatNo || "", society: d.society || "", landmark: d.landmark || "", city: d.city || "" };
+        return {
+          ...prev,
+          flatNo: src.flatNo || "",
+          society: src.society || "",
+          landmark: src.landmark || "",
+          city: src.city || "",
+        };
       });
+    const profileAddr = String(user?.address || "").trim();
+    if (profileAddr) {
+      autoFilled.current = true;
+      // Split "Flat 402, Sunshine Society, Baner, Pune" into the form fields,
+      // same heuristic as applySavedLocation for unstructured addresses.
+      const parts = profileAddr.split(",").map((p) => p.trim()).filter(Boolean);
+      fill(
+        parts.length === 1
+          ? { society: parts[0] }
+          : parts.length === 2
+            ? { flatNo: parts[0], society: parts[1] }
+            : { flatNo: parts[0], society: parts.slice(1, -1).join(", "), city: parts[parts.length - 1] }
+      );
+      return;
+    }
+    if (savedLocations.length > 0) {
+      autoFilled.current = true;
+      fill(savedLocations[0].addressDetails || {});
       setSavedIdx("0");
       if (savedLocations[0].location?.lat != null) {
         setCoords({ lat: savedLocations[0].location.lat, lng: savedLocations[0].location.lng });
       }
-      return;
-    }
-    const profileAddress = user?.address?.trim();
-    if (profileAddress) {
-      autoFilled.current = true;
-      const parts = profileAddress.split(",").map((p) => p.trim()).filter(Boolean);
-      let flatNo = "", society = "", city = "";
-      if (parts.length === 1) society = parts[0];
-      else if (parts.length === 2) [flatNo, society] = parts;
-      else if (parts.length > 2) { flatNo = parts[0]; city = parts[parts.length - 1]; society = parts.slice(1, -1).join(", "); }
-      setFormData((prev) => {
-        if (prev.flatNo || prev.society || prev.landmark || prev.city) return prev;
-        return { ...prev, flatNo, society, city };
-      });
     }
   }, [savedLocations, savedLoaded, user?.role, user?.address]);
 
@@ -412,6 +437,9 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
   useEffect(() => {
     if (!siteLocation?.city && !siteLocation?.area && !siteLocation?.state) return;
     if (autoFilled.current) return;
+    // Logged-in customers: hold off until the profile fetch settles so a
+    // profile address keeps priority over the browser-detected location.
+    if (user?.role === "customer" && user?.address === undefined) return;
     autoFilled.current = true;
     setFormData((prev) => {
       if (prev.flatNo || prev.society || prev.landmark || prev.city) return prev;
@@ -425,7 +453,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
     if (Number.isFinite(siteLocation?.lat) && Number.isFinite(siteLocation?.lng)) {
       setCoords((c) => c || { lat: siteLocation.lat, lng: siteLocation.lng });
     }
-  }, [siteLocation?.city, siteLocation?.area, siteLocation?.state, siteLocation?.street, siteLocation?.lat, siteLocation?.lng]);
+  }, [siteLocation?.city, siteLocation?.area, siteLocation?.state, siteLocation?.street, siteLocation?.lat, siteLocation?.lng, user?.role, user?.address]);
 
   // Returning from login with an unfinished booking for THIS cook: restore
   // the filled fields + pin and land back on the confirm step. Runs once;
@@ -933,6 +961,23 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
                 </select>
               </label>
             )}
+            {profileAddress && !addrEditing ? (
+              <div className="bk-profile-addr">
+                <MapPin size={16} />
+                <div className="bk-profile-addr-text">
+                  <strong>Using your profile address</strong>
+                  <span>{addrSummary}</span>
+                </div>
+                <button
+                  type="button"
+                  className="bk-recap-edit"
+                  onClick={() => setAddrEditing(true)}
+                  aria-label="Edit address"
+                >
+                  <Pencil size={12} /> Edit
+                </button>
+              </div>
+            ) : (
             <div className="bk-field-grid">
               <div className="bk-field">
                 <label htmlFor="bk-flat">Flat / House no. *</label>
@@ -989,6 +1034,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, onSubmit }) => {
                 />
               </div>
             </div>
+            )}
             {/* Map pin status */}
             <div className={`bk-pin-card ${pinMapsUrl ? "has-pin" : ""}`}>
               <span className="bk-pin-avatar"><MapPinned size={15} /></span>

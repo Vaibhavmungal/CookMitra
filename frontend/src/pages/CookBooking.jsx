@@ -18,6 +18,7 @@ import {
   Home as HomeIcon,
   MessageCircle,
   History,
+  Pencil,
   ArrowRight,
   ArrowLeft,
   Minus,
@@ -31,7 +32,8 @@ import { formatCurrency, localTodayStr, localTomorrowStr, slabPriceForDuration, 
 import CouponApply from "../components/CouponApply";
 import CustomCalendar from "../components/CustomCalendar";
 import { resolveFileUrl } from "../components/CookDocUploads";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { updateUser } from "../store/authSlice";
 import { useShowToast, useSiteLocation } from "../store/hooks";
 import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/bookingDraft";
 
@@ -237,6 +239,10 @@ const CookBooking = () => {
   // they are still empty — typed or previously-saved input always wins.
   useEffect(() => {
     if (!siteLocation?.city && !siteLocation?.area && !siteLocation?.state) return;
+    // Logged-in customers: hold off until the profile address (which wins the
+    // auto-fill priority) has loaded — otherwise a brief race lets the
+    // detected location fill fields the profile address should own.
+    if (user?.role === "customer" && user?.address === undefined) return;
     setForm((f) => {
       if (f.flatNo || f.society || f.landmark || f.city) return f;
       return {
@@ -249,7 +255,31 @@ const CookBooking = () => {
     if (Number.isFinite(siteLocation?.lat) && Number.isFinite(siteLocation?.lng)) {
       setCoords((c) => c || { lat: siteLocation.lat, lng: siteLocation.lng });
     }
-  }, [siteLocation?.city, siteLocation?.area, siteLocation?.state, siteLocation?.street, siteLocation?.lat, siteLocation?.lng]);
+  }, [siteLocation?.city, siteLocation?.area, siteLocation?.state, siteLocation?.street, siteLocation?.lat, siteLocation?.lng, user?.role, user?.address]);
+
+  /* ── Profile address (locked summary card + Edit button) ── */
+  const profileAddress = String(user?.address || "").trim();
+  const [addrEditing, setAddrEditing] = useState(false);
+  // Summary shown while locked: the composed form address (profile/saved/
+  // detected fill), falling back to the raw profile string.
+  const addrSummary =
+    [form.flatNo, form.society, form.landmark ? `Near ${form.landmark}` : "", form.city]
+      .map((p) => String(p || "").trim())
+      .filter(Boolean)
+      .join(", ") || profileAddress;
+
+  // The stored user (localStorage from an older login) can lack the address
+  // key — refresh it from /auth/me so the profile address can claim priority
+  // and the locked summary can be decided.
+  const dispatch = useDispatch();
+  useEffect(() => {
+    if (user?.role !== "customer" || user?.address !== undefined) return;
+    let cancelled = false;
+    API.get("/auth/me")
+      .then((res) => { if (!cancelled) dispatch(updateUser({ name: res.data?.name, phone: res.data?.phone, address: res.data?.address ?? "" })); })
+      .catch(() => { if (!cancelled) dispatch(updateUser({ address: "" })); });
+    return () => { cancelled = true; };
+  }, [user?.role, user?.address, dispatch]);
 
   // Previous locations of this customer for one-tap reuse (customers only).
   useEffect(() => {
@@ -302,27 +332,46 @@ const CookBooking = () => {
     }
   };
 
-  // Existing customers: auto-fill the most recent previous address on load
-  // (only when the address fields are still untouched).
+  // Auto-fill priority: profile address > most recent previous booking
+  // (an explicit pick from the dropdown above always wins once made).
   useEffect(() => {
-    if (autoFilled.current || savedLocations.length === 0) return;
+    if (autoFilled.current) return;
+    // Wait for the customer's profile to settle (address key resolved) so the
+    // profile address can claim priority over saved bookings.
+    if (user?.role === "customer" && user?.address === undefined) return;
     autoFilled.current = true;
-    setForm((f) => {
-      if (f.flatNo || f.society || f.landmark || f.city) return f;
-      const d = savedLocations[0].addressDetails || {};
-      return {
-        ...f,
-        flatNo: d.flatNo || "",
-        society: d.society || "",
-        landmark: d.landmark || "",
-        city: d.city || "",
-      };
-    });
+    const fill = (src) =>
+      setForm((f) => {
+        if (f.flatNo || f.society || f.landmark || f.city) return f;
+        return {
+          ...f,
+          flatNo: src.flatNo || "",
+          society: src.society || "",
+          landmark: src.landmark || "",
+          city: src.city || "",
+        };
+      });
+    const profileAddr = String(user?.address || "").trim();
+    if (profileAddr) {
+      // Split "Flat 402, Sunshine Society, Baner, Pune" into the form fields,
+      // same heuristic as applySavedLocation for unstructured addresses.
+      const parts = profileAddr.split(",").map((p) => p.trim()).filter(Boolean);
+      fill(
+        parts.length === 1
+          ? { society: parts[0] }
+          : parts.length === 2
+            ? { flatNo: parts[0], society: parts[1] }
+            : { flatNo: parts[0], society: parts.slice(1, -1).join(", "), city: parts[parts.length - 1] }
+      );
+      return;
+    }
+    if (savedLocations.length === 0) return;
+    fill(savedLocations[0].addressDetails || {});
     setSavedIdx("0");
     if (savedLocations[0].location?.lat != null) {
       setCoords({ lat: savedLocations[0].location.lat, lng: savedLocations[0].location.lng });
     }
-  }, [savedLocations]);
+  }, [savedLocations, user?.role, user?.address]);
 
   const mapsLink = coords
     ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}`
@@ -1300,6 +1349,24 @@ const CookBooking = () => {
                 </div>
               )}
             </div>
+            {profileAddress && !addrEditing ? (
+              <div className="bk-profile-addr">
+                <MapPin size={16} />
+                <div className="bk-profile-addr-text">
+                  <strong>Using your profile address</strong>
+                  <span>{addrSummary}</span>
+                </div>
+                <button
+                  type="button"
+                  className="bk-recap-edit"
+                  onClick={() => setAddrEditing(true)}
+                  aria-label="Edit address"
+                >
+                  <Pencil size={12} /> Edit
+                </button>
+              </div>
+            ) : (
+            <>
             <div className="form-row">
               <div className="form-group">
                 <label>
@@ -1359,6 +1426,8 @@ const CookBooking = () => {
                 />
               </div>
             </div>
+            </>
+            )}
 
             <SecTitle n="05" icon={<UtensilsCrossed size={15} />}>What dishes do you need? *</SecTitle>
             <div className="form-group">
