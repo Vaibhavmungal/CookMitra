@@ -40,6 +40,12 @@ EOF
                 if ! grep -q "MONGODB_URI" .env; then
                     echo "MONGODB_URI=mongodb://db:27017/festivecook" >> .env
                 fi
+
+                # Ensure REACT_APP_GOOGLE_CLIENT_ID exists in .env for frontend build
+                if ! grep -q "REACT_APP_GOOGLE_CLIENT_ID" .env && grep -q "GOOGLE_CLIENT_ID=" .env; then
+                    GOOGLE_ID=$(grep "GOOGLE_CLIENT_ID=" .env | head -n 1 | cut -d '=' -f2)
+                    echo "REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_ID}" >> .env
+                fi
                 '''
             }
         }
