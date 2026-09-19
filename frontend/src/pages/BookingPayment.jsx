@@ -24,7 +24,8 @@ import { AnalyticsEvents, track } from "../utils/analytics";
 import { SERVICE_DETAILS, formatCurrency, formatDate } from "../utils/constants";
 
 const WINDOW_MS = 5 * 60 * 1000; // 5-minute payment window
-const POLL_MS = 5000;
+// Calmed for scale (see BookingWaiting): 8s halves sustained poll rps.
+const POLL_MS = 8000;
 const REDIRECT_S = 6;
 // Circumference of the countdown ring (SVG r=54).
 const RING = 2 * Math.PI * 54;
@@ -81,6 +82,7 @@ const BookingPayment = () => {
   const [selfWaUrl, setSelfWaUrl] = useState(null);
   const handledRef = useRef(false);
   const aliveRef = useRef(true);
+  const pollRef = useRef(null);
   // True once Razorpay reports a successful payment (Checkout also fires
   // `ondismiss` when it closes after success — this tells the two apart).
   const completedRef = useRef(false);
@@ -125,11 +127,31 @@ const BookingPayment = () => {
   useEffect(() => {
     aliveRef.current = true;
     load();
-    const poll = setInterval(load, POLL_MS);
+    // Pause polling while the tab is hidden (see BookingWaiting).
+    const startPoll = () => {
+      stopPoll();
+      pollRef.current = setInterval(() => {
+        if (!document.hidden) load();
+      }, POLL_MS);
+    };
+    const stopPoll = () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
+    const onVis = () => {
+      if (document.hidden) stopPoll();
+      else {
+        load();
+        startPoll();
+      }
+    };
+    startPoll();
+    document.addEventListener("visibilitychange", onVis);
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       aliveRef.current = false;
-      clearInterval(poll);
+      stopPoll();
+      document.removeEventListener("visibilitychange", onVis);
       clearInterval(tick);
     };
   }, [load]);

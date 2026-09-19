@@ -6,7 +6,6 @@ import { useShowToast } from "../store/hooks";
 import ReviewForm, { ReviewStars } from "../components/ReviewForm";
 import ComplaintForm from "../components/ComplaintForm";
 import {
-  formatCurrency,
   formatDate,
   mapsNavigateUrl,
   bookingWhatsAppUrl,
@@ -240,7 +239,7 @@ const BookingDetails = () => {
       case "accepted":
         return (
           <span className="badge badge-amber">
-            {booking?.payment?.status === "paid" ? "Confirmed & Scheduled" : "Action Needed — Pay to Confirm"}
+            Accepted by Cook
           </span>
         );
       case "confirmed":
@@ -353,8 +352,8 @@ const BookingDetails = () => {
     { key: "requested", label: "Requested", hint: "Waiting for cook" },
     {
       key: "confirmed",
-      label: booking?.status === "accepted" && !isPaid ? "Accepted — Pay to Confirm" : "Confirmed",
-      hint: booking?.status === "accepted" && !isPaid ? "Complete payment" : "Cook accepted",
+      label: "Accepted",
+      hint: "Cook accepted",
     },
     { key: "in_progress", label: "In progress", hint: "Cooking now" },
     { key: "completed", label: "Completed", hint: "Done · rate cook" },
@@ -476,7 +475,7 @@ const BookingDetails = () => {
       {reschedNote && (
         <div className="bd-banner info">
           <Clock size={18} />
-          <span>{reschedNote}. Duration and fee unchanged.</span>
+          <span>{reschedNote}. Session length unchanged.</span>
           {user?.role === "customer" && reschedWa && (
             <a href={reschedWa} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
               <MessageCircle size={15} /> Send update to cook
@@ -493,7 +492,7 @@ const BookingDetails = () => {
           </h3>
           <p className="bd-rs-hint">
             Session stays {booking.durationHours} hr{Number(booking.durationHours) === 1 ? "" : "s"} — only the date and start
-            time change, so the fee and any payment stay exactly as they are. Your cook is notified instantly.
+            time change. Your cook is notified instantly.
           </p>
           <div className="bd-rs-grid">
             <div className="meta-field">
@@ -700,7 +699,7 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {/* Booking summary: cook + order + payment in one card
+      {/* Booking summary: cook + order in one card
           (session facts live in the hero chips above) */}
       <div className="bd-card">
         <h3 className="bd-card-head">
@@ -715,9 +714,7 @@ const BookingDetails = () => {
           <div>
             <div className="bd-cook-name">{booking.cook?.name || "Assigned Cook"}</div>
             <div className="bd-cook-sub">
-              {[booking.cookServiceArea && `${booking.cookServiceArea}`, booking.cookRate != null && `${formatCurrency(booking.cookRate)}/hr`]
-                .filter(Boolean)
-                .join(" • ") || "Verified cook"}
+              {booking.cookServiceArea || "Verified cook"}
             </div>
             {booking.cook?.phone && (
               <div className="bd-cook-phone">
@@ -761,77 +758,6 @@ const BookingDetails = () => {
               </p>
             )}
           </>
-        )}
-
-        {/* Payment */}
-        <hr className="bd-sec-div" />
-        <h4 className="bd-sec-head">
-          <Receipt size={15} /> Payment
-        </h4>
-        {Number(booking.slabPrice) > 0 && (
-          <div className="price-rows bd-pay-rows">
-            <div className="price-row">
-              <span>Service Price · {booking.durationHours} hr{Number(booking.durationHours) === 1 ? "" : "s"}</span>
-              <span>{formatCurrency(booking.slabPrice)}</span>
-            </div>
-            {booking.couponCode ? (
-              <div className="price-row discount">
-                <span>Coupon {booking.couponCode}</span>
-                <span>−{formatCurrency(booking.discount)}</span>
-              </div>
-            ) : null}
-          </div>
-        )}
-        {user?.role === "cook" && Number(booking.cookPayout) > 0 && (
-          <div className="bd-payout">
-            Your payout (75%): <strong>{formatCurrency(booking.cookPayout)}</strong>
-          </div>
-        )}
-        <div className="bd-facts">
-          <div className="bd-fact">
-            <span className="bd-fact-icon"><Receipt size={16} /></span>
-            <div className="bd-fact-body"><label>{booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId ? "Total Paid" : "Amount Due"}</label><span className="bd-pay-amount">
-              {booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId
-                ? formatCurrency(booking.payment.paidAmount || 0)
-                : `${formatCurrency(booking.amount)} pending`}
-            </span></div>
-          </div>
-          <div className="bd-fact">
-            <span className="bd-fact-icon"><CheckCircle2 size={16} /></span>
-            <div className="bd-fact-body"><label>Status</label><span>
-              {booking.payment?.status === "paid" && booking.payment?.razorpayPaymentId
-                ? <span className="badge badge-emerald">Paid ✓</span>
-                : <span className="badge badge-slate">{booking.payment?.status || "—"}</span>}
-            </span></div>
-          </div>
-        </div>
-        {booking.payment?.razorpayPaymentId && (
-          <div className="bd-pay-meta">
-            Payment ID: {booking.payment.razorpayPaymentId}
-            {booking.payment?.paidAt ? ` • ${timeAgo(booking.payment.paidAt)}` : ""}
-          </div>
-        )}
-        {booking.payment?.refundStatus && booking.payment.refundStatus !== "none" && (
-          <div className="bd-refund">
-            {booking.payment.refundStatus === "processed" && (
-              <span className="badge badge-emerald">Refund processed ✓</span>
-            )}
-            {booking.payment.refundStatus === "pending" && (
-              <span className="badge badge-amber">Refund processing…</span>
-            )}
-            {booking.payment.refundStatus === "failed" && (
-              <span className="badge badge-rose">Refund failed — contact support</span>
-            )}
-            {booking.payment.refundStatus === "manual" && (
-              <span className="badge badge-slate">Refund settled manually</span>
-            )}
-            {booking.payment.refundAmount > 0 && (
-              <span className="bd-refund-amount">
-                {formatCurrency(booking.payment.refundAmount)}
-                {booking.payment?.refundedAt ? ` • ${timeAgo(booking.payment.refundedAt)}` : ""}
-              </span>
-            )}
-          </div>
         )}
       </div>
 

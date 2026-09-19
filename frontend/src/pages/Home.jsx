@@ -11,7 +11,6 @@ import HomeCoupons from "../components/HomeCoupons";
 import ReviewForm from "../components/ReviewForm";
 import {
   ArrowRight,
-  BadgeIndianRupee,
   CalendarClock,
   ChefHat,
   Users,
@@ -370,37 +369,45 @@ const Home = () => {
     {
       id: "cook_for_me",
       title: "Cook for Me",
+      tagline: "Most Popular",
       description: "Host effortlessly while a skilled chef prepares authentic festival meals right in your home kitchen.",
-      icon: <ChefHat size={22} />,
-      bg: "var(--primary-light)",
-      color: "var(--primary)",
+      icon: <ChefHat size={24} />,
+      bg: "linear-gradient(135deg, #fff7ed, #ffedd5)",
+      color: "#c2410c",
+      accent: "linear-gradient(135deg, #f59e0b, #ea580c)",
       perks: ["Full meal prep & plating", "Traditional authentic spices", "Kitchen left clean & tidy"],
     },
     {
       id: "cook_with_me",
       title: "Cook With Me",
+      tagline: "Family Favourite",
       description: "Team up with an experienced home chef to knead, fry, shape, and cook festive snacks together.",
-      icon: <Users size={22} />,
-      bg: "var(--accent-emerald-light)",
-      color: "#059669",
+      icon: <Users size={24} />,
+      bg: "linear-gradient(135deg, #ecfdf5, #d1fae5)",
+      color: "#047857",
+      accent: "linear-gradient(135deg, #10b981, #047857)",
       perks: ["Hands-on partnership", "Great for family bonding", "Share traditional recipes"],
     },
     {
       id: "teach_me",
       title: "Teach Me",
+      tagline: "Learn Heritage",
       description: "Master intricate culinary techniques like one-string sugar syrup, chakli spiral shaping, and modak pleating.",
-      icon: <GraduationCap size={22} />,
-      bg: "var(--accent-blue-light)",
-      color: "#2563eb",
+      icon: <GraduationCap size={24} />,
+      bg: "linear-gradient(135deg, #eff6ff, #dbeafe)",
+      color: "#1d4ed8",
+      accent: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
       perks: ["Step-by-step guidance", "Troubleshooting tips", "Heritage secret ratios"],
     },
     {
       id: "preparation_help",
       title: "Preparation Help",
+      tagline: "Save Hours",
       description: "Get reliable helping hands for labor-intensive tasks like grating coconut, chopping, kneading, and deep-frying.",
-      icon: <HandHelping size={22} />,
-      bg: "var(--accent-purple-light)",
-      color: "#7c3aed",
+      icon: <HandHelping size={24} />,
+      bg: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
+      color: "#6d28d9",
+      accent: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
       perks: ["Saves hours of prep time", "Ideal for large gatherings", "Focused prep assistance"],
     },
   ];
@@ -415,7 +422,7 @@ const Home = () => {
     },
     {
       name: "Vikram Kulkarni",
-      role: "Ganesh Festival in Mumbai",
+      role: "Ganesh Festival in Pune",
       quote: "Booking a cook for Modaks was the best decision we made. We learned the traditional pleating technique and enjoyed fresh steamed Ukadiche Modak.",
       rating: 5,
       avatar: "VK",
@@ -770,8 +777,8 @@ const Home = () => {
               </div>
               <span className="how-step-badge">03</span>
             </div>
-            <h3>3. Pick Date & Slot</h3>
-            <p>Select your desired service type, choose an available date and time slot, and confirm your request.</p>
+            <h3>3. OTP-Verified Start</h3>
+            <p>Cook arrives at your home, you share the OTP — session starts securely with live tracking and UPI payment after approval.</p>
           </div>
 
           <div className="how-card">
@@ -799,15 +806,21 @@ const Home = () => {
 
         <div className="services-grid-modern">
           {services.map((svc) => (
-            <div key={svc.id} className="service-card-modern">
-              <div
-                className="service-icon-wrapper"
-                style={{ background: svc.bg, color: svc.color }}
-              >
-                {svc.icon}
+            <article key={svc.id} className="service-card-modern">
+              <span className="service-accent-bar" style={{ background: svc.accent }} aria-hidden="true" />
+              <div className="service-card-top">
+                <div
+                  className="service-icon-wrapper"
+                  style={{ background: svc.bg, color: svc.color }}
+                >
+                  {svc.icon}
+                </div>
+                <span className="service-tagline" style={{ color: svc.color, background: svc.bg }}>
+                  {svc.tagline}
+                </span>
               </div>
               <h3>{svc.title}</h3>
-              <p>{svc.description}</p>
+              <p className="service-desc">{svc.description}</p>
               <ul className="service-card-perks">
                 {svc.perks.map((perk, i) => (
                   <li key={i}>
@@ -815,17 +828,16 @@ const Home = () => {
                   </li>
                 ))}
               </ul>
-              {user?.role !== "admin" && user?.role !== "cook" && (
-                <Link
-                  to={`/cook-on-demand?serviceType=${svc.id}`}
-                  className="btn btn-outline"
-                  style={{ width: "100%", justifyContent: "space-between" }}
-                >
-                  <span>Book Now</span>
-                  <ArrowRight size={16} />
-                </Link>
-              )}
-            </div>
+              <Link
+                to={`/cook-on-demand?serviceType=${svc.id}`}
+                className="service-learn-more"
+                style={{ color: svc.color }}
+                aria-label={`Book now - ${svc.title}`}
+              >
+                <span>Book now</span>
+                <ArrowRight size={15} />
+              </Link>
+            </article>
           ))}
         </div>
       </section>
@@ -868,40 +880,51 @@ const Home = () => {
           Deep-links to /register?role=cook so the Register page preselects
           the "Join as Cook" tab instead of defaulting to customer. */}
       {user?.role !== "cook" && user?.role !== "admin" && (
+        <div className="cta-cook-wrap">
         <section className="cta-banner cta-cook">
           <div className="cta-cook-glow cta-cook-glow-1" aria-hidden="true" />
           <div className="cta-cook-glow cta-cook-glow-2" aria-hidden="true" />
-          <span className="cta-cook-badge">
-            <ChefHat size={14} /> For Home Chefs · Earn Festive Income
-          </span>
-          <h2>Are You a Skilled Home Cook?</h2>
-          <p>
-            Keep 75% of every booking — discounts are on us. Earn during festive
-            seasons by sharing your traditional culinary recipes and cooking skills
-            with families in your city.
-          </p>
-          <ul className="cta-cook-perks">
-            <li>
-              <BadgeIndianRupee size={16} /> Keep 75% of every booking
-            </li>
-            <li>
-              <CalendarClock size={16} /> Flexible slots
-            </li>
-            <li>
-              <ShieldCheck size={16} /> Verified profile
-            </li>
-          </ul>
-          <div className="cta-cook-actions">
-            <Link to="/register?role=cook" className="btn btn-lg cta-cook-btn-primary">
-              <ChefHat size={18} /> {user ? "Join as a Cook" : "Register as a Cook"} <ArrowRight size={18} />
-            </Link>
-            {!user && (
-              <Link to="/login" className="cta-cook-signin">
-                Already a cook? Sign in
-              </Link>
-            )}
+          <div className="cta-cook-pattern" aria-hidden="true" />
+          <div className="cta-cook-grid">
+            <div className="cta-cook-copy">
+              <span className="cta-cook-badge">
+                <ChefHat size={14} /> For Home Chefs · Earn Festive Income
+              </span>
+              <h2>Are You a Skilled Home Cook?</h2>
+              <p className="cta-cook-sub">
+                Turn your family recipes into festive earnings. Share your traditional
+                culinary recipes and cooking skills with families in your city —
+                on flexible slots, with a verified profile.
+              </p>
+              <ul className="cta-cook-perks">
+                <li>
+                  <span className="cta-cook-perk-icon"><ChefHat size={17} /></span>
+                  <span><strong>Share recipes</strong><em>Traditional festive dishes</em></span>
+                </li>
+                <li>
+                  <span className="cta-cook-perk-icon"><CalendarClock size={17} /></span>
+                  <span><strong>Flexible slots</strong><em>You choose timings</em></span>
+                </li>
+                <li>
+                  <span className="cta-cook-perk-icon"><ShieldCheck size={17} /></span>
+                  <span><strong>Verified profile</strong><em>Build trust & reviews</em></span>
+                </li>
+              </ul>
+              <div className="cta-cook-actions">
+                <Link to="/register?role=cook" className="btn btn-lg cta-cook-btn-primary">
+                  <ChefHat size={18} /> {user ? "Join as a Cook" : "Register as a Cook"} <ArrowRight size={18} />
+                </Link>
+                {!user && (
+                  <Link to="/login" className="btn btn-lg cta-cook-btn-ghost">
+                    Already a cook? Sign in
+                  </Link>
+                )}
+              </div>
+              <p className="cta-cook-note">No joining fee · Festive demand in Pune</p>
+            </div>
           </div>
         </section>
+        </div>
       )}
     </div>
   );

@@ -1,9 +1,12 @@
-// Time-slot engine: derive bookable start times from a cook's open windows
-// (Availability, status "available") minus already-booked intervals, sized to
-// the customer's input service hours.
+// Time-slot engine: derive bookable start times for a cook's service day
+// minus already-booked intervals, sized to the customer's input service hours.
 //
-// Cooks publish broad windows (e.g. 09:00–14:00); customers pick a duration
-// (e.g. 3h) and get every viable start time on a 30-min grid.
+// Availability model: EVERY cook is bookable across the whole service day
+// (08:00–20:00) by default. The only things that block a slot are existing
+// bookings (accepted/confirmed/in_progress + live 5-minute "requested" holds)
+// and the cook's whole-day "unavailable" toggle (enforced by callers via
+// resolveCookAvailability). Published Availability windows, if any, are
+// informational only and no longer restrict bookability.
 
 const Availability = require("../models/Availability");
 const Booking = require("../models/Booking");
@@ -120,34 +123,13 @@ const resolveCookAvailability = async (profile) => {
 };
 
 const getDayWindows = async (cookId, dateStr) => {
-  const { start, end } = dayBounds(dateStr);
-  const windows = await Availability.find({
-    cook: cookId,
-    date: { $gte: start, $lte: end },
-    status: "available",
-  }).sort({ startTime: 1 });
-  // Cooks are available all hours by default: with no published windows the
-  // whole day is open (existing bookings still block overlaps). Cooks opt OUT
-  // via the unavailable toggle, enforced by the callers.
-  if (!windows.length) {
-    return [{ startTime: "08:00", endTime: "20:00", status: "available", derived: true }];
-  }
-  // Published windows are intersected with the 08:00–20:00 service day so
-  // early-morning / late-night availability never surfaces to customers.
-  return windows
-    .map((w) => {
-      const s = timeToMinutes(w.startTime);
-      const e = timeToMinutes(w.endTime);
-      if (s == null || e == null) return null;
-      const cs = Math.max(s, SERVICE_DAY_START_MIN);
-      const ce = Math.min(e, SERVICE_DAY_END_MIN);
-      if (ce <= cs) return null;
-      const clone = typeof w.toObject === "function" ? w.toObject() : { ...w };
-      clone.startTime = minutesToTime(cs);
-      clone.endTime = minutesToTime(ce);
-      return clone;
-    })
-    .filter(Boolean);
+  // Universal full-day availability: every cook's service day is 08:00–20:00
+  // regardless of published Availability windows — existing bookings (and the
+  // whole-day unavailable toggle, enforced by callers) are the only blockers.
+  // The cookId/date params are kept for signature compatibility with callers.
+  void cookId;
+  void dateStr;
+  return [{ startTime: "08:00", endTime: "20:00", status: "available", derived: true }];
 };
 
 const getDayBookings = (cookId, dateStr) => {

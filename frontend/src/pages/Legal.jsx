@@ -300,8 +300,8 @@ export const ContactUs = () => (
       <li>Area: Pune & Mumbai, India</li>
       <li>
         Instagram:{" "}
-        <a href="https://instagram.com/contactuscookmitra" target="_blank" rel="noreferrer">
-          @contactuscookmitra
+        <a href="https://instagram.com/cookmitra_india" target="_blank" rel="noreferrer">
+          @cookmitra_india
         </a>
       </li>
       <li>Hours: 10:00 AM – 6:00 PM IST, all days</li>

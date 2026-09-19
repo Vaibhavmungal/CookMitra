@@ -111,3 +111,75 @@ export const track = (event, params = {}) => {
 
 /** True when at least one provider is configured (for conditional UI). */
 export const isAnalyticsConfigured = () => hasGa || hasPixel;
+
+// In-house visit counter (POST /api/stats/public/visit) — answers "how many
+// users visit the website" without any third party. One ping per browser
+// session (sessionStorage guard); the visitor id lives in localStorage so
+// repeat visits count as one unique per day. The ping also carries the
+// approximate city (IP-based, city-level only — raw IPs are never sent or
+// stored). Fire-and-forget: failures are swallowed so tracking can never
+// break the app.
+const VISIT_SESSION_KEY = "cm-visit-sent";
+const VISITOR_KEY = "cm-vid";
+// Never hold the ping longer than this waiting for the city lookup.
+const VISIT_CITY_TIMEOUT_MS = 2500;
+
+const getVisitorId = () => {
+  try {
+    let vid = localStorage.getItem(VISITOR_KEY);
+    if (!vid) {
+      vid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      localStorage.setItem(VISITOR_KEY, vid);
+    }
+    return vid;
+  } catch {
+    return null;
+  }
+};
+
+export const trackSiteVisit = (path = "/") => {
+  try {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(VISIT_SESSION_KEY)) return;
+    sessionStorage.setItem(VISIT_SESSION_KEY, "1");
+    const vid = getVisitorId();
+    if (!vid) return;
+    const send = (loc) => {
+      // Lazy import keeps analytics.js free of module cycles.
+      import("../api/axios")
+        .then(({ default: API }) =>
+          API.post("/stats/public/visit", {
+            vid,
+            path,
+            city: loc?.city || "",
+            state: loc?.state || "",
+            country: loc?.country || "",
+          })
+        )
+        .catch(() => {
+          // ignore — counting must never break browsing
+        });
+    };
+    // Resolve the approximate city first, but never delay the ping past
+    // the timeout — a slow lookup still counts the visit, just without a city.
+    let settled = false;
+    const done = (loc) => {
+      if (settled) return;
+      settled = true;
+      send(loc);
+    };
+    const timer = setTimeout(() => done(null), VISIT_CITY_TIMEOUT_MS);
+    import("./geolocation")
+      .then(({ fetchIpLocation }) => fetchIpLocation())
+      .then((loc) => {
+        clearTimeout(timer);
+        done(loc);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        done(null);
+      });
+  } catch {
+    // ignore — counting must never break browsing
+  }
+};

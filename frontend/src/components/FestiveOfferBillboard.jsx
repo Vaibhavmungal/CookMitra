@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 const SEEN_KEY = "cm-festive-offer-seen";
+const HIDE_KEY = "cm-festive-offer-hide";
 // Ganesh Utsav 2026 (Sept 14 – Sept 25) — offer runs till midnight after
 // Visarjan on Anant Chaturdashi (Sept 25).
 const OFFER_END = new Date("2026-09-26T00:00:00");
@@ -25,21 +26,15 @@ const OFFER_PERCENT = 20;
 const MODAK_IMG =
   "https://images.pexels.com/photos/33643272/pexels-photo-33643272.jpeg";
 
-const PURAN_POLI_IMG = "https://images.pexels.com/photos/38229508/pexels-photo-38229508.jpeg"
+const PURAN_POLI_IMG = "https://images.pexels.com/photos/38229508/pexels-photo-38229508.jpeg";
 
-const KARANJI_IMG = "https://images.pexels.com/photos/18488315/pexels-photo-18488315.jpeg"
-
-const LADOO_IMG = "https://images.pexels.com/photos/8887021/pexels-photo-8887021.jpeg"
-
-const SHRIKHAND_IMG = "https://images.pexels.com/photos/34131068/pexels-photo-34131068.jpeg"
-
-const GULAB_JAMUN_IMG = "https://images.pexels.com/photos/15014919/pexels-photo-15014919.jpeg"
+const LADOO_IMG = "https://images.pexels.com/photos/8887021/pexels-photo-8887021.jpeg";
 
  
 const FOODS = [
   {
     name: "Modak",
-    tag: "Festive",
+    tag: "Bappa's favourite",
     tagClass: "hot",
     src: MODAK_IMG,
     alt: "Steamed Ukadiche Modak for Ganesh Chaturthi",
@@ -52,32 +47,11 @@ const FOODS = [
     alt: "Sweet Puran Poli flatbread",
   },
   {
-    name: "Karanji",
+    name: "Ladoo",
     tag: "Festive",
     tagClass: "hot",
-    src: KARANJI_IMG,
-    alt: "Fried Karanji sweet pastry",
-  },
-  {
-    name: "Ladoo",
-    tag: "Popular",
-    tagClass: "hot",
     src: LADOO_IMG,
-    alt: "Bite-sized Motichoor Ladoo sweets",
-  },
-  {
-    name: "Shrikhand",
-    tag: "New",
-    tagClass: "hot",
-    src: SHRIKHAND_IMG,
-    alt: "Creamy Shrikhand dessert",
-  },
-  {
-    name: "Gulab Jamun",
-    tag: "Popular",
-    tagClass: "hot",
-    src: GULAB_JAMUN_IMG,
-    alt: "Sweet Gulab Jamun",
+    alt: "Festive besan ladoo sweets",
   },
 ];
 
@@ -135,12 +109,15 @@ const FestiveOfferBillboard = () => {
   useEffect(() => {
     let timer;
     try {
+      const hidden = localStorage.getItem(HIDE_KEY);
       const seen = sessionStorage.getItem(SEEN_KEY);
-      if (!seen) {
-        timer = setTimeout(() => setShowModal(true), 900);
+      if (!hidden && !seen) {
+        // Delayed entry so the hero paints first — less intrusive,
+        // better LCP and first impression.
+        timer = setTimeout(() => setShowModal(true), 8000);
       }
     } catch {
-      timer = setTimeout(() => setShowModal(true), 900);
+      timer = setTimeout(() => setShowModal(true), 8000);
     }
     return () => clearTimeout(timer);
   }, []);
@@ -163,10 +140,11 @@ const FestiveOfferBillboard = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [showModal]);
 
-  const closeModal = () => {
+  const closeModal = (persist = false) => {
     setShowModal(false);
     try {
       sessionStorage.setItem(SEEN_KEY, "1");
+      if (persist) localStorage.setItem(HIDE_KEY, "1");
     } catch {
       /* storage unavailable — modal simply reappears next visit */
     }
@@ -205,34 +183,23 @@ const FestiveOfferBillboard = () => {
             <div className="festive-body">
               <div className="festive-main">
                 <p className="festive-eyebrow">
-                  <span aria-hidden="true">🪔</span> Ganesh Utsav · Limited period
+                  <span aria-hidden="true">🪔</span> Ganesh Utsav · Ends {expired ? "tonight" : "Sept 25"}
                 </p>
 
                 <h2 className="festive-title">
-                  <span className="festive-title-first">Ganpati Bappa Morya,</span>{" "}
-                  <span className="festive-title-gold"> Ghar Ka Swad!</span>
+                  <span className="festive-title-first">Get {heroPercent}% OFF</span>{" "}
+                  <span className="festive-title-gold">festive feasts</span>
                 </h2>
 
                 <p className="festive-desc">
-                  Book a verified festive cook and get fresh naivedya,
-                  ukadiche modak &amp; festive meals made right in your kitchen.
+                  Hot modaks, puran poli &amp; naivedya — cooked fresh in{" "}
+                  <strong>your kitchen</strong>. Use code{" "}
+                  <strong className="festive-desc-code">{heroCode}</strong> at
+                  checkout.
                 </p>
 
                 <div className="festive-offer-row">
                   <div className="festive-mega">
-                    <div className="festive-burst" aria-hidden="true">
-                      <svg viewBox="0 0 100 100">
-                        <path
-                          d="M50 0 L58 12 L72 6 L74 20 L89 19 L86 33 L100 38 L92 50 L100 62 L86 67 L89 81 L74 80 L72 94 L58 88 L50 100 L42 88 L28 94 L26 80 L11 81 L14 67 L0 62 L8 50 L0 38 L14 33 L11 19 L26 20 L28 6 L42 12 Z"
-                          fill="#ffd24d"
-                        />
-                      </svg>
-                      <span>
-                        UP
-                        <br />
-                        TO
-                      </span>
-                    </div>
                     <div className="festive-mega-num">
                       <span className="mega-20">{heroPercent}%</span>
                       <span className="mega-off">OFF</span>
@@ -243,7 +210,7 @@ const FestiveOfferBillboard = () => {
                           <Star key={i} size={11} fill="#ffd24d" color="#ffd24d" />
                         ))}
                       </span>
-                      <span>on festive cook bookings</span>
+                      <span>with code {heroCode}</span>
                     </div>
                   </div>
 
@@ -276,7 +243,15 @@ const FestiveOfferBillboard = () => {
                   {FOODS.map((f) => (
                     <figure key={f.name} className="festive-food">
                       <span className="festive-food-ring">
-                        <img src={f.src} alt={f.alt} loading="lazy" />
+                        <img
+                          src={f.src}
+                          srcSet={`${f.src}?auto=compress&cs=tinysrgb&w=160 160w, ${f.src}?auto=compress&cs=tinysrgb&w=320 320w, ${f.src}?auto=compress&cs=tinysrgb&w=480 480w`}
+                          sizes="(max-width: 380px) 26vw, (max-width: 560px) 30vw, 128px"
+                          width={320}
+                          height={320}
+                          alt={f.alt}
+                          loading="lazy"
+                        />
                         <span className={`festive-food-tag ${f.tagClass}`}>{f.tag}</span>
                       </span>
                       <figcaption>{f.name}</figcaption>
@@ -284,14 +259,14 @@ const FestiveOfferBillboard = () => {
                   ))}
                 </div>
                 <p className="festive-showcase-note">
-                  Fresh naivedya & festive specials — cooked in your kitchen
+                  Verified cooks · OTP-verified sessions · Min order ₹349
                 </p>
               </div>
 
               <div className="festive-bottom-row">
                 <div className="festive-coupon">
                   <span className="festive-coupon-label">
-                    <Gift size={15} /> Use code
+                    <Gift size={15} /> Your code
                   </span>
                   <strong className="festive-coupon-code">{heroCode}</strong>
                   <button
@@ -300,7 +275,7 @@ const FestiveOfferBillboard = () => {
                     aria-label={`Copy offer code ${heroCode}`}
                   >
                     {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? "Copied!" : "Copy"}
+                    {copied ? "Copied!" : "Copy code"}
                   </button>
                 </div>
 
@@ -308,12 +283,18 @@ const FestiveOfferBillboard = () => {
                   <Link
                     to="/cook-on-demand"
                     className="btn btn-lg festive-cta"
-                    onClick={closeModal}
+                    onClick={() => closeModal()}
                   >
-                    <ChefHat size={20} /> Book a Cook Now <ArrowRight size={20} />
+                    <ChefHat size={20} /> Claim {heroPercent}% OFF <ArrowRight size={20} />
                   </Link>
-                  <button className="festive-maybe" onClick={closeModal}>
+                  <button className="festive-maybe" onClick={() => closeModal()}>
                     Maybe later
+                  </button>
+                  <button
+                    className="festive-maybe festive-never"
+                    onClick={() => closeModal(true)}
+                  >
+                    Don't show again
                   </button>
                 </div>
               </div>

@@ -22,7 +22,7 @@ const {
   resolveCookAvailability,
 } = require("../utils/slots");
 const { buildCustomerWhatsAppUrl, buildCookJobSheetWhatsAppUrl, buildHoursCompleteWhatsAppUrl, buildReviewWhatsAppUrl, FRONTEND_BASE_URL } = require("../utils/whatsapp");
-const { paginationParams, applyPagination, sendList } = require("../utils/pagination");
+const { paginationParams, applyPagination, sendList, HARD_CAP } = require("../utils/pagination");
 const { razorpay: razorpayClient, isConfigured: razorpayConfigured } = require("../config/razorpay");
 
 // OTP for starting a service: 4 digits, first digit non-zero so it always
@@ -590,7 +590,7 @@ exports.getMyBookings = async (req, res, next) => {  try {
     const filter = { customer: req.user.id };
     const pg = paginationParams(req);
     const bookings = await applyPagination(
-      Booking.find(filter).populate("cook", "name email phone").sort({ date: -1 }),
+      Booking.find(filter).populate("cook", "name email phone").sort({ date: -1 }).limit(HARD_CAP),
       pg
     );
     // Submitted reviews keyed by booking id (one review per booking max).
@@ -692,7 +692,7 @@ exports.getCookBookings = async (req, res, next) => {
     const filter = { cook: req.user.id };
     const pg = paginationParams(req);
     const bookings = await applyPagination(
-      Booking.find(filter).populate("customer", "name email phone").sort({ date: -1 }),
+      Booking.find(filter).populate("customer", "name email phone").sort({ date: -1 }).limit(HARD_CAP),
       pg
     );
     for (const b of bookings) {

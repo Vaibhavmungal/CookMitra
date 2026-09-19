@@ -24,9 +24,18 @@ const CookDashboard = () => {
   const firstLoadDone = useRef(false);
 
   // Poll bookings so the hours-complete alarm fires without refresh.
+  // Calmed for scale: 30s -> 60s + hidden-tab pause, so a dashboard left open
+  // in a background tab stops hitting the API entirely.
   useEffect(() => {
-    const id = setInterval(() => refetchBookings(), 30000);
-    return () => clearInterval(id);
+    const tick = () => {
+      if (!document.hidden) refetchBookings();
+    };
+    const id = setInterval(tick, 60000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [refetchBookings]);
 
   // Alarm once per booking when hours complete (skip state that already

@@ -4,6 +4,7 @@
 
 .navbar-mobile-actions { display: none; gap: 0.5rem; }
 .mobile-bell { display: none; }
+.mobile-avatar { display: none; }
 
 /* Tablet */
 @media (max-width: 1024px) {
@@ -36,6 +37,9 @@
   .navbar-mobile-actions { display: flex; align-items: center; }
   .mobile-toggle-btn { display: inline-flex; }
   .mobile-bell { display: inline-flex; }
+  .mobile-avatar { display: inline-flex; }
+  /* Avatar button in the navbar bar: same footprint as the bell icon. */
+  .mobile-avatar .user-avatar-sm { width: 34px; height: 34px; font-size: 0.8rem; box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--primary-100, #ffe1c4); }
   /* Drawer links: comfortable row height for thumbs. */
   .mobile-menu .nav-link { font-size: 0.95rem; min-height: 46px; }
 }

@@ -164,5 +164,8 @@ const bookingSchema = new mongoose.Schema(
 bookingSchema.index({ customer: 1, status: 1 });
 bookingSchema.index({ cook: 1, status: 1 });
 bookingSchema.index({ cook: 1, date: 1, startTime: 1, endTime: 1 });
+// Hot read paths: "today's bookings" scans and status-sorted dashboards.
+bookingSchema.index({ date: 1, status: 1 });
+bookingSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Booking", bookingSchema);

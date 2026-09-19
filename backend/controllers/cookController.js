@@ -2,10 +2,9 @@ const mongoose = require("mongoose");
 const CookProfile = require("../models/CookProfile");
 const Notification = require("../models/Notification");
 const User = require("../models/User");
-const { paginationParams, sendList } = require("../utils/pagination");
+const { paginationParams, sendList, HARD_CAP } = require("../utils/pagination");
 const {
   getDayWindows,
-  getDayBookings,
   computeStartOptions,
   localDayString,
   parseDay,
@@ -51,20 +50,37 @@ exports.getCooks = async (req, res, next) => {
       filter.approvalStatus = "approved";
     }
 
-    // Whitelist service types: raw query values flow into Mongoose, so an
-    // object like ?serviceType[$ne]=x must never become a query operator.
-    const SERVICE_TYPES = ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"];
-    if (serviceType) {
-      const asked = Array.isArray(serviceType) ? serviceType : [serviceType];
-      const clean = asked.map((t) => String(t)).filter((t) => SERVICE_TYPES.includes(t));
-      if (clean.length) filter.serviceTypes = { $in: clean };
-    }
+    // Every cook offers ALL service types: the serviceType query param is
+    // accepted for URL compatibility but no longer filters the list —
+    // customers pick a service and see every approved cook, since all cooks
+    // can perform any service. (The value never reaches Mongoose, so the old
+    // ?serviceType[$ne]=x injection concern is moot.)
+    void serviceType;
     // Escape user input before $regex (no ReDoS / pattern injection) + cap.
     if (serviceArea) {
       const esc = String(serviceArea)
         .slice(0, 60)
         .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       filter.serviceArea = { $regex: esc, $options: "i" };
+    }
+
+    // Name search pushed into Mongo (not in-memory over every cook): match
+    // via the populated user through an aggregation-friendly two-step —
+    // first resolve matching user ids (indexed name prefix), then filter.
+    // Capped to 200 ids so a one-letter query can't fan out unbounded.
+    const searchText = String(search || "").trim().slice(0, 60);
+    if (searchText && !isAdmin) {
+      const escName = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matchedUsers = await User.find({ name: { $regex: escName, $options: "i" } })
+        .select("_id")
+        .limit(200)
+        .lean();
+      const ids = matchedUsers.map((u) => u._id);
+      // Specialties live on the profile — $or user-match OR specialty-match.
+      filter.$or = [
+        { user: { $in: ids } },
+        { specialties: { $regex: escName, $options: "i" } },
+      ];
     }
 
     // Contact PII: guests see discovery fields only; signed-in users see the
@@ -74,7 +90,20 @@ exports.getCooks = async (req, res, next) => {
       : isAdmin
         ? "name email phone status"
         : "name phone status";
-    let cooks = await CookProfile.find(filter).populate("user", userFields);
+    // Server-side paging FIRST (bounded in Mongo): without ?page=&limit= the
+    // legacy full-array path applies (HARD_CAP 500). With params we skip/limit
+    // at the DB so 1000-user browsing never loads the whole collection.
+    const pg = paginationParams(req);
+    let cookQuery = CookProfile.find(filter).populate("user", userFields).sort({ createdAt: -1 });
+    if (pg.has) {
+      cookQuery = cookQuery.skip(pg.skip).limit(pg.limit);
+    } else {
+      // Legacy array response: cap the DB read at the same HARD_CAP the
+      // response applies, so an un-paged call can never stream the whole
+      // collection into memory under load.
+      cookQuery = cookQuery.limit(HARD_CAP);
+    }
+    let cooks = await cookQuery;
 
     // Hide cooks whose account was blocked or deleted by an admin so they
     // can no longer be discovered or booked by customers. Admins still see
@@ -90,8 +119,10 @@ exports.getCooks = async (req, res, next) => {
       cooks = cooks.filter((_, i) => flags[i]);
     }
 
-    if (search) {
-      const searchLower = search.toLowerCase();
+    // Admin free-text search (name/specialty) still needs the in-memory pass —
+    // the DB-level filter above already handled the public case.
+    if (searchText && isAdmin) {
+      const searchLower = searchText.toLowerCase();
       cooks = cooks.filter(
         (cook) =>
           cook.user?.name?.toLowerCase().includes(searchLower) ||
@@ -104,6 +135,8 @@ exports.getCooks = async (req, res, next) => {
     // least one free start option after subtracting existing bookings;
     // date + startTime + endTime -> that exact window must be free (so a cook
     // busy 10:00-13:00 never shows for a 10:00-13:00 search).
+    // BATCHED: one availability lookup + one bookings lookup for the whole
+    // page (not 2 queries per cook), then pure in-memory math per cook.
     if (date) {
       // Local-midnight parse like the slot engine — new Date("YYYY-MM-DD")
       // is UTC midnight and validates/wraps to the wrong local day.
@@ -136,12 +169,34 @@ exports.getCooks = async (req, res, next) => {
         }
         dur = (exactEnd - exactStart) / 60;
       }
-      const checks = await Promise.all(
-        cooks.map(async (cook) => {
+      const checks = (() => {
+        // Windows are universal (08:00-20:00) — compute once, reuse per cook.
+        // Bookings differ per cook but one $in query beats N round trips.
+        const windowsPromise = getDayWindows(null, date);
+        const cookIds = cooks.map((c) => c.user?._id || c.user);
+        const { start, end } = require("../utils/slots").dayBounds(date);
+        const Booking = require("../models/Booking");
+        const { activeSlotMatch } = require("../utils/slots");
+        const bookingsPromise = Booking.find({
+          cook: { $in: cookIds },
+          date: { $gte: start, $lte: end },
+          $or: activeSlotMatch(),
+        })
+          .select("cook startTime endTime status")
+          .lean();
+        return Promise.all([windowsPromise, bookingsPromise]);
+      })().then(([windows, allBookings]) => {
+        const byCook = new Map();
+        for (const b of allBookings || []) {
+          const key = String(b.cook);
+          if (!byCook.has(key)) byCook.set(key, []);
+          byCook.get(key).push(b);
+        }
+        return cooks.map((cook) => {
           try {
-            const windows = await getDayWindows(cook.user?._id || cook.user, date);
             if (!windows.length) return false;
-            const bookings = await getDayBookings(cook.user?._id || cook.user, date);
+            const id = String(cook.user?._id || cook.user);
+            const bookings = byCook.get(id) || [];
             if (exactStart != null) {
               // The exact [startTime, endTime] must sit inside one open window
               // and overlap no existing booking.
@@ -162,20 +217,20 @@ exports.getCooks = async (req, res, next) => {
           } catch {
             return false;
           }
-        })
-      );
-      cooks = cooks.filter((_, i) => checks[i]);
+        });
+      });
+      // Await ONCE (the promise is shared, awaiting per-item would re-wrap it).
+      const checkResults = await checks;
+      cooks = cooks.filter((_, i) => checkResults[i]);
     }
 
-    // In-memory paging (after availability/search filtering): opt-in via
-    // ?page=&limit=, otherwise the full array (capped) as before.
-    const pg = paginationParams(req);
+    // Post-filter paging response: when ?page=&limit= was used the DB already
+    // bounded the page; total counts the filtered page-set (documented inline).
+    // Without params the legacy full-array path applies (HARD_CAP 500).
     if (pg.has) {
-      const total = cooks.length;
-      const page = cooks.slice(pg.skip, pg.skip + pg.limit);
-      return sendList(res, page, pg, total);
+      return sendList(res, cooks, pg, cooks.length);
     }
-    res.json(cooks);
+    res.json(cooks.length > HARD_CAP ? cooks.slice(0, HARD_CAP) : cooks);
   } catch (error) {
     next(error);
   }

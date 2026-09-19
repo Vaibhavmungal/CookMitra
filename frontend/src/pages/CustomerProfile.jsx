@@ -4,7 +4,7 @@ import API from "../api/axios";
 import { useDispatch } from "react-redux";
 import { updateUser } from "../store/authSlice";
 import { useShowToast } from "../store/hooks";
-import { ArrowLeft, User, MapPin, Phone, Save, AlertCircle } from "lucide-react";
+import { ArrowLeft, MapPin, Phone, Save, AlertCircle, UserRound, ShieldCheck } from "lucide-react";
 
 const CustomerProfile = () => {
   const dispatch = useDispatch();
@@ -97,18 +97,30 @@ const CustomerProfile = () => {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto" }}>
+    <div className="dashboard-container my-profile-page">
+      <div style={{ maxWidth: 720, margin: "0 auto", width: "100%" }}>
       <div style={{ marginBottom: "1.5rem" }}>
         <Link to="/dashboard/my-bookings" className="back-link-bar">
           <ArrowLeft size={16} /> Back to My Bookings
         </Link>
       </div>
 
-      <div className="profile-card-block">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem" }}>
-          <User size={22} style={{ color: "var(--primary)" }} />
-          <h1 style={{ fontSize: "1.85rem", margin: 0 }}>My Profile</h1>
+      <div className="od-hero">
+        <div className="od-hero-text">
+          <span className="od-eyebrow">
+            <UserRound size={12} /> Your account
+          </span>
+          <h1 className="od-title">My Profile</h1>
+          <p className="od-sub">
+            <ShieldCheck size={13} />
+            <span className="od-sub-text">
+              Name, contact and address your cook uses to reach you
+            </span>
+          </p>
         </div>
+      </div>
+
+      <div className="profile-card-block">
 
         {error && (
           <div className="error-alert-banner">
@@ -171,6 +183,7 @@ const CustomerProfile = () => {
             {saving ? "Saving..." : "Save Changes"}
           </button>
         </form>
+      </div>
       </div>
     </div>
   );

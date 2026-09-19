@@ -86,11 +86,11 @@ const Footer = () => {
                 <a href="tel:+919322321831" style={{ color: "inherit" }}>+91 9322321831</a>
               </li>
               <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
-                <MapPin size={16} /> Pune & Mumbai, India
+                <MapPin size={16} /> Pune, India
               </li>
               <li style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "var(--slate-400)" }}>
                 <Camera size={16} />
-                <a href="https://instagram.com/contactuscookmitra" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>Instagram: @contactuscookmitra</a>
+                <a href="https://instagram.com/cookmitra_india" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>Instagram: @cookmitra_india</a>
               </li>
             </ul>
           </div>

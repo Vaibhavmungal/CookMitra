@@ -198,7 +198,7 @@ export const searchLocations = async (query, limit = 5) => {
 // Approximate city from the network IP — no browser permission needed, so it
 // can run on page open as a non-blocking hint until the user shares precise
 // GPS or picks a place manually. Tries BigDataCloud, then ipapi.co.
-// Returns { city, state, label } or null.
+// Returns { city, state, country, label } or null.
 export const fetchIpLocation = async () => {
   try {
     const r = await fetch("https://api.bigdatacloud.net/data/ip-geolocation-full?localityLanguage=en");
@@ -207,7 +207,8 @@ export const fetchIpLocation = async () => {
       const locality = d.location || {};
       const city = locality.city || locality.localityName || d.city || "";
       const state = locality.principalSubdivision || "";
-      if (city || state) return { city, state, label: formatLocationLabel({ city, state }) };
+      const country = d.country?.isoName || d.country?.name || "";
+      if (city || state) return { city, state, country, label: formatLocationLabel({ city, state }) };
     }
   } catch {
     // fall through to the backup provider
@@ -218,8 +219,9 @@ export const fetchIpLocation = async () => {
     const d2 = await r2.json();
     const city = d2.city || "";
     const state = d2.region || "";
+    const country = d2.country_name || "";
     if (!city && !state) return null;
-    return { city, state, label: formatLocationLabel({ city, state }) };
+    return { city, state, country, label: formatLocationLabel({ city, state }) };
   } catch {
     return null;
   }

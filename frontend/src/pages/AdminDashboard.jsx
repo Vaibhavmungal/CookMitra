@@ -9,6 +9,8 @@ import AddCookModal from "../components/AddCookModal";
 import AdminDocViewer from "../components/AdminDocViewer";
 import AdminDocUpload from "../components/AdminDocUpload";
 import CouponManagement from "../components/CouponManagement";
+import VisitStats from "../components/VisitStats";
+import AnalyticsPanel from "../components/AnalyticsPanel";
 import {
   ShieldAlert,
   Users,
@@ -32,7 +34,14 @@ import {
   Eye,
   EyeOff,
   Copy,
+  Briefcase,
+  MapPin,
+  Wallet,
+  Clock,
+  XCircle,
+  BarChart3,
 } from "lucide-react";
+import { resolveFileUrl } from "../components/CookDocUploads";
 
 const AdminDashboard = () => {  const [activeTab, setActiveTab] = useState("cooks");
 
@@ -93,6 +102,18 @@ const AdminDashboard = () => {  const [activeTab, setActiveTab] = useState("cook
         >
           <Tag size={17} /> Coupons
         </button>
+        <button
+          className={`tab-btn ${activeTab === "visits" ? "active" : ""}`}
+          onClick={() => setActiveTab("visits")}
+        >
+          <Eye size={17} /> Site Visits
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "analytics" ? "active" : ""}`}
+          onClick={() => setActiveTab("analytics")}
+        >
+          <BarChart3 size={17} /> Analytics
+        </button>
       </div>
 
       {activeTab === "cooks" && <CookManagement />}
@@ -101,6 +122,8 @@ const AdminDashboard = () => {  const [activeTab, setActiveTab] = useState("cook
       {activeTab === "admins" && <AdminManagement />}
       {activeTab === "leads" && <LeadManagement />}
       {activeTab === "coupons" && <CouponManagement />}
+      {activeTab === "visits" && <VisitStats />}
+      {activeTab === "analytics" && <AnalyticsPanel />}
     </div>
   );
 };
@@ -166,16 +189,27 @@ const CookManagement = () => {
       ) : filteredCooks.length > 0 ? (
         <div className="bookings-list-modern">
           {filteredCooks.map((cook) => (
-            <div key={cook._id} className="booking-item-card">
-              <div className="booking-item-top">
-                <div>
-                  <h3 style={{ margin: 0 }}>{cook.user?.name || "Cook Applicant"}</h3>
-                  <span style={{ fontSize: "0.85rem", color: "var(--slate-500)" }}>
-                    Email: {cook.user?.email} • Area: {cook.serviceArea}
-                  </span>
+            <div key={cook._id} className="admin-cook-card">
+              <div className="acc-head">
+                <div className="acc-ava">
+                  {cook.photoUrl ? (
+                    <img src={resolveFileUrl(cook.photoUrl)} alt={cook.user?.name || "Cook"} />
+                  ) : (
+                    (cook.user?.name || "C")[0].toUpperCase()
+                  )}
+                  <span
+                    className={`acc-ava-dot acc-dot-${cook.approvalStatus || "pending"}`}
+                    title={cook.approvalStatus}
+                  />
+                </div>
+                <div className="acc-id">
+                  <h3>{cook.user?.name || "Cook Applicant"}</h3>
+                  <p>
+                    <Mail size={12} /> {cook.user?.email}
+                  </p>
                 </div>
                 <span
-                  className={`badge ${
+                  className={`badge acc-badge ${
                     cook.approvalStatus === "approved"
                       ? "badge-emerald"
                       : cook.approvalStatus === "rejected"
@@ -183,32 +217,42 @@ const CookManagement = () => {
                       : "badge-amber"
                   }`}
                 >
-                  {cook.approvalStatus?.toUpperCase()}
+                  {cook.approvalStatus === "approved" ? (
+                    <CheckCircle2 size={13} />
+                  ) : cook.approvalStatus === "rejected" ? (
+                    <XCircle size={13} />
+                  ) : (
+                    <Clock size={13} />
+                  )}
+                  {cook.approvalStatus?.toUpperCase() || "PENDING"}
                 </span>
               </div>
 
-              <div className="booking-metadata-grid">
-                <div className="meta-field">
-                  <label>Experience</label>
-                  <span>{cook.experienceYears} Years</span>
-                </div>
-                <div className="meta-field">
-                  <label>Session Rate</label>
-                  <span style={{ color: "var(--primary)", fontWeight: 700 }}>
-                    {formatCurrency(cook.rate)}/hr
+              <div className="acc-chips">
+                <span className="acc-chip">
+                  <Briefcase size={13} /> {cook.experienceYears} yrs experience
+                </span>
+                <span className="acc-chip acc-chip-rate">
+                  <Wallet size={13} /> {formatCurrency(cook.rate)}/hr
+                </span>
+                {cook.serviceArea && (
+                  <span className="acc-chip">
+                    <MapPin size={13} /> {cook.serviceArea}
                   </span>
-                </div>
-                <div className="meta-field">
-                  <label>Specialties</label>
-                  <span>{cook.specialties?.join(", ") || "General"}</span>
-                </div>
+                )}
+                {(cook.specialties || []).slice(0, 3).map((s) => (
+                  <span key={s} className="acc-chip acc-chip-spec">
+                    <ChefHat size={13} /> {s}
+                  </span>
+                ))}
+                {(cook.specialties?.length || 0) > 3 && (
+                  <span className="acc-chip acc-chip-spec">
+                    +{cook.specialties.length - 3} more
+                  </span>
+                )}
               </div>
 
-              {(cook.skills || cook.bio) && (
-                <p style={{ fontSize: "0.9rem", color: "var(--slate-600)", margin: "0.5rem 0" }}>
-                  {cook.skills || cook.bio}
-                </p>
-              )}
+              {(cook.skills || cook.bio) && <p className="acc-bio">{cook.skills || cook.bio}</p>}
 
               {/* ID verification uploads — click a thumb to preview */}
               <AdminDocViewer

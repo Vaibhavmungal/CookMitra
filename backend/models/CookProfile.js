@@ -93,9 +93,15 @@ const cookProfileSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Rating aggregate, maintained by createReview only (updateCookProfile
+    // strips a `rating` payload so a cook can never edit their own score).
+    // `sum`/`count` are the authoritative counters, bumped atomically with
+    // $inc; `average` is derived from them and exists for read paths (cook
+    // lists, profiles) that should not have to recompute it.
     rating: {
       average: { type: Number, default: 0 },
       count: { type: Number, default: 0 },
+      sum: { type: Number, default: 0 },
     },
   },
   { timestamps: true }
