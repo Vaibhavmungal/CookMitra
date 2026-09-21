@@ -240,12 +240,15 @@
   flex-direction: column;
   gap: 0.5rem;
 }
-/* Make the official Google button fill the card width */
+/* The official Google button takes a fixed pixel width (see width="320" in
+ * GoogleSignInButton.jsx — GSI rejects percentage widths and logs
+ * "Provided button width is invalid"). Never force its iframe to 100% via
+ * CSS; keep the pixel width and centre it instead. */
 .google-btn-wrapper > div {
-  width: 100% !important;
+  display: flex;
+  justify-content: center;
 }
 .google-btn-wrapper iframe {
-  width: 100% !important;
   margin: 0 auto;
 }
 .google-btn-loading {
