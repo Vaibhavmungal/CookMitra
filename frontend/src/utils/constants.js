@@ -329,6 +329,64 @@ export const isCancelLocked = (obj, now = Date.now()) => {
   return now >= start.getTime() - CANCEL_LOCK_MINUTES * 60 * 1000;
 };
 
+// Reschedule policy — client mirror of the backend constants in
+// bookingController (RESCHEDULE_ALLOWED_STATUSES / RESCHEDULE_MIN_LEAD_MS /
+// MAX_CUSTOMER_RESCHEDULES). Customers may move an upcoming booking until 30
+// minutes before the current start, the NEW slot must be at least 30 minutes
+// away, and each booking moves at most twice; admins are exempt from all three.
+export const RESCHEDULE_LOCK_MINUTES = 30;
+export const RESCHEDULE_MIN_LEAD_MINUTES = 30;
+export const MAX_RESCHEDULES = 2;
+export const isRescheduleLocked = (obj, now = Date.now()) => {
+  const start = sessionStartDate(obj);
+  if (!start) return false;
+  return now >= start.getTime() - RESCHEDULE_LOCK_MINUTES * 60 * 1000;
+};
+
+// True when the signed-in viewer may be offered the Reschedule action. The
+// backend enforces the same rules — this only hides doomed buttons (a customer
+// on the deadline still gets the server's explicit 400 message).
+export const canRescheduleBooking = (booking, user, now = Date.now()) => {
+  if (!booking) return false;
+  if (!["requested", "accepted", "confirmed"].includes(booking.status)) return false;
+  if (booking.serviceStartedAt || booking.cookArrived || booking.hoursCompleted) return false;
+  const role = String(user?.role || "");
+  if (role === "admin") return true;
+  if (role !== "customer") return false;
+  if (Number(booking.rescheduleCount || 0) >= MAX_RESCHEDULES) return false;
+  return !isRescheduleLocked(booking, now);
+};
+
+// Display time-state for customer bookings — UPCOMING (service not yet
+// started), IN_PROGRESS (started, end still ahead), OVERDUE (scheduled end
+// passed, still not completed), plus the terminal statuses straight through.
+// Pure UI categorization: it never mutates status and never auto-completes —
+// a past end only moves the card between dashboard sections. Status takes
+// precedence over time (a completed booking stays COMPLETED forever).
+// Unknown/missing end ⇒ UPCOMING (safe default — never strand a booking).
+// Boundary: now >= end ⇒ OVERDUE (at exactly 8:00 PM an 8:00 PM end is over).
+export const getBookingDisplayState = (booking, now = Date.now()) => {
+  if (!booking) return "UNKNOWN";
+  const status = String(booking.status || "");
+  if (status === "completed") return "COMPLETED";
+  if (status === "cancelled") return "CANCELLED";
+  if (status === "rejected") return "REJECTED";
+  if (status === "expired") return "EXPIRED";
+  const end = sessionEndDate(booking);
+  if (!end) return "UPCOMING";
+  if (now < end.getTime()) {
+    const start = sessionStartDate(booking);
+    if (start && now >= start.getTime()) return "IN_PROGRESS";
+    return "UPCOMING";
+  }
+  return "OVERDUE";
+};
+
+// True when a live (non-terminal) booking's scheduled end has passed without
+// completion — the card belongs in Action Required, never Active & Upcoming.
+export const isBookingOverdue = (booking, now = Date.now()) =>
+  getBookingDisplayState(booking, now) === "OVERDUE";
+
 // True when the session is under way: the cook verified the OTP
 // (serviceStartedAt set) OR now ≥ date + startTime. Unknown start ⇒ false,
 // matching how hours-complete treats an unknown end.

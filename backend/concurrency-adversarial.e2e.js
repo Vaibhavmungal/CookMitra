@@ -5,11 +5,11 @@
 // burst below is dispatched with Promise.allSettled over synchronously-created
 // fetch promises, so all requests in a burst are in flight at the same time.
 //
-// What it does (15 scenarios):
+// What it does (16 scenarios):
 //   T01  30 (or FLOOD_N) customers, same cook + slot, same tick
 //   T02  20 customers, overlapping ranges, same tick
 //   T03  two accepts of the SAME booking, same tick
-//   T04  accept vs removed-reschedule tombstone (410), same tick
+//   T04  accept vs reschedule (instant move), same tick
 //   T05  accept vs cancel, same tick
 //   T06  create (overlapping) vs accept, same tick
 //   T07  pay-confirm vs cancel, same tick            (needs test payments)
@@ -23,6 +23,7 @@
 //   T13  invalid-id + wrong-owner ops vs a valid op, same tick
 //   T14  same customer + same key from "two devices", same tick
 //   T15  identical amounts, distinct payments, same tick (needs test payments)
+//   T16  two reschedules of one booking, same tick
 //
 // For EVERY test it records: initial DB state, every response status,
 // final DB state, then checks: overlapping active bookings, invalid status
@@ -498,10 +499,12 @@ const bookPayload = (cookId, date, s, e, extra = {}) => ({
     await api("PATCH", `/bookings/${id}/cancel`, { token: cook.token, body: {} });
   }
 
-  // ══ T04: accept vs removed-reschedule tombstone ═══════════════════════════
-  // Self-serve reschedule was removed; the endpoint is a permanent 410
-  // tombstone. This burst proves a concurrent tombstone call can neither
-  // disturb the accept nor mutate the booking.
+  // ══ T04: accept vs reschedule, same tick ══════════════════════════════════
+  // Both orders are legal: the instant move may land before the accept
+  // (booking ends accepted at the NEW slot) or after it (accepted at the OLD
+  // slot and the move is refused by the status/rescheduleCount claim guard).
+  // The result must be exactly one of those two worlds — never a mixed slot,
+  // never a lost update, never a dirty history.
   {
     const id = await freshRequest(customers[1], dayStr(12));
     const before = await fetchBooking(id);
@@ -511,12 +514,71 @@ const bookPayload = (cookId, date, s, e, extra = {}) => ({
     ]);
     const after = await fetchBooking(id);
     const an = historyAnomalies(after || { statusHistory: [] });
-    const moved = after?.startTime !== before?.startTime || after?.endTime !== before?.endTime;
-    const valid = ["requested", "accepted", "confirmed"].includes(after?.status) && an.out.length === 0 && !moved;
-    finalize("T04", "accept vs removed reschedule (410 tombstone)", ra.status === 200 && rr.status === 410, valid,
-      `accept=${ra.status} resched=${rr.status} final=${after?.status}@${after?.startTime} moved=${moved} anomalies=${an.out.join(";") || "none"}`,
-      { responses: [ra.status, rr.status], final: after });
+    const atNew = after?.startTime === "14:00" && after?.endTime === "16:00";
+    const atOld = after?.startTime === before?.startTime && after?.endTime === before?.endTime;
+    const count = Number(after?.rescheduleCount || 0);
+    // Accept must win its claim (the move never changes the status), and the
+    // move's HTTP answer must match the world the booking actually landed in.
+    const httpOk =
+      ra.status === 200 &&
+      [200, 400, 409].includes(rr.status) &&
+      ((rr.status === 200 && atNew) || (rr.status !== 200 && atOld));
+    const valid =
+      after?.status === "accepted" &&
+      (atNew || atOld) &&
+      count === (atNew ? 1 : 0) &&
+      an.out.length === 0;
+    const day = (await snapshotBookings(admin.token)).filter((b) =>
+      normId(b.cook) === cookId &&
+      Math.abs(new Date(b.date).getTime() - new Date(dayStr(12)).getTime()) < 12 * 3600 * 1000);
+    const overs = findOverlaps(day);
+    finalize("T04", "accept vs reschedule",
+      httpOk && overs.length === 0, valid && overs.length === 0,
+      `accept=${ra.status} resched=${rr.status} final=${after?.status}@${after?.startTime}-${after?.endTime} count=${count} overlaps=${overs.length} anomalies=${an.out.join(";") || "none"}`,
+      {
+        responses: [ra.status, rr.status],
+        final: after && { status: after.status, startTime: after.startTime, endTime: after.endTime, rescheduleCount: count },
+      });
     await api("PATCH", `/bookings/${id}/cancel`, { token: customers[1].token, body: {} });
+  }
+
+  // ══ T16: two reschedules of one booking, same tick ════════════════════════
+  // The optimistic claim (status + rescheduleCount) must admit exactly ONE
+  // move: one 200, one refusal, rescheduleCount 1, the booking parked on
+  // exactly one of the two targets, and a single "Rescheduled" history note.
+  {
+    const mover = customers[6] || customers[0];
+    const id = await freshRequest(mover, dayStr(26));
+    const before = await fetchBooking(id);
+    const [r1, r2] = await burst([
+      () => api("PATCH", `/bookings/${id}/reschedule`, { token: mover.token, body: { date: dayStr(26), startTime: "14:00" } }),
+      () => api("PATCH", `/bookings/${id}/reschedule`, { token: mover.token, body: { date: dayStr(26), startTime: "16:00" } }),
+    ]);
+    const after = await fetchBooking(id);
+    const count = Number(after?.rescheduleCount || 0);
+    const at14 = after?.startTime === "14:00" && after?.endTime === "16:00";
+    const at16 = after?.startTime === "16:00" && after?.endTime === "18:00";
+    const atOld = after?.startTime === before?.startTime && after?.endTime === before?.endTime;
+    const moveNotes = (after?.statusHistory || []).filter((h) => /Rescheduled from/i.test(String(h.note || ""))).length;
+    const httpOk =
+      [r1.status, r2.status].filter((s) => s === 200).length === 1 &&
+      [r1.status, r2.status].every((s) => [200, 409].includes(s));
+    const an = historyAnomalies(after || { statusHistory: [] });
+    const valid =
+      (at14 || at16) &&
+      !atOld &&
+      count === 1 &&
+      moveNotes === 1 &&
+      after?.status === "requested" &&
+      an.out.length === 0;
+    finalize("T16", "2x reschedule one booking",
+      httpOk, valid,
+      `responses=${r1.status},${r2.status} final=${after?.startTime}-${after?.endTime} count=${count} notes=${moveNotes} anomalies=${an.out.join(";") || "none"}`,
+      {
+        responses: [r1.status, r2.status],
+        final: after && { startTime: after.startTime, endTime: after.endTime, rescheduleCount: count },
+      });
+    await api("PATCH", `/bookings/${id}/cancel`, { token: mover.token, body: {} });
   }
 
   // ══ T05: accept vs cancel ═════════════════════════════════════════════════

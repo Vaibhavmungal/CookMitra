@@ -127,7 +127,13 @@ const originals = {
   userFindById: User.findById,
 };
 Booking.findOne = findOneStub;
-Booking.find = async () => []; // no rival bookings → no slot conflict
+// Chainable fake: the accept pre-check awaits `Booking.find(...).select(...)`,
+// so the stub must expose `.select` (a bare array threw → 500). Also thenable
+// so an awaited `Booking.find(...)` keeps working.
+Booking.find = () => ({
+  select: async () => [],
+  then: (resolve, reject) => Promise.resolve([]).then(resolve, reject),
+}); // no rival bookings → no slot conflict
 Notification.create = async (doc) => {
   notificationLog.push(doc);
   return doc;

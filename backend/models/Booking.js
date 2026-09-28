@@ -100,10 +100,33 @@ const bookingSchema = new mongoose.Schema(
     // existing hold instead of double-booking; bookings without a key are
     // unaffected.
     clientKey: { type: String, default: "", trim: true },
-    // Legacy: self-serve reschedule was removed, so nothing increments this
-    // any more. Kept so historical bookings (and their audit trail) stay
-    // readable; new bookings always carry 0.
+    // Self-serve reschedule counter (the customer cap + admin exemption live
+    // in bookingController). Historical rows keep whatever they had; new
+    // bookings start at 0.
     rescheduleCount: { type: Number, default: 0, min: 0 },
+    // Structured reschedule audit trail — one entry per move, written in the
+    // same update as the statusHistory note. Date fields are the stored
+    // IST-midnight Date instants (same shape as `date`); `by` is
+    // "customer" | "cook" | "admin". Cook-swap moves (v2) also record
+    // fromCook/toCook (+ denormalized names for history display) and the
+    // optional customer reason (≤200 chars, never sensitive PII).
+    reschedules: [
+      {
+        fromDate: Date,
+        fromStartTime: String,
+        fromEndTime: String,
+        toDate: Date,
+        toStartTime: String,
+        toEndTime: String,
+        by: String,
+        at: { type: Date, default: Date.now },
+        fromCook: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        toCook: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        fromCookName: { type: String, default: "", trim: true },
+        toCookName: { type: String, default: "", trim: true },
+        reason: { type: String, default: "", trim: true, maxlength: 200 },
+      },
+    ],
     // Coupon release idempotency: set once the held coupon is freed, so
     // concurrent cancel/expire paths cannot double-decrement usedCount.
     couponReleased: { type: Boolean, default: false },
@@ -169,6 +192,17 @@ const bookingSchema = new mongoose.Schema(
       },
       refundAmount: { type: Number, default: 0 },
       refundedAt: { type: Date },
+      // Customer post-service refund request (no-show / not completed). The
+      // customer never chooses an amount — refundAmount is always computed
+      // server-side (capped at maxRefundable). requestedBy is "customer" for
+      // self-serve requests ("system"/"admin" for queued cancels etc.).
+      // adminNote carries the decline reason (or partial-approval note) shown
+      // back to the customer on the booking page.
+      refundReason: { type: String, default: "", trim: true, maxlength: 120 },
+      refundCustomerNote: { type: String, default: "", trim: true, maxlength: 500 },
+      refundRequestedAt: { type: Date },
+      refundRequestedBy: { type: String, default: "", trim: true },
+      refundAdminNote: { type: String, default: "", trim: true, maxlength: 500 },
       // True for dev-gated test checkouts (no real money). Lets test
       // payments be told apart from real gateway payments later.
       testMode: { type: Boolean, default: false },

@@ -327,10 +327,27 @@ exports.approveRefund = async (req, res, next) => {
     }
     // Validate BEFORE claiming: amount caps, test-mode routing, and the
     // settled-payout clawback gate are all pure checks on the queued state.
+    // Optional body.amount selects a PARTIAL refund (0 < amount <= cap);
+    // omitted/wild values fall back to the full capped amount. The customer
+    // can never set this — this route is admin-only.
     const clawback = req.body?.clawback === true;
     const pre = refundApprovalCheck(booking, { clawback });
     if (!pre.ok) {
       return res.status(400).json({ message: pre.reasons[0], reasons: pre.reasons });
+    }
+    let approvedAmount = pre.amount;
+    let partial = false;
+    if (req.body?.amount != null && String(req.body.amount).trim() !== "") {
+      const asked = Math.round(Number(req.body.amount));
+      if (!Number.isFinite(asked) || !(asked > 0)) {
+        return res.status(400).json({ message: "Approved amount must be a positive number." });
+      }
+      const cap = maxRefundable(booking);
+      if (asked > cap) {
+        return res.status(400).json({ message: `Refund of ₹${asked} exceeds the refundable ₹${cap}` });
+      }
+      approvedAmount = asked;
+      partial = asked < pre.amount;
     }
     // Exactly one approver survives: concurrent approves lose here with a
     // safe 400 instead of double-charging the gateway.
@@ -363,7 +380,8 @@ exports.approveRefund = async (req, res, next) => {
       });
       return res.json(claimed);
     }
-    const refundAmount = pre.amount;
+    const refundAmount = approvedAmount;
+    const requestedAmount = Math.round(Number(claimed.payment?.refundAmount || refundAmount));
     if (claimed.payment?.razorpayPaymentId && razorpayConfigured && razorpayClient) {
       try {
         const refund = await razorpayClient.payments.refund(claimed.payment.razorpayPaymentId, {
@@ -385,9 +403,15 @@ exports.approveRefund = async (req, res, next) => {
     }
     claimed.statusHistory.push({
       status: claimed.status,
-      note: `Refund of ₹${refundAmount} approved by admin (${claimed.payment.refundStatus})` +
+      note:
+        (partial
+          ? `Partial refund of ₹${refundAmount} approved by admin (requested ₹${requestedAmount}, ${claimed.payment.refundStatus})`
+          : `Refund of ₹${refundAmount} approved by admin (${claimed.payment.refundStatus})`) +
         (clawback ? " — clawback required: cook payout was already settled, recover from the cook" : ""),
     });
+    claimed.payment.refundAdminNote = partial
+      ? `Partially approved: ₹${refundAmount}`
+      : `Approved in full: ₹${refundAmount}`;
     await claimed.save();
 
     await recordLedger({
@@ -414,8 +438,27 @@ exports.approveRefund = async (req, res, next) => {
         type: "refund_processed",
         booking: claimed._id,
         message: approved
-          ? `Your refund of ₹${refundAmount} has been approved — it reaches your account in 5–7 business days.`
+          ? partial
+            ? `Your refund request was partially approved — ₹${refundAmount} of ₹${claimed.payment.paidAmount}. Refund processing has started.`
+            : `Your refund of ₹${refundAmount} has been approved — it reaches your account in 5–7 business days.`
           : "Your approved refund hit a gateway error — our team is following up and will notify you.",
+      });
+    } catch {
+      // non-fatal
+    }
+    // The assigned cook's payout is decided by this refund (blocked while the
+    // refund is live; clawback when already settled) — they hear the outcome
+    // too, in their own words.
+    try {
+      const Notification = require("../models/Notification");
+      const ref = String(claimed._id).slice(-6).toUpperCase();
+      await Notification.create({
+        user: claimed.cook,
+        type: "refund_processed",
+        booking: claimed._id,
+        message:
+          `A refund of ₹${refundAmount} was approved for booking #${ref} — the cook payout for this booking will not proceed` +
+          (clawback ? " (it was already settled — our team will contact you about recovery)." : "."),
       });
     } catch {
       // non-fatal
@@ -441,6 +484,7 @@ exports.rejectRefund = async (req, res, next) => {
     }
     const reason = String(req.body?.reason || "").trim().slice(0, 200);
     booking.payment.refundStatus = "rejected";
+    booking.payment.refundAdminNote = reason;
     booking.statusHistory.push({
       status: booking.status,
       note: `Refund request declined by admin${reason ? `: ${reason}` : ""}`,
@@ -465,6 +509,20 @@ exports.rejectRefund = async (req, res, next) => {
         type: "refund_processed",
         booking: booking._id,
         message: `Your refund request for ₹${booking.payment?.refundAmount || booking.amount} was declined by our team${reason ? `: ${reason}` : ""}. Please contact support if you need help.`,
+      });
+    } catch {
+      // non-fatal
+    }
+    // Declining unblocks the cook leg (a rejected refund never gates payout)
+    // — the cook hears the request is closed.
+    try {
+      const Notification = require("../models/Notification");
+      const ref = String(booking._id).slice(-6).toUpperCase();
+      await Notification.create({
+        user: booking.cook,
+        type: "refund_processed",
+        booking: booking._id,
+        message: `The refund request for booking #${ref} was declined — the cook payout for this booking is no longer blocked.`,
       });
     } catch {
       // non-fatal
@@ -517,7 +575,7 @@ exports.rejectPayout = async (req, res, next) => {
       const Notification = require("../models/Notification");
       await Notification.create({
         user: booking.cook,
-        type: "payout_settled",
+        type: "payout_failed",
         booking: booking._id,
         message: `Your payout for the ${
           booking.date

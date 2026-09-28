@@ -1,7 +1,7 @@
 
 const express = require("express");
 const router = express.Router();
-const { body } = require("express-validator");
+const { body, query } = require("express-validator");
 const rateLimit = require("express-rate-limit");
 const validate = require("../middleware/validate");
 const { auth, authorize } = require("../middleware/auth");
@@ -18,10 +18,15 @@ const {
   cancelBooking,
   deleteBooking,
   rescheduleBooking,
+  getRescheduleOptions,
   startService,
   payBooking,
   markCookArrived,
 } = require("../controllers/bookingController");
+const {
+  getRefundEligibility,
+  requestRefund,
+} = require("../controllers/refundController");
 
 router.post(
   "/",
@@ -107,13 +112,50 @@ router.patch("/:id/cancel", auth, cancelBooking);
 // Customers may permanently remove bookings the cook never accepted
 // (requested / rejected / expired) or ones they already cancelled.
 router.delete("/:id", auth, authorize("customer"), deleteBooking);
-// Self-serve reschedule removed — route kept so old clients get an explicit
-// 410 (see rescheduleBooking stub) instead of a generic 404.
+// Reschedule (+ v2 cook reassignment): free slots for the picker + the move
+// itself. v1 policy is customer + admin (cooks don't move bookings); the
+// controller enforces ownership, the 30-minute cutoff/lead, the reschedule
+// cap, cook eligibility, and the no-money-moves rule. Price, payment status
+// and rescheduleCount can never be set from the request — they are absent
+// from the validators below by design.
+router.get(
+  "/:id/reschedule-options",
+  auth,
+  authorize("customer", "admin"),
+  [
+    query("date").matches(/^\d{4}-\d{2}-\d{2}$/).withMessage("Valid date (YYYY-MM-DD) is required"),
+    query("startTime").optional().matches(/^\d{1,2}:\d{2}$/).withMessage("Valid start time (HH:MM) is required"),
+  ],
+  validate,
+  getRescheduleOptions
+);
 router.patch(
   "/:id/reschedule",
   auth,
-  authorize("customer", "cook", "admin"),
+  authorize("customer", "admin"),
+  [
+    body("date").matches(/^\d{4}-\d{2}-\d{2}$/).withMessage("Valid date (YYYY-MM-DD) is required"),
+    body("startTime").matches(/^\d{1,2}:\d{2}$/).withMessage("Valid start time (HH:MM) is required"),
+    body("reason").optional().isString().withMessage("Reason must be text").isLength({ max: 200 }).withMessage("Reason must be under 200 characters"),
+    body("cookId").optional().isMongoId().withMessage("Selected cook is not available for the selected time"),
+  ],
+  validate,
   rescheduleBooking
+);
+// Post-service refund requests: eligibility is computed server-side from the
+// booking's own service clock — the frontend never decides, and amount /
+// status / eligibility keys are never read from the request by design.
+router.get("/:id/refund-eligibility", auth, getRefundEligibility);
+router.post(
+  "/:id/refund-request",
+  auth,
+  authorize("customer"),
+  [
+    body("reason").isString().withMessage("Please choose a refund reason").isLength({ min: 1, max: 120 }).withMessage("Please choose a refund reason"),
+    body("note").optional().isString().withMessage("Note must be text").isLength({ max: 500 }).withMessage("Note must be under 500 characters"),
+  ],
+  validate,
+  requestRefund
 );
 
 module.exports = router;

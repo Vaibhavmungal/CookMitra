@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const {
   getDayWindows,
   getDayBookings,
+  computeStartOptions,
   activeSlotMatch,
   findContainingWindow,
   findOverlapBooking,
@@ -91,6 +92,40 @@ const cancelLocked = (booking, now = Date.now()) => {
   const start = sessionStartDate(booking);
   return Boolean(start) && now >= start.getTime() - CANCEL_LOCK_MS;
 };
+
+// ── Reschedule policy (v1: customer + admin, instant move) ─────────────────
+// Only upcoming, not-yet-started bookings may move. The CURRENT slot must be
+// outside the same 30-minute cutoff as cancellation (a move is at least as
+// disruptive as a cancel) and the NEW slot must start at least 30 minutes from
+// now — without that lead a move could dodge the cutoff by jumping into a slot
+// that is already minutes away. Customers get a small cap; admins are exempt
+// from both the lock and the cap (support override).
+const RESCHEDULE_ALLOWED_STATUSES = ["requested", "accepted", "confirmed"];
+const RESCHEDULE_MIN_LEAD_MS = 30 * 60 * 1000;
+const MAX_CUSTOMER_RESCHEDULES = 2;
+// Service day 08:00–20:00 — mirror of the constants in utils/slots.js (not
+// exported there) so a move can never land outside the bookable day.
+const RESCHEDULE_DAY_START_MIN = 8 * 60;
+const RESCHEDULE_DAY_END_MIN = 20 * 60;
+// Same 30-minute rule as cancel — a reschedule is not a lesser change of
+// commitment. Exported for the reschedule unit tests.
+const rescheduleLocked = (booking, now = Date.now()) => cancelLocked(booking, now);
+// Optional customer reason for a move (v2) — stored on the reschedules[]
+// audit entry, never mandatory, never sensitive PII, max 200 chars.
+const RESCHEDULE_REASONS = [
+  "Change of plans",
+  "Personal reason",
+  "Wrong date/time selected",
+  "Cook unavailable",
+  "Family/event schedule changed",
+  "Other",
+];
+const normalizeRescheduleReason = (raw) => {
+  const s = String(raw ?? "").trim().slice(0, 200);
+  if (!s) return "";
+  return s;
+};
+
 
 // Refund policy: money is NEVER moved automatically. A cancel, reject or
 // expiry of a paid booking only queues a refund request (refundStatus
@@ -207,12 +242,28 @@ const notifyServiceCompleted = async (booking) => {
   } catch {
     // non-fatal
   }
-  await Notification.create({
-    user: booking.customer,
-    type: "booking_completed",
-    booking: booking._id,
-    message: `Service complete! ${cookName} finished your session — please rate your cook.`,
-  });
+  try {
+    await Notification.create({
+      user: booking.customer,
+      type: "booking_completed",
+      booking: booking._id,
+      message: `Service complete! ${cookName} finished your session — please rate your cook.`,
+    });
+  } catch {
+    // non-fatal
+  }
+  // The cook hears about it too (mirrors the manual-complete notice) —
+  // completion closes their job and unlocks the payout queue.
+  try {
+    await Notification.create({
+      user: booking.cook,
+      type: "booking_completed",
+      booking: booking._id,
+      message: "Service marked complete — the customer has been asked to rate the session.",
+    });
+  } catch {
+    // non-fatal
+  }
 };
 
 // Flag cooking-hours completion. The session clock only runs after the cook
@@ -236,9 +287,20 @@ const markHoursCompleteIfNeeded = async (booking) => {
     (!booking.payment?.refundStatus || booking.payment.refundStatus === "none")
   ) {
     try {
-      if (queueRefundForApproval(booking, "booking_unattended") > 0) {
+      const queued = queueRefundForApproval(booking, "booking_unattended");
+      if (queued > 0) {
         await booking.save();
         changed = true;
+        try {
+          await Notification.create({
+            user: booking.customer,
+            type: "refund_pending",
+            booking: booking._id,
+            message: `Your refund of ₹${queued} is under admin review.`,
+          });
+        } catch {
+          // non-fatal
+        }
       }
     } catch {
       // non-fatal: retried on the next read
@@ -325,8 +387,9 @@ const markHoursCompleteIfNeeded = async (booking) => {
       // for admin approval and free the coupon, exactly like a cancel does —
       // queueRefundForApproval is a no-op unless paid with no refund yet, and
       // releaseCouponUsage claims atomically, so repeats are safe.
+      let unattendedRefund = 0;
       try {
-        queueRefundForApproval(booking, "booking_unattended");
+        unattendedRefund = queueRefundForApproval(booking, "booking_unattended") || 0;
       } catch {
         // non-fatal: the status flip below is what matters
       }
@@ -337,6 +400,40 @@ const markHoursCompleteIfNeeded = async (booking) => {
       }
       changed = true;
       await booking.save();
+      // Both sides hear about the no-show (best-effort — the flip above is
+      // what matters). The customer also learns a refund was queued.
+      try {
+        await Notification.create({
+          user: booking.customer,
+          type: "booking_unattended",
+          booking: booking._id,
+          message: `Your cook did not attend the session.${unattendedRefund > 0 ? ` A refund of ₹${unattendedRefund} has been requested — our team will review it shortly.` : " Please contact support if you were charged."}`,
+        });
+      } catch {
+        // non-fatal
+      }
+      try {
+        await Notification.create({
+          user: booking.cook,
+          type: "booking_unattended",
+          booking: booking._id,
+          message: "You missed a booked session — it was marked unattended. Please contact support if this is a mistake.",
+        });
+      } catch {
+        // non-fatal
+      }
+      if (unattendedRefund > 0) {
+        try {
+          await Notification.create({
+            user: booking.customer,
+            type: "refund_pending",
+            booking: booking._id,
+            message: `Your refund of ₹${unattendedRefund} is under admin review.`,
+          });
+        } catch {
+          // non-fatal
+        }
+      }
     }
   }
   return changed;
@@ -991,6 +1088,17 @@ const expireBookingIfNeeded = async (booking) => {
       } catch {
         // non-fatal: expiry itself must always succeed
       }
+      // The cook's calendar just freed up — tell them the request lapsed.
+      try {
+        await Notification.create({
+          user: booking.cook,
+          type: "booking_expired",
+          booking: booking._id,
+          message: "A booking request expired without a response — the slot is open again.",
+        });
+      } catch {
+        // non-fatal: expiry itself must always succeed
+      }
       return booking;
     }
     if (
@@ -1016,6 +1124,17 @@ const expireBookingIfNeeded = async (booking) => {
       } catch {
         // non-fatal: expiry itself must always succeed
       }
+      // The held slot just freed up — tell the cook it is bookable again.
+      try {
+        await Notification.create({
+          user: booking.cook,
+          type: "booking_cancelled",
+          booking: booking._id,
+          message: "A held slot was released (the customer didn't pay in time) — it is bookable again.",
+        });
+      } catch {
+        // non-fatal: expiry itself must always succeed
+      }
       return booking;
     }
   } catch {
@@ -1027,8 +1146,15 @@ const expireBookingIfNeeded = async (booking) => {
 exports.expireBookingIfNeeded = expireBookingIfNeeded;
 // Exported for unit tests of the cook-login no-show rule.
 exports.isNoShowPastHours = isNoShowPastHours;
+// Exported for unit tests of the auto-complete notification path.
+exports.markHoursCompleteIfNeeded = markHoursCompleteIfNeeded;
 // Exported for unit tests of the 30-minute cancel cutoff.
 exports.cancelLocked = cancelLocked;
+// Exported for unit tests of the 30-minute reschedule cutoff.
+exports.rescheduleLocked = rescheduleLocked;
+// Exported for the cook-reassignment reschedule tests + options feed.
+exports.RESCHEDULE_REASONS = RESCHEDULE_REASONS;
+exports.normalizeRescheduleReason = normalizeRescheduleReason;
 
 exports.getMyBookings = async (req, res, next) => {  try {
     // A request that expired (cook didn't respond in 5 minutes) stays in the
@@ -1929,13 +2055,690 @@ exports.cancelBooking = async (req, res, next) => {
   }
 };
 
-// Self-serve reschedule removed: bookings can no longer be moved to a new
-// date/time via the API. Kept as a stub so old clients get an explicit
-// message instead of a generic 404.
-exports.rescheduleBooking = async (req, res) => {
-  return res.status(410).json({
-    message: "Rescheduling is no longer available — please cancel this booking and create a new one for the new time.",
+// Free slots for moving a booking to a new day — the reschedule picker's
+// feed. Auth: the booking's own customer or an admin (cooks cannot reschedule
+// in v1). The booking being moved is excluded from the occupancy check so its
+// own current hold never hides the calendar around it. Shape mirrors
+// GET /availability so the client can reuse its slot picker.
+//
+// Slot+cook mode: with ?date=&startTime= the response also answers whether
+// the CURRENT cook covers that exact slot and, when not, lists verified
+// replacement cooks — public cards only, never PII.
+exports.getRescheduleOptions = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+    const isCustomer = booking.customer.toString() === req.user.id;
+    const isAdmin = String(req.user.role).toUpperCase() === "ADMIN";
+    if (!isCustomer && !isAdmin) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const strictDay = parseDayStrict(req.query.date);
+    if (!strictDay) {
+      return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
+    }
+    const dayStr = istDayString(strictDay);
+    if (dayStr < istDayString()) {
+      return res.status(400).json({ message: "That date already passed — please pick today or a future date." });
+    }
+    if (strictDay.getTime() > Date.now() + MAX_BOOKING_HORIZON_DAYS * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ message: "That date is too far ahead — please pick a nearer date." });
+    }
+
+    const durHours = Number(booking.durationHours);
+    if (!Number.isFinite(durHours) || durHours * 60 < 30 || durHours > 4) {
+      return res.status(400).json({ message: "This booking has no usable duration — please contact support" });
+    }
+
+    const windows = await getDayWindows(booking.cook, dayStr);
+    const rivals = (await getDayBookings(booking.cook, dayStr)).filter(
+      (b) => String(b._id) !== String(booking._id)
+    );
+    // Same 30-minute lead rule the move itself enforces; admins see all slots
+    // (support can move a booking into the next slot if needed).
+    const slots = computeStartOptions(windows, rivals, durHours).filter((s) => {
+      if (isAdmin) return true;
+      const instant = istEventInstant(dayStr, s.startTime);
+      return Boolean(instant) && instant.getTime() - Date.now() >= RESCHEDULE_MIN_LEAD_MS;
+    });
+
+    const base = {
+      date: dayStr,
+      durationHours: durHours,
+      currentSlot: {
+        date: istDayString(booking.date),
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+      },
+      slots: slots.map((s) => ({ ...s, derived: true })),
+    };
+
+    // Date-only mode (calendar feed) — unchanged v1 behaviour.
+    const rawStart = req.query.startTime;
+    if (rawStart == null || String(rawStart).trim() === "") {
+      return res.json(base);
+    }
+
+    // Slot+cook mode — is the current cook free at exactly this start?
+    const slotStart = parseTimeStrict(String(rawStart).trim());
+    if (slotStart == null || !isOnGrid(slotStart)) {
+      return res.status(400).json({ message: "Valid start time (HH:MM) is required" });
+    }
+    const durMin = Math.round(Number(booking.durationHours || 0) * 60);
+    const slotEnd = slotStart + durMin;
+    const slotStartTime = minutesToTime(slotStart);
+    const slotEndTime = minutesToTime(slotEnd);
+    if (slotStart < RESCHEDULE_DAY_START_MIN || slotEnd > RESCHEDULE_DAY_END_MIN) {
+      return res.status(400).json({
+        message: "Sessions must run between 8:00 AM and 8:00 PM",
+        currentCookAvailable: false,
+        currentCookUnavailableReason: "outside_working_hours",
+        slot: { date: dayStr, startTime: slotStartTime, endTime: slotEndTime },
+        availableCooks: [],
+      });
+    }
+    if (!isAdmin) {
+      const instant = istEventInstant(dayStr, slotStartTime);
+      if (!instant || instant.getTime() - Date.now() < RESCHEDULE_MIN_LEAD_MS) {
+        return res.status(400).json({ message: "The new time must be at least 30 minutes from now — please pick a later slot." });
+      }
+    }
+    const check = await checkCookForSlot(booking.cook, booking, dayStr, slotStartTime, slotEndTime);
+    if (check.ok) {
+      return res.json({
+        ...base,
+        slot: { date: dayStr, startTime: slotStartTime, endTime: slotEndTime },
+        currentCookAvailable: true,
+        availableCooks: [],
+      });
+    }
+    const availableCooks = await findReplacementCooks(
+      booking, dayStr, slotStartTime, slotEndTime, booking.cook
+    );
+    return res.json({
+      ...base,
+      slot: { date: dayStr, startTime: slotStartTime, endTime: slotEndTime },
+      currentCookAvailable: false,
+      currentCookUnavailableReason: check.conflict ? "already_booked" : "cook_unavailable",
+      currentCookMessage: "Your current cook is unavailable for this time.",
+      availableCooks,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Move an upcoming booking to a new date/time (same duration, same money;
+// optionally a new cook when the original cannot cover the new slot — v2).
+// Policy: the booking's own customer, or an admin, may move it; the
+// move is instant — the other side is notified — and subject to:
+//   1. requested / accepted / confirmed only (never a started or terminal row),
+//   2. the CURRENT slot outside the 30-minute cutoff (admins exempt),
+//   3. the NEW slot ≥30 minutes away, on the 30-minute grid, inside the cook's
+//      open windows, clear of rival bookings, and inside the service day — the
+//      same rules booking creation enforces,
+//   4. at most MAX_CUSTOMER_RESCHEDULES moves (admins exempt).
+// Money is NEVER touched: the slab fee depends only on the duration, which
+// cannot change here — no refund, re-charge, coupon or ledger work happens.
+// The 5-minute request/payment windows are renewed in the SAME atomic update
+// so a moved hold cannot expire the moment it lands.
+// A move keeps duration/money; it may also swap the cook when the original
+// cook cannot cover the new slot. All cook eligibility checks mirror booking
+// creation (approved profile, live account, availability toggle, open window,
+// no overlap) plus the service-type membership when the profile declares one.
+// Public cook card for reschedule replacement lists — discovery fields only.
+// Never phones, documents, payout details, tokens or admin data.
+const publicRescheduleCookCard = (profile, userDoc) => ({
+  cookId: String(userDoc?._id || profile?.user?._id || profile?.user || ""),
+  name: String(userDoc?.name || "Verified cook"),
+  photoUrl: String(profile?.photoUrl || ""),
+  rating: Number(profile?.rating?.average || 0),
+  ratingCount: Number(profile?.rating?.count || 0),
+  experienceYears: Number(profile?.experienceYears || 0),
+  serviceArea: String(profile?.serviceArea || ""),
+  specialties: Array.isArray(profile?.specialties) ? profile.specialties.slice(0, 6) : [],
+});
+// Single-cook eligibility for an exact [startTime, endTime] slot. Returns
+// { ok:true, profile, userDoc } or { ok:false, message, conflict } where
+// conflict=true maps to HTTP 409 (slot taken) and false maps to 400.
+const checkCookForSlot = async (cookUserId, booking, dayStr, startTime, endTime) => {
+  const unavailable = (message, conflict = false) => ({ ok: false, message, conflict });
+  let profile = null;
+  try {
+    profile = await CookProfile.findOne({ user: cookUserId });
+  } catch {
+    return unavailable("Cook not found or not approved");
+  }
+  if (!profile || profile.approvalStatus !== "approved") {
+    return unavailable("Cook not found or not approved");
+  }
+  // Live-account check (same fail-closed shape as booking creation): only
+  // runs against a live DB; disconnected unit-test fakes skip it while the
+  // profile/availability/window/overlap checks below still run in memory.
+  if (dbReady()) {
+    try {
+      const account = await User.findById(cookUserId).select("status name");
+      if (!account || account.status === "suspended") {
+        return unavailable("This cook is no longer available for the selected time. Please choose another cook.");
+      }
+    } catch {
+      return unavailable("Cook not found or not approved");
+    }
+  }
+  if (!(await resolveCookAvailability(profile))) {
+    return unavailable("This cook is no longer available for the selected time. Please choose another cook.");
+  }
+  // Service-type membership — only when the profile declares a list (legacy
+  // profiles with an empty list can perform any service, as in creation).
+  if (
+    Array.isArray(profile.serviceTypes) &&
+    profile.serviceTypes.length > 0 &&
+    booking?.serviceType &&
+    !profile.serviceTypes.includes(booking.serviceType)
+  ) {
+    return unavailable("This cook does not offer the requested service for the selected time. Please choose another cook.");
+  }
+  let windows = [];
+  try {
+    windows = await getDayWindows(cookUserId, dayStr);
+  } catch {
+    windows = [];
+  }
+  if (!findContainingWindow(windows, startTime, endTime)) {
+    return unavailable("This cook is no longer available for the selected time. Please choose another cook.");
+  }
+  let rivals = [];
+  try {
+    rivals = await getDayBookings(cookUserId, dayStr);
+  } catch {
+    rivals = [];
+  }
+  const clash = findOverlapBooking(rivals, startTime, endTime);
+  // The booking being moved never blocks itself (same-cook re-pick).
+  if (clash && String(clash._id) !== String(booking?._id)) {
+    return unavailable("This cook was just booked for the selected time. Please choose another cook.", true);
+  }
+  return { ok: true, profile };
+};
+// Replacement-cook search for a slot the current cook cannot cover.
+// Batched: one profile query + one bookings $in query, then in-memory math
+// per cook (same pattern as availability search).
+const findReplacementCooks = async (booking, dayStr, startTime, endTime, excludeCookId, limit = 12) => {
+  let profiles = [];
+  try {
+    profiles = await CookProfile.find({ approvalStatus: "approved" })
+      .populate("user", "name status")
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+  } catch {
+    return [];
+  }
+  const eligible = [];
+  for (const p of profiles || []) {
+    const uid = String(p?.user?._id || p?.user || "");
+    if (!uid || uid === String(excludeCookId || "")) continue;
+    if (!p?.user || p.user.status === "suspended") continue;
+    eligible.push(p);
+  }
+  const flags = await Promise.all(eligible.map((p) => resolveCookAvailability(p)));
+  const live = eligible.filter((_, i) => flags[i]);
+  const withService = live.filter((p) => {
+    if (!Array.isArray(p?.serviceTypes) || p.serviceTypes.length === 0) return true;
+    return booking?.serviceType ? p.serviceTypes.includes(booking.serviceType) : true;
   });
+  let bookingsByCook = new Map();
+  try {
+    const ids = withService.map((p) => p?.user?._id || p?.user);
+    const { start, end } = dayBounds(dayStr);
+    const all = await Booking.find({
+      cook: { $in: ids },
+      date: { $gte: start, $lte: end },
+      $or: activeSlotMatch(),
+    })
+      .select("cook startTime endTime status")
+      .lean();
+    for (const b of all || []) {
+      const key = String(b.cook);
+      if (!bookingsByCook.has(key)) bookingsByCook.set(key, []);
+      bookingsByCook.get(key).push(b);
+    }
+  } catch {
+    bookingsByCook = new Map();
+  }
+  const out = [];
+  for (const p of withService) {
+    const uid = String(p?.user?._id || p?.user || "");
+    const wins = (() => {
+      try {
+        const { resolveCookWindows } = require("../utils/slots");
+        return resolveCookWindows(p, dayStr);
+      } catch {
+        return null;
+      }
+    })();
+    if (!wins || !findContainingWindow(wins, startTime, endTime)) continue;
+    if (findOverlapBooking(bookingsByCook.get(uid) || [], startTime, endTime)) continue;
+    out.push(publicRescheduleCookCard(p, p.user));
+    if (out.length >= limit) break;
+  }
+  // Highest-rated first — the customer picks from a short, sane list.
+  out.sort((a, b) => b.rating - a.rating || b.ratingCount - a.ratingCount);
+  return out;
+};
+const dateLabelFromParts = (dayStr) => {
+  const m = String(dayStr || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(dayStr || "");
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] || m[2]}`;
+};
+
+exports.rescheduleBooking = async (req, res, next) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const isCustomer = booking.customer.toString() === req.user.id;
+    const isAdmin = String(req.user.role).toUpperCase() === "ADMIN";
+    if (!isCustomer && !isAdmin) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // A hold past its window is already dead — expire it first so a stale
+    // request can never be moved (mirrors cancelBooking).
+    await expireBookingIfNeeded(booking);
+
+    const requestedDayStr = String(req.body?.date || "").trim();
+    const requestedStart = parseTimeStrict(req.body?.startTime);
+    // Optional v2 fields: reason (≤200 chars, stored on the audit entry) and
+    // cookId (explicit cook swap when the original cook cannot cover the new
+    // slot; aliases accepted for forward-compat clients).
+    const rawReason = String(req.body?.reason ?? "");
+    if (rawReason.length > 200) {
+      return res.status(400).json({ message: "Reschedule reason is too long — please keep it under 200 characters." });
+    }
+    const reason = rawReason.trim().slice(0, 200);
+    const rawCookId = req.body?.cookId ?? req.body?.newCookId ?? req.body?.selectedCookId;
+    let requestedCookId = null;
+    if (rawCookId != null && String(rawCookId).trim() !== "") {
+      requestedCookId = String(rawCookId).trim();
+      if (!mongoose.Types.ObjectId.isValid(requestedCookId)) {
+        return res.status(400).json({ message: "This cook is no longer available for the selected time. Please choose another cook." });
+      }
+    }
+
+    // Idempotency first: a retry of a move that already landed (double-click,
+    // client timeout, back button) reports success instead of 400/409. Only
+    // while the row is still movable — a cancelled booking must never answer
+    // "moved". A cook swap is part of the identity: same slot + same cook →
+    // unchanged; same slot + different cook is a real (counted) change.
+    const sameSlot =
+      RESCHEDULE_ALLOWED_STATUSES.includes(booking.status) &&
+      requestedDayStr === istDayString(booking.date) &&
+      requestedStart != null &&
+      requestedStart === timeToMinutes(booking.startTime);
+    if (sameSlot && (requestedCookId == null || requestedCookId === String(booking.cook))) {
+      return res.json({ ...stripServiceOtp(booking), unchanged: true });
+    }
+
+    if (!RESCHEDULE_ALLOWED_STATUSES.includes(booking.status)) {
+      return res.status(400).json({
+        message:
+          booking.status === "in_progress"
+            ? "This session has already started — rescheduling is no longer possible."
+            : "Only upcoming bookings that have not started can be rescheduled.",
+      });
+    }
+    if (booking.serviceStartedAt || booking.cookArrived || booking.hoursCompleted) {
+      return res.status(400).json({
+        message: "This session is already under way — rescheduling is no longer possible.",
+      });
+    }
+    // 30-minute cutoff on the CURRENT slot; admins are exempt (support).
+    if (!isAdmin && rescheduleLocked(booking)) {
+      return res.status(400).json({
+        message: "Bookings can only be rescheduled until 30 minutes before the service start time. Please contact support for help.",
+      });
+    }
+    // Move cap: self-serve rescheduling is not unlimited shuffling.
+    if (!isAdmin && Number(booking.rescheduleCount || 0) >= MAX_CUSTOMER_RESCHEDULES) {
+      return res.status(400).json({
+        message: "This booking has already been rescheduled twice — please contact support if you need another change.",
+      });
+    }
+
+    // Strict date/time validation (server-side, IST) — the same rules booking
+    // creation enforces, so a stale tab can never land an off-grid slot.
+    if (requestedStart == null) {
+      return res.status(400).json({ message: "Valid start time (HH:MM) is required" });
+    }
+    if (!isOnGrid(requestedStart)) {
+      return res.status(400).json({ message: "Start time must be on a 30-minute interval" });
+    }
+    const strictDay = parseDayStrict(requestedDayStr);
+    if (!strictDay) {
+      return res.status(400).json({ message: "Valid date (YYYY-MM-DD) is required" });
+    }
+    const dayStr = istDayString(strictDay);
+    const todayStr = istDayString();
+    if (dayStr < todayStr) {
+      return res.status(400).json({ message: "That date already passed — please pick today or a future date." });
+    }
+    if (strictDay.getTime() > Date.now() + MAX_BOOKING_HORIZON_DAYS * 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ message: "That date is too far ahead — please pick a nearer date." });
+    }
+    if (dayStr === todayStr && requestedStart < istNowMinutes()) {
+      return res.status(400).json({ message: "That time already passed today — please pick a later start time." });
+    }
+    // Minimum lead on the NEW slot: without it a move could dodge the cutoff
+    // above by jumping into a slot that is minutes away.
+    if (!isAdmin) {
+      const targetInstant = istEventInstant(dayStr, minutesToTime(requestedStart));
+      if (!targetInstant || targetInstant.getTime() - Date.now() < RESCHEDULE_MIN_LEAD_MS) {
+        return res.status(400).json({
+          message: "The new time must be at least 30 minutes from now — please pick a later slot.",
+        });
+      }
+    }
+
+    // Duration is fixed by the original booking — it drives the price, so it
+    // must never change here.
+    const durMin = Math.round(Number(booking.durationHours || 0) * 60);
+    if (!Number.isFinite(durMin) || durMin < 30 || durMin > 4 * 60) {
+      return res.status(400).json({ message: "This booking has no usable duration — please contact support" });
+    }
+    const endMin = requestedStart + durMin;
+    const startTime = minutesToTime(requestedStart);
+    const endTime = minutesToTime(endMin);
+    // Service day 08:00–20:00 — mirror of the engine's clamp in utils/slots.js.
+    if (requestedStart < RESCHEDULE_DAY_START_MIN || endMin > RESCHEDULE_DAY_END_MIN) {
+      return res.status(400).json({ message: "Sessions must run between 8:00 AM and 8:00 PM" });
+    }
+
+    // Target cook: explicit swap (v2) or the currently assigned cook (v1).
+    // Never trust the frontend's availability answer — every eligibility
+    // check below is re-run server-side against live data.
+    const targetCookId = requestedCookId || String(booking.cook);
+    const cookChanged = String(targetCookId) !== String(booking.cook);
+
+    if (!cookChanged) {
+      // The cook must still be able to take work: approved profile, live
+      // account, availability toggle on — the checks booking creation runs.
+      const cookProfile = await CookProfile.findOne({ user: booking.cook, approvalStatus: "approved" });
+      if (!cookProfile) {
+        return res.status(400).json({ message: "Cook not found or not approved" });
+      }
+      if (dbReady()) {
+        try {
+          const cookAccount = await User.findById(booking.cook).select("status");
+          if (!cookAccount || cookAccount.status === "suspended") {
+            return res.status(400).json({ message: "Cook not found or not approved" });
+          }
+        } catch {
+          return res.status(400).json({ message: "Cook not found or not approved" });
+        }
+      }
+      if (!(await resolveCookAvailability(cookProfile))) {
+        return res.status(400).json({
+          message: "Your current cook is unavailable for this time. Please choose another time or find another available cook.",
+          currentCookAvailable: false,
+        });
+      }
+
+      // The new slot must sit inside one of the cook's open windows and clash
+      // with nothing else (the booking being moved is excluded from its own
+      // overlap check).
+      const windows = await getDayWindows(booking.cook, dayStr);
+      if (!findContainingWindow(windows, startTime, endTime)) {
+        return res.status(400).json({
+          message: "Your current cook is unavailable for this time. Please choose another time or find another available cook.",
+          currentCookAvailable: false,
+        });
+      }
+      const rivals = (await getDayBookings(booking.cook, dayStr)).filter(
+        (b) => String(b._id) !== String(booking._id)
+      );
+      if (findOverlapBooking(rivals, startTime, endTime)) {
+        return res.status(409).json({
+          message: "That time just got booked — please pick another start time",
+          currentCookAvailable: false,
+        });
+      }
+    } else {
+      // Cook swap: the selected cook must independently pass every
+      // eligibility check for the exact new slot (approved, live, available,
+      // service-type, window, overlap). Users cannot assign arbitrary,
+      // suspended or unverified cooks — the checks run here, not in the UI.
+      const swap = await checkCookForSlot(targetCookId, booking, dayStr, startTime, endTime);
+      if (!swap.ok) {
+        return res.status(swap.conflict ? 409 : 400).json({ message: swap.message });
+      }
+    }
+
+    // Everything below is the move itself. Capture the old slot first: the
+    // in-memory fallback mutates the document in place. Money is NEVER
+    // touched here — amount, payment and coupon fields are not in the update.
+    const oldDate = booking.date;
+    const oldStartTime = booking.startTime;
+    const oldEndTime = booking.endTime;
+    const oldCook = String(booking.cook);
+    const oldSlotLabel = `${dateLabelFromParts(istDayString(oldDate))} ${oldStartTime}–${oldEndTime}`.trim();
+    const newSlotLabel = `${dateLabelFromParts(dayStr)} ${startTime}–${endTime}`;
+    const actor = isAdmin ? "admin" : "customer";
+    const expectedCount = Number(booking.rescheduleCount || 0);
+    const newDay = istMidnight(dayStr);
+    // Denormalized cook names for the history display (best effort).
+    let oldCookName = "";
+    let newCookName = "";
+    try {
+      if (cookChanged && dbReady()) {
+        const [oldU, newU] = await Promise.all([
+          User.findById(oldCook).select("name").lean(),
+          User.findById(targetCookId).select("name").lean(),
+        ]);
+        oldCookName = String(oldU?.name || "");
+        newCookName = String(newU?.name || "");
+      }
+    } catch {
+      // non-fatal: ids alone still audit the swap
+    }
+    // 5-minute windows are renewed inside the same write (see policy above).
+    const renewedWindow =
+      booking.status === "requested"
+        ? { requestExpiresAt: new Date(Date.now() + REQUEST_WINDOW_MS) }
+        : booking.status === "accepted"
+          ? { paymentExpiresAt: new Date(Date.now() + PAYMENT_WINDOW_MS) }
+          : {};
+    const historyEntry = {
+      status: booking.status,
+      note:
+        `Rescheduled from ${oldSlotLabel} to ${newSlotLabel} by ${actor}` +
+        (cookChanged ? ` (cook reassigned${oldCookName || newCookName ? `: ${oldCookName || "previous cook"} → ${newCookName || "new cook"}` : ""})` : "") +
+        (reason ? ` — reason: ${reason}` : ""),
+    };
+    const auditEntry = {
+      fromDate: oldDate,
+      fromStartTime: oldStartTime,
+      fromEndTime: oldEndTime,
+      toDate: newDay,
+      toStartTime: startTime,
+      toEndTime: endTime,
+      by: actor,
+      at: new Date(),
+      fromCook: booking.cook,
+      toCook: targetCookId,
+      fromCookName: oldCookName,
+      toCookName: newCookName,
+      reason,
+    };
+
+    let moved = null;
+    if (dbReady()) {
+      // Optimistic claim: status + rescheduleCount pin the state that was read,
+      // so a concurrent move, accept, cancel or expiry makes the filter miss —
+      // exactly one racer wins. The date/time/cook swap lands in ONE atomic
+      // update — never new-time + old-unavailable-cook. Losers re-read below
+      // instead of silently dropping the request.
+      const claimFilter = { _id: booking._id, status: booking.status, rescheduleCount: expectedCount };
+      if (!isAdmin) claimFilter.customer = req.user.id;
+      try {
+        moved = await Booking.findOneAndUpdate(
+          claimFilter,
+          {
+            $set: {
+              date: newDay,
+              startTime,
+              endTime,
+              ...(cookChanged ? { cook: targetCookId } : {}),
+              rescheduleCount: expectedCount + 1,
+              ...renewedWindow,
+            },
+            $push: { statusHistory: historyEntry, reschedules: auditEntry },
+          },
+          { new: true }
+        );
+      } catch {
+        moved = null;
+      }
+      if (!moved) {
+        // Lost the race (or the state moved on): report the current truth.
+        let latest = null;
+        try {
+          latest = await Booking.findById(booking._id);
+        } catch {
+          latest = null;
+        }
+        if (!latest) {
+          return res.status(404).json({ message: "Booking not found" });
+        }
+        if (
+          RESCHEDULE_ALLOWED_STATUSES.includes(latest.status) &&
+          dayStr === istDayString(latest.date) &&
+          requestedStart === timeToMinutes(latest.startTime) &&
+          String(latest.cook) === String(requestedCookId || latest.cook)
+        ) {
+          return res.json({ ...stripServiceOtp(latest), unchanged: true });
+        }
+        return res.status(409).json({
+          message: "This booking was just updated elsewhere — please refresh to see its current time.",
+        });
+      }
+
+      // Cross-document race guard: a rival booking (a new request, or another
+      // move) can take this slot between the pre-check and the claim. Re-verify
+      // now against the TARGET cook; on a clash the deterministic tie-break
+      // gives the slot to the smaller booking id and this move is rolled back
+      // (slot + cook together — never a half-applied swap). (This codebase uses no
+      // Mongo transactions — accept/pay/start all re-verify overlaps too, so a
+      // crash before the rollback can only surface as a refused accept.)
+      try {
+        const after = (await getDayBookings(targetCookId, dayStr)).filter(
+          (b) => String(b._id) !== String(booking._id)
+        );
+        const clash = findOverlapBooking(after, startTime, endTime);
+        if (clash && String(clash._id) < String(booking._id)) {
+          const reverted = await Booking.findOneAndUpdate(
+            { _id: booking._id, status: booking.status, rescheduleCount: expectedCount + 1 },
+            {
+              $set: {
+                date: oldDate,
+                startTime: oldStartTime,
+                endTime: oldEndTime,
+                ...(cookChanged ? { cook: oldCook } : {}),
+                rescheduleCount: expectedCount,
+                ...(booking.status === "requested" ? { requestExpiresAt: booking.requestExpiresAt } : {}),
+                ...(booking.status === "accepted" ? { paymentExpiresAt: booking.paymentExpiresAt } : {}),
+              },
+              $pop: { statusHistory: 1, reschedules: 1 },
+            },
+            { new: true }
+          );
+          if (reverted) {
+            return res.status(409).json({
+              message: cookChanged
+                ? "This cook was just booked for the selected time. Please choose another cook."
+                : "That time just got booked — please pick another start time",
+            });
+          }
+          return res.status(409).json({
+            message: "That time just got booked while your move was in flight — please refresh to check your booking.",
+          });
+        }
+      } catch {
+        // Non-fatal: the pre-check covered the common case, and every
+        // downstream flow (accept/pay/start) re-verifies overlaps.
+      }
+    } else {
+      // Disconnected unit-test path (mirrors accept's legacy branch): apply the
+      // same move in memory so the controller stays testable without a DB.
+      booking.date = newDay;
+      booking.startTime = startTime;
+      booking.endTime = endTime;
+      if (cookChanged) booking.cook = targetCookId;
+      booking.rescheduleCount = expectedCount + 1;
+      Object.assign(booking, renewedWindow);
+      booking.statusHistory.push(historyEntry);
+      if (Array.isArray(booking.reschedules)) booking.reschedules.push(auditEntry);
+      await booking.save();
+      moved = booking;
+    }
+
+    // Both sides are always notified that the booking moved: the cook who
+    // must show up, and the customer who booked it. An admin move touches
+    // both parties since neither of them initiated it; a customer move
+    // confirms back to the customer as well as informing the cook. Cook
+    // swap: the old cook is released, the new cook is assigned — each gets
+    // exactly one targeted message.
+    const notifyMoved = (user, message) =>
+      Notification.create({ user, type: "booking_rescheduled", booking: booking._id, message });
+    try {
+      if (cookChanged) {
+        await notifyMoved(
+          oldCook,
+          `A booking previously assigned to you is no longer yours — its schedule was changed to ${newSlotLabel}. The slot is now open.`
+        );
+        await notifyMoved(
+          targetCookId,
+          `You have been assigned a new booking — ${newSlotLabel}. Please check your schedule.`
+        );
+        await notifyMoved(
+          booking.customer,
+          isAdmin
+            ? `Your booking was rescheduled to ${newSlotLabel} and a new cook has been assigned.`
+            : `Your booking has been rescheduled to ${newSlotLabel} and a new cook has been assigned.`
+        );
+      } else if (isAdmin) {
+        await notifyMoved(
+          booking.cook,
+          `Booking moved to ${newSlotLabel} by our support team (was ${oldSlotLabel}). Please check your schedule.`
+        );
+        await notifyMoved(
+          booking.customer,
+          `Your booking was moved to ${newSlotLabel} by our support team (was ${oldSlotLabel}).`
+        );
+      } else {
+        await notifyMoved(
+          booking.cook,
+          `Booking rescheduled to ${newSlotLabel} by the customer (was ${oldSlotLabel}). Please check your schedule.`
+        );
+        await notifyMoved(
+          booking.customer,
+          `Your booking has been rescheduled to ${newSlotLabel} (was ${oldSlotLabel}).`
+        );
+      }
+    } catch {
+      // non-fatal: the move itself already succeeded
+    }
+
+    res.json(stripServiceOtp(moved));
+  } catch (error) {
+    next(error);
+  }
 };
 
 // Cook starts the service by entering the customer's 4-digit OTP (read out
@@ -2068,6 +2871,17 @@ exports.startService = async (req, res, next) => {
         type: "service_started",
         booking: booking._id,
         message: "Your service has started — enjoy your session! The hours are now being counted.",
+      });
+    } catch {
+      // non-fatal
+    }
+    // Confirm to the cook as well — their hours are now being counted.
+    try {
+      await Notification.create({
+        user: booking.cook,
+        type: "service_started",
+        booking: booking._id,
+        message: "Service started (OTP verified) — your hours are now being counted. Have a great session!",
       });
     } catch {
       // non-fatal

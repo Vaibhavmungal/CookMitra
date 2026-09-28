@@ -22,14 +22,16 @@ const ledgerEntrySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    // payment.confirmed | payment.webhook_confirmed | refund.approved |
-    // refund.rejected | refund.settled | payout.settled | payout.rejected
+    // payment.confirmed | payment.webhook_confirmed | refund.requested |
+    // refund.approved | refund.rejected | refund.settled | payout.settled |
+    // payout.rejected
     type: {
       type: String,
       required: true,
       enum: [
         "payment.confirmed",
         "payment.webhook_confirmed",
+        "refund.requested",
         "refund.approved",
         "refund.rejected",
         "refund.settled",
