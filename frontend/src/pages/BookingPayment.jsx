@@ -44,6 +44,15 @@ const METHODS = [
   { id: "wallet", label: "Wallet", desc: "Paytm · Amazon Pay", icon: Wallet },
 ];
 
+// What happens after tapping Pay, per method. Card numbers / UPI IDs are
+// collected ONLY inside Razorpay's secure popup (PCI-DSS) — never in our
+// own inputs, so there is intentionally no inline card/UPI form here.
+const METHOD_HINTS = {
+  upi: "After tapping Pay, a secure Razorpay popup opens — pick GPay / PhonePe / Paytm there, or enter your UPI ID and approve the collect request.",
+  card: "After tapping Pay, enter card number, expiry & CVV in the secure Razorpay popup — we never see or store card details.",
+  netbanking: "After tapping Pay, choose your bank and approve in the secure Razorpay popup.",
+  wallet: "After tapping Pay, choose your wallet and approve in the secure Razorpay popup.",
+};
 // Razorpay Checkout method keys hidden for each choice, so the gateway opens
 // focused on the method the customer picked (best-effort — unknown keys are
 // ignored by Checkout).
@@ -595,6 +604,7 @@ const BookingPayment = () => {
                     type="button"
                     className={`bf-method${active ? " selected" : ""}`}
                     onClick={() => setMethod(m.id)}
+                    aria-pressed={active}
                   >
                     <Icon size={20} />
                     <span className="bf-method-name">{m.label}</span>
@@ -604,6 +614,14 @@ const BookingPayment = () => {
                 );
               })}
             </div>
+            <p
+              className="bf-method-hint"
+              aria-live="polite"
+              style={{ margin: "0.6rem 0 0", fontSize: "0.88rem", color: "var(--slate-600)" }}
+            >
+              <ShieldCheck size={13} style={{ verticalAlign: "-2px", marginRight: "0.25rem" }} />
+              {METHOD_HINTS[method]}
+            </p>
           </div>
 
           <aside className="bf-grid-side">

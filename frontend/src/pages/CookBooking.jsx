@@ -1,17 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  ChefHat,
   Users,
-  GraduationCap,
-  HandHelping,
   CalendarCheck,
   MapPin,
   UtensilsCrossed,
   StickyNote,
   LogIn,
   Check,
-  CheckCircle2,
   Clock3,
   Building2,
   Landmark,
@@ -39,12 +35,11 @@ import { saveBookingDraft, loadBookingDraft, clearBookingDraft } from "../utils/
 
 import LoginPromptModal from "../components/LoginPromptModal";
 
-const SERVICE_OPTIONS = [
-  { id: "cook_for_me", label: "Cook for Me", desc: "Cook prepares food at your home", icon: <ChefHat size={24} /> },
-  { id: "cook_with_me", label: "Cook With Me", desc: "Prepare together, learn as you go", icon: <Users size={24} /> },
-  { id: "teach_me", label: "Teach Me", desc: "Hands-on lesson in festive cooking", icon: <GraduationCap size={24} /> },
-  { id: "preparation_help", label: "Preparation Help", desc: "Help with chopping, dough, frying", icon: <HandHelping size={24} /> },
-];
+// Direct cook booking: the customer books a cook for a home-cooking
+// session. No service picker — every cook offers home cooking at the same
+// flat launch price. Kept as a constant default for the API payload
+// (backend `serviceType` is still required).
+const DEFAULT_SERVICE_TYPE = "cook_for_me";
 
 // One-tap hour presets — the most common booking lengths. Exact values
 // (0.5 steps, 1–12) can still be typed in the input below the chips.
@@ -152,14 +147,6 @@ const CookBooking = () => {
   const { location: siteLocation } = useSiteLocation();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
-
-  // Deep links (Home services, Footer) may preselect the service via
-  // ?serviceType= — fall back to the default for anything unknown.
-  const initialService = (() => {
-    const q = searchParams.get("serviceType");
-    return SERVICE_OPTIONS.some((s) => s.id === q) ? q : "cook_for_me";
-  })();
 
   const [step, setStep] = useState(1);
 
@@ -173,7 +160,7 @@ const CookBooking = () => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [step]);
   const [form, setForm] = useState({
-    serviceType: initialService,
+    serviceType: DEFAULT_SERVICE_TYPE,
     date: localTomorrowStr(),
     flatNo: "",
     society: "",
@@ -362,8 +349,7 @@ const CookBooking = () => {
     ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}`
     : "";
 
-  const serviceLabel =
-    (SERVICE_OPTIONS.find((s) => s.id === form.serviceType) || {}).label || "Cook service";
+  const serviceLabel = "Home cooking session";
 
   // Launch slab pricing (server recomputes it — display + preview only).
   const slab = slabPriceForDuration(Number(form.durationHours));
@@ -385,14 +371,13 @@ const CookBooking = () => {
     }
     resumedDraft.current = true;
     autoFilled.current = true;
-    setForm((f) => ({ ...f, ...d.form }));
+    setForm((f) => ({ ...f, ...d.form, serviceType: DEFAULT_SERVICE_TYPE }));
     if (d.coords?.lat != null) setCoords(d.coords);
     if (d.couponCode) setCouponRestore(d.couponCode);
     setSearching(true);
     (async () => {
       try {
         const r = await runSlotSearch({
-          serviceType: d.form.serviceType,
           date: d.form.date,
           durationHours: d.form.durationHours,
         });
@@ -473,9 +458,9 @@ const CookBooking = () => {
       .map((d) => d.trim())
       .filter(Boolean);
 
-  // Step 1 → 2 validates only the plan (service is always set, date /
-  // hours / guests drive availability). Venue + menu are validated at
-  // booking time on step 3, so nobody types an address for a dead date.
+  // Step 1 → 2 validates only the plan (date / hours / guests drive
+  // availability). Venue + menu are validated at booking time on step 3,
+  // so nobody types an address for a dead date.
   const validatePlan = (durationOverride) => {
     if (!form.date) return "Please choose a date for your session";
     if (form.date < localTodayStr()) return "That date already passed — please pick today or a future date";
@@ -527,7 +512,7 @@ const CookBooking = () => {
 
   // Distinct start–end times across cooks with a free-cook count each,
   // sorted earliest first. Backend already sizes slots to the selected
-  // service hours; this only aggregates them for step 2.
+  // hours; this only aggregates them for step 2.
   const aggregateSlots = (cooksWithSlots) => {
     const map = new Map();
     cooksWithSlots.forEach((c) => {
@@ -544,13 +529,11 @@ const CookBooking = () => {
     );
   };
 
-  // Shared slot search — ONE batched request (GET /availability/search)
-  // replaces the old N+1 fan-out (1 × cooks list + N × per-cook
-  // availability). Same slot math, server-side, so a search spike costs
-  // ~3 DB round trips instead of ~3 per cook. Falls back to the fan-out
-  // only if the batched endpoint is unreachable (stale backend).
-  const runSlotSearch = async ({ serviceType, date, durationHours }) => {
-    void serviceType;
+  // Shared slot search — ONE batched request (GET /availability/search).
+  // Same slot math, server-side, so a search spike costs ~3 DB round trips
+  // instead of ~3 per cook. Falls back to the fan-out only if the batched
+  // endpoint is unreachable (stale backend).
+  const runSlotSearch = async ({ date, durationHours }) => {
     try {
       const r = await API.get("/availability/search", {
         params: { date, durationHours, suggest: 1 },
@@ -574,15 +557,13 @@ const CookBooking = () => {
         failedCooks: 0,
       };
     } catch {
-      return runSlotSearchLegacy({ serviceType, date, durationHours });
+      return runSlotSearchLegacy({ date, durationHours });
     }
   };
 
   // Legacy per-cook fan-out — fallback only (see runSlotSearch above).
-  const runSlotSearchLegacy = async ({ serviceType, date, durationHours }) => {
-    const cooksRes = await API.get(
-      `/cooks${serviceType ? `?serviceType=${encodeURIComponent(serviceType)}` : ""}`
-    );
+  const runSlotSearchLegacy = async ({ date, durationHours }) => {
+    const cooksRes = await API.get("/cooks");
     const rawCooks = cooksRes.data;
     const cooks = Array.isArray(rawCooks) ? rawCooks : rawCooks?.cooks || rawCooks?.data || [];
     const suggested = new Set();
@@ -652,7 +633,6 @@ const CookBooking = () => {
     setSlotSuggestions([]);
     try {
       const { available, options, suggestions, totalCooks, failedCooks } = await runSlotSearch({
-        serviceType: form.serviceType,
         date: form.date,
         durationHours: effDuration,
       });
@@ -673,7 +653,7 @@ const CookBooking = () => {
       if (available.length === 0) {
         showToast(
           totalCooks === 0
-            ? "No cooks offer this service yet — try another service"
+            ? "No cooks available yet — please try another date"
             : suggestions.length > 0
               ? `No ${effDuration}-hour slots that day — shorter sessions are free below`
               : "No free slots on this date — try another date or duration",
@@ -703,18 +683,17 @@ const CookBooking = () => {
     } catch {
       // ignore
     }
-    if (!retry.form?.date || !retry.form?.serviceType || !retry.selectedSlot) {
+    if (!retry.form?.date || !retry.selectedSlot) {
       return;
     }
     autoFilled.current = true;
-    setForm((f) => ({ ...f, ...retry.form }));
+    setForm((f) => ({ ...f, ...retry.form, serviceType: DEFAULT_SERVICE_TYPE }));
     if (retry.coords?.lat != null) setCoords(retry.coords);
     if (retry.couponCode) setCouponRestore(retry.couponCode);
     setSearching(true);
     (async () => {
       try {
         const r = await runSlotSearch({
-          serviceType: retry.form.serviceType,
           date: retry.form.date,
           durationHours: retry.form.durationHours,
         });
@@ -780,7 +759,6 @@ const CookBooking = () => {
     try {
       const verify = await API.get("/cooks", {
         params: {
-          serviceType: form.serviceType,
           date: form.date,
           durationHours: form.durationHours,
           startTime: selectedSlot.startTime,
@@ -897,7 +875,6 @@ const CookBooking = () => {
           try {
             const verify = await API.get("/cooks", {
               params: {
-                serviceType: form.serviceType,
                 date: form.date,
                 durationHours: form.durationHours,
                 startTime: selectedSlot.startTime,
@@ -941,7 +918,7 @@ const CookBooking = () => {
       }
       const payload = {
         cook: cook?.user?._id || (typeof cook?.user === "string" ? cook.user : null) || cook?._id,
-        serviceType: form.serviceType,
+        serviceType: DEFAULT_SERVICE_TYPE,
         date: form.date,
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -976,7 +953,7 @@ const CookBooking = () => {
   };
 
   const steps = [
-    { label: "Plan", desc: "Service, date & hours" },
+    { label: "Plan", desc: "Date & hours" },
     { label: "Time Slot", desc: "Pick when" },
     { label: "Venue & Cook", desc: "Address & book" },
   ];
@@ -1054,27 +1031,9 @@ const CookBooking = () => {
       {step === 1 && (
         <form onSubmit={handleSeeSlots} className="ondemand-form-card">
           <h3>Step 1 — Plan your session</h3>
-          <SecTitle n="01" icon={<ChefHat size={15} />}>Which service do you need?</SecTitle>
-          <p className="ondemand-form-sub">Same launch price for every service — pick what fits today.</p>
-          <div className="service-pick-grid">
-            {SERVICE_OPTIONS.map((s) => (
-              <button
-                type="button"
-                key={s.id}
-                className={`service-pick-card ${form.serviceType === s.id ? "selected" : ""}`}
-                onClick={() => setForm({ ...form, serviceType: s.id })}
-              >
-                <span className="service-pick-check" aria-hidden="true">
-                  {form.serviceType === s.id && <CheckCircle2 size={18} />}
-                </span>
-                <span className="service-pick-icon">{s.icon}</span>
-                <strong>{s.label}</strong>
-                <span>{s.desc}</span>
-              </button>
-            ))}
-          </div>
+          <p className="ondemand-form-sub">Same launch price for every cook — pick a date and duration.</p>
 
-          <SecTitle n="02" icon={<CalendarCheck size={15} />}>When and for how many?</SecTitle>
+          <SecTitle n="01" icon={<CalendarCheck size={15} />}>When and for how many?</SecTitle>
 
           <div className="form-row">
             <div className="form-group">
@@ -1144,7 +1103,7 @@ const CookBooking = () => {
             </div>
           </div>
 
-          <SecTitle n="03" icon={<Clock3 size={15} />}>How long do you need the cook?</SecTitle>
+          <SecTitle n="02" icon={<Clock3 size={15} />}>How long do you need the cook?</SecTitle>
 
           <div className="form-row">
             <div className="form-group">
@@ -1170,7 +1129,7 @@ const CookBooking = () => {
                     );
                   })}
                 </div>
-                <span className="bk-price-note">Flat rate · same for every cook &amp; service · no payment now</span>
+                <span className="bk-price-note">Flat rate · same for every cook · no payment now</span>
               </div>
             </div>
           </div>
@@ -1203,7 +1162,7 @@ const CookBooking = () => {
             <div className="no-data">
               <p>
                 {totalCooksFound === 0
-                  ? "No cooks offer this service yet — try another service."
+                  ? "No cooks available yet — please try another date."
                   : slotSuggestions.length > 0
                     ? `No ${form.durationHours}-hour slots on this date — but shorter sessions are free.`
                     : "No free slots on this date — try another date or duration."}
@@ -1331,7 +1290,7 @@ const CookBooking = () => {
         <div>
           <h3>Step 3 — Venue &amp; Cook</h3>
           <div className="ondemand-form-card od-venue-card">
-            <SecTitle n="04" icon={<MapPin size={15} />}>Where should the cook come?</SecTitle>
+            <SecTitle n="03" icon={<MapPin size={15} />}>Where should the cook come?</SecTitle>
             <div className="ondemand-locate-box">
               {savedLocations.length > 0 && (
                 <div className="form-group">
@@ -1477,7 +1436,7 @@ const CookBooking = () => {
             </>
             )}
 
-            <SecTitle n="05" icon={<UtensilsCrossed size={15} />}>What dishes do you need? *</SecTitle>
+            <SecTitle n="04" icon={<UtensilsCrossed size={15} />}>What dishes do you need? *</SecTitle>
             <div className="form-group">
               <label>Dishes <small>(comma separated)</small></label>
                 <input
@@ -1508,7 +1467,7 @@ const CookBooking = () => {
               />
             </div>
 
-            <SecTitle n="06" icon={<BadgePercent size={15} />}>Price &amp; coupon</SecTitle>
+            <SecTitle n="05" icon={<BadgePercent size={15} />}>Price &amp; coupon</SecTitle>
             <div className="price-rows">
               <div className="price-row">
                 <span>Service Price · {form.durationHours} hr{Number(form.durationHours) === 1 ? "" : "s"}</span>
@@ -1528,7 +1487,7 @@ const CookBooking = () => {
             {slab != null && (
               <CouponApply
                 amount={slab}
-                serviceType={form.serviceType}
+                serviceType={DEFAULT_SERVICE_TYPE}
                 onApplied={setCoupon}
                 initialCode={couponRestore}
               />
@@ -1621,7 +1580,7 @@ const CookBooking = () => {
       <LoginPromptModal
         open={showLoginModal}
         onClose={() => setShowLoginModal(false)}
-        returnTo={`/cook-on-demand${initialService !== "cook_for_me" ? `?serviceType=${initialService}` : ""}`}
+        returnTo="/cook-on-demand"
       />
     </div>
   );

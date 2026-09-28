@@ -16,12 +16,17 @@ import {
 
 // Admin settlement console: nothing moves money automatically — cooks are
 // paid and customers refunded only by an explicit admin decision here.
-// Sections: pending cook payouts (Mark paid / Reject), refunds awaiting a
-// decision (Approve / Reject), and failed-refund follow-ups.
-const AdminPayoutsPanel = () => {
+// `view` splits the console across two admin tabs: "payouts" lists only cook
+// payouts, "refunds" lists only customer refunds (awaiting decision +
+// manual follow-ups). Sections: pending cook payouts (Mark paid / Reject),
+// refunds awaiting a decision (Approve / Reject), and failed-refund follow-ups.
+const AdminPayoutsPanel = ({ view = "payouts" }) => {
+  const isRefunds = view === "refunds";
   const showToast = useShowToast();
-  const { data: queue, loading, error, refetch } = useFetch("/payouts/queue");
-  const { data: refunds, refetch: refetchRefunds } = useFetch("/payouts/refunds");
+  // Each tab fetches ONLY what it displays: cook-payout queue on the Payouts
+  // tab, refund requests on the Refunds tab. Never the other list.
+  const { data: queue, loading, error, refetch } = useFetch(isRefunds ? null : "/payouts/queue");
+  const { data: refunds, loading: refundsLoading, error: refundsError, refetch: refetchRefunds } = useFetch(isRefunds ? "/payouts/refunds" : null);
   const [refFor, setRefFor] = useState(null);
   const [reference, setReference] = useState("");
   const [saving, setSaving] = useState(false);
@@ -83,14 +88,22 @@ const AdminPayoutsPanel = () => {
     }
   };
 
-  const approveRefund = async () => {
+  const approveRefund = async (amountInput) => {
     const bookingId = pendingApprove;
     if (!bookingId || saving) return;
     setPendingApprove(null);
+    // Partial approval: a typed number becomes the approved amount (the
+    // backend caps it at the refundable total); blank means full refund.
+    const raw = String(amountInput ?? "").trim();
+    const body = raw === "" ? {} : { amount: Number(raw) };
+    if (raw !== "" && !(Number.isFinite(body.amount) && body.amount > 0)) {
+      showToast("Approved amount must be a positive number — leave blank for a full refund.", "error");
+      return;
+    }
     setSaving(true);
     try {
-      await API.patch(`/payouts/refunds/${bookingId}/approve`);
-      showToast("Refund approved — customer notified.", "success");
+      await API.patch(`/payouts/refunds/${bookingId}/approve`, body);
+      showToast(raw === "" ? "Refund approved — customer notified." : `Partial refund of ₹${body.amount} approved — customer notified.`, "success");
       refetchRefunds();
     } catch (err) {
       if (err.response?.status === 409) {
@@ -151,19 +164,32 @@ const AdminPayoutsPanel = () => {
   return (
     <div className="admin-section">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1.15rem", fontWeight: 800, margin: 0 }}>Cook Payouts</h2>
-        <button className="btn btn-outline btn-sm" onClick={() => { refetch(); refetchRefunds(); }}>
+        <h2 style={{ fontSize: "1.15rem", fontWeight: 800, margin: 0 }}>{isRefunds ? "Refunds" : "Cook Payouts"}</h2>
+        <button className="btn btn-outline btn-sm" onClick={() => { isRefunds ? refetchRefunds() : refetch(); }}>
           <RefreshCw size={15} /> Refresh
         </button>
       </div>
 
-      {error && (
-        <div className="error-alert-banner">
-          <AlertCircle size={16} /> {error}
-        </div>
+      {isRefunds ? (
+        <>
+          {refundsError && (
+            <div className="error-alert-banner">
+              <AlertCircle size={16} /> {refundsError}
+            </div>
+          )}
+          {refundsLoading && <p style={{ color: "var(--slate-500)" }}>Loading refund requests…</p>}
+        </>
+      ) : (
+        <>
+          {error && (
+            <div className="error-alert-banner">
+              <AlertCircle size={16} /> {error}
+            </div>
+          )}
+          {loading && <p style={{ color: "var(--slate-500)" }}>Loading payout queue…</p>}
+        </>
       )}
-      {loading && <p style={{ color: "var(--slate-500)" }}>Loading payout queue…</p>}
-      {!loading && !error && (queue?.length ? (
+      {!isRefunds && !loading && !error && (queue?.length ? (
         <div className="bookings-list-modern">
           {queue.map((b) => {
             const cook = b.cook || {};
@@ -253,6 +279,8 @@ const AdminPayoutsPanel = () => {
           </p>
         </div>
       ))}
+      {isRefunds && (
+      <>
       {/* Refunds awaiting a decision — approve returns the money, reject declines it */}
       <h3 style={{ margin: "1.75rem 0 0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <Clock3 size={17} style={{ color: "#d97706" }} /> Refunds awaiting decision
@@ -270,10 +298,23 @@ const AdminPayoutsPanel = () => {
                     {" "}· {formatCurrency(b.payment?.refundAmount || b.amount)} refund ·{" "}
                     {b.status ? String(b.status).replace(/_/g, " ") : "booking"} ·{" "}
                     {b.date ? formatDate(b.date) : ""}
+                    {b.startTime ? ` · ${formatTimeRange12(b.startTime, b.endTime, "-")}` : ""}
                   </span>
                   <div style={{ fontSize: "0.8rem", color: "var(--slate-500)", marginTop: "0.2rem" }}>
                     Payment id: <code>{b.payment?.razorpayPaymentId || "—"}</code>
                   </div>
+                  {b.payment?.refundReason ? (
+                    <div style={{ fontSize: "0.82rem", color: "var(--slate-700)", marginTop: "0.25rem" }}>
+                      <strong>Reason:</strong> {b.payment.refundReason}
+                      {b.payment?.refundCustomerNote ? ` — “${b.payment.refundCustomerNote}”` : ""}
+                    </div>
+                  ) : null}
+                  {b.payment?.refundRequestedAt ? (
+                    <div style={{ fontSize: "0.78rem", color: "var(--slate-500)" }}>
+                      Requested {new Date(b.payment.refundRequestedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                      {b.payment?.refundRequestedBy ? ` · by ${b.payment.refundRequestedBy}` : ""}
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                   <button
@@ -344,13 +385,19 @@ const AdminPayoutsPanel = () => {
           ))}
         </div>
       )}
+      </>
+      )}
       <ConfirmDialog
         open={!!pendingApprove}
         title="Approve this refund?"
-        message="The money will be returned to the customer."
+        message="Leave the amount blank for a full refund, or type a smaller approved amount for a partial refund. The money will be returned to the customer."
         confirmLabel="Approve refund"
         tone="emerald"
         busy={saving}
+        input={{
+          label: "Approved amount in ₹ (blank = full)",
+          placeholder: "e.g. 700",
+        }}
         onCancel={() => setPendingApprove(null)}
         onConfirm={approveRefund}
       />

@@ -16,6 +16,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ChevronRight,
+  CalendarClock,
 } from "lucide-react";
 
 const TYPE_META = {
@@ -26,6 +27,8 @@ const TYPE_META = {
   booking_completed: { label: "Booking completed", icon: CheckCheck, color: "var(--accent-emerald)" },
   booking_cancelled: { label: "Booking cancelled", icon: XCircle, color: "var(--slate-500)" },
   booking_expired: { label: "Booking expired", icon: Clock, color: "var(--slate-500)" },
+  booking_rescheduled: { label: "Booking rescheduled", icon: CalendarClock, color: "var(--accent-blue)" },
+  booking_unattended: { label: "Cook didn't attend", icon: AlertCircle, color: "#dc2626" },
   service_started: { label: "Service started", icon: ChefHat, color: "var(--accent-emerald)" },
   cook_arrived: { label: "Cook arrived", icon: ChefHat, color: "var(--accent-emerald)" },
   cooking_hours_completed: { label: "Cooking hours complete", icon: Clock, color: "var(--accent-amber)" },
@@ -33,6 +36,8 @@ const TYPE_META = {
   profile_approved: { label: "Profile approved", icon: ShieldCheck, color: "var(--accent-emerald)" },
   profile_rejected: { label: "Profile needs attention", icon: AlertCircle, color: "#dc2626" },
   payout_settled: { label: "Payout sent", icon: CheckCircle2, color: "var(--accent-emerald)" },
+  payout_failed: { label: "Payout declined", icon: XCircle, color: "#dc2626" },
+  refund_pending: { label: "Refund under review", icon: Clock, color: "var(--accent-amber)" },
   refund_processed: { label: "Refund processed", icon: CheckCircle2, color: "var(--accent-emerald)" },
   general: { label: "Update", icon: Bell, color: "var(--primary)" },
 };
@@ -167,8 +172,8 @@ const Notifications = () => {
         ? notifications.filter((n) => n.read)
         : notifications;
 
-  const backTo = user?.role === "cook" ? "/dashboard/cook-bookings" : "/dashboard/my-bookings";
-  const backLabel = user?.role === "cook" ? "Back to Cook Dashboard" : "Back to My Bookings";
+  const backTo = user?.role === "cook" ? "/dashboard/cook-bookings" : user?.role === "admin" ? "/admin" : "/dashboard/my-bookings";
+  const backLabel = user?.role === "cook" ? "Back to Cook Dashboard" : user?.role === "admin" ? "Back to Admin Dashboard" : "Back to My Bookings";
 
   return (
     <div className="dashboard-container notif-page">

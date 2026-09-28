@@ -438,8 +438,10 @@
 }
 
 /* ==========================================================================
-   New-notification popup stack — fixed bottom-right cards shown by
+   New-notification popup stack — fixed top-center cards shown by
    <NotificationPopup /> whenever a fresh unread notification arrives.
+   Width is fluid per viewport: 380px on desktop, full-bleed with 1rem
+   gutters on phones. Cards always stretch to the stack width.
    ========================================================================== */
 .notif-popup-stack {
   position: fixed;
@@ -449,15 +451,17 @@
   z-index: 1300;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 0.6rem;
-  width: max-content;
-  max-width: min(380px, calc(100vw - 2rem));
+  width: min(380px, calc(100vw - 2rem));
+  box-sizing: border-box;
 }
 .notif-popup-card {
   display: flex;
   gap: 0.65rem;
   align-items: flex-start;
+  width: 100%;
+  box-sizing: border-box;
   background: #fff;
   border: 1px solid var(--slate-200, #e2e8f0);
   border-left: 4px solid var(--primary, #e8590c);
@@ -545,7 +549,14 @@
     bottom: auto;
     transform: none;
     width: auto;
-    max-width: none;
+  }
+  .notif-popup-card {
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+  }
+  .notif-popup-message {
+    font-size: 0.84rem;
+    -webkit-line-clamp: 4;
   }
 }
 @media (prefers-reduced-motion: reduce) {

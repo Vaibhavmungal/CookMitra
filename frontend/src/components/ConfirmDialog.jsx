@@ -6,6 +6,7 @@
 // Optional `input` ({ label, placeholder, initialValue }) turns it into a
 // prompt-style dialog; the typed value is passed to onConfirm(value).
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Info, CheckCircle2, X, Loader2 } from "lucide-react";
 
 const TONES = {
@@ -52,7 +53,9 @@ const ConfirmDialog = ({
   if (!open) return null;
   const { Icon, cls } = TONES[tone] || TONES.brand;
 
-  return (
+  // Portaled to document.body: escapes .main-content's pageIn stacking
+  // context so the sticky navbar can never paint over the dialog.
+  return createPortal(
     <div
       className="cf-overlay"
       onMouseDown={(e) => {
@@ -126,7 +129,8 @@ const ConfirmDialog = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

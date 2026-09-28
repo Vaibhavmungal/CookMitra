@@ -9,7 +9,8 @@
 //     (Manual arrival taps are disabled — presence is proven by the
 //     OTP-verified start, so no arrived/cancel interaction is tested.)
 //  4. markCookArrived: manual arrival disabled (410, no state change).
-//  5. rescheduleBooking: self-serve removal enforced (410 tombstone).
+//  5. rescheduleBooking: customer/admin only, no money moves, OTP stripped,
+//     and the old 410 tombstone is gone.
 //  6. payBooking: zero-amount without coupon rejected.
 //  7. createReview: unpaid bookings rejected.
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret";
@@ -144,19 +145,101 @@ async function main() {
     check("cook cancel bumps count", r.statusCode === 200 && incArg?.$inc?.cancelledByCookCount === 1, `s=${r.statusCode}`);
   }
 
-  console.log("\n═══ reschedule removed ═══");
+  console.log("\n═══ rescheduleBooking (customer/admin, no money moves) ═══");
   {
-    // Self-serve reschedule was deleted; the endpoint survives only as a 410
-    // tombstone so old clients get an explicit reason, never a silent move.
-    const d = doc({ status: "confirmed", date: new Date(Date.now() + 48 * 3600 * 1000), startTime: "10:00", endTime: "12:00", durationHours: 2 });
-    Booking.findById = async () => d;
-    const r = makeRes();
-    await bookingCtrl.rescheduleBooking(
-      { params: { id: "b1" }, body: { date: "2099-01-02", startTime: "10:00" }, user: { id: "cust1", role: "CUSTOMER" } },
-      r,
-      next
-    );
-    check("reschedule tombstone is 410", r.statusCode === 410, `s=${r.statusCode} ${r.body?.message || ""}`);
+    // The endpoint used to be a permanent 410 tombstone; it is now a real
+    // feature (customer + admin, instant move). Security-relevant behaviour
+    // checked here: ownership, no cook self-service in v1, no 410 left, and a
+    // paid move that touches NO money field and never leaks the start OTP.
+    const chainable = (v) => ({
+      select: () => chainable(v),
+      lean: () => chainable(v),
+      then: (resolve, reject) => Promise.resolve(v).then(resolve, reject),
+    });
+    const oFind = Booking.find;
+    const oOne = CookProfile.findOne;
+    const oNotif = Notification.create;
+    try {
+      const target = (() => {
+        const d = new Date(Date.now() + 5 * 24 * 3600 * 1000);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      })();
+      const futureDoc = (over = {}) =>
+        doc({
+          status: "confirmed",
+          date: new Date(Date.now() + 48 * 3600 * 1000),
+          startTime: "10:00",
+          endTime: "12:00",
+          durationHours: 2,
+          rescheduleCount: 0,
+          ...over,
+        });
+      Booking.find = () => ({ select: async () => [] });
+      CookProfile.findOne = () => chainable({ availabilityStatus: "available", approvalStatus: "approved" });
+      Notification.create = async () => ({});
+
+      // A different customer cannot move someone else's booking.
+      {
+        const d = futureDoc();
+        Booking.findById = async () => d;
+        const r = makeRes();
+        await bookingCtrl.rescheduleBooking(
+          { params: { id: "b1" }, body: { date: target, startTime: "14:00" }, user: { id: "cust2", role: "CUSTOMER" } },
+          r,
+          next
+        );
+        check("stranger customer cannot reschedule", r.statusCode === 403, `s=${r.statusCode}`);
+        check(
+          "stranger attempt never mutates the booking",
+          d.startTime === "10:00" && !d.rescheduleCount && d.statusHistory.length === 0,
+          JSON.stringify({ s: d.startTime, n: d.rescheduleCount, h: d.statusHistory.length })
+        );
+      }
+      // The assigned cook cannot move it either (v1 policy: customer + admin).
+      {
+        const d = futureDoc();
+        Booking.findById = async () => d;
+        const r = makeRes();
+        await bookingCtrl.rescheduleBooking(
+          { params: { id: "b1" }, body: { date: target, startTime: "14:00" }, user: { id: "cook1", role: "COOK" } },
+          r,
+          next
+        );
+        check("cook cannot reschedule in v1", r.statusCode === 403, `s=${r.statusCode}`);
+      }
+      // Missing booking -> 404, never the old 410 tombstone.
+      {
+        Booking.findById = async () => null;
+        const r = makeRes();
+        await bookingCtrl.rescheduleBooking(
+          { params: { id: "gone" }, body: { date: target, startTime: "14:00" }, user: { id: "cust1", role: "CUSTOMER" } },
+          r,
+          next
+        );
+        check("missing booking -> 404 (tombstone gone)", r.statusCode === 404, `s=${r.statusCode}`);
+      }
+      // A paid move: revenue untouched, coupon untouched, OTP never returned.
+      {
+        const d = futureDoc({ serviceOtp: "9876", couponCode: "WELCOME50" });
+        const money = JSON.stringify(d.payment);
+        Booking.findById = async () => d;
+        const r = makeRes();
+        await bookingCtrl.rescheduleBooking(
+          { params: { id: "b1" }, body: { date: target, startTime: "14:00" }, user: { id: "cust1", role: "CUSTOMER" } },
+          r,
+          next
+        );
+        check("owner reschedule succeeds", r.statusCode === 200, `s=${r.statusCode} ${r.body?.message || ""}`);
+        check("paid move changes no money fields", JSON.stringify(d.payment) === money && !d.payment.refundStatus, JSON.stringify(d.payment));
+        check("coupon not released by a move", d.couponReleased !== true, String(d.couponReleased));
+        check("OTP stripped from the move response", !("serviceOtp" in (r.body || {})), Object.keys(r.body || {}).join(","));
+      }
+    } finally {
+      Booking.find = oFind;
+      CookProfile.findOne = oOne;
+      Notification.create = oNotif;
+    }
   }
 
   console.log("\n═══ payBooking zero-amount ═══");

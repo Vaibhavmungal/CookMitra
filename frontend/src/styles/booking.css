@@ -3798,3 +3798,13 @@
   .od-date-input::-webkit-calendar-picker-indicator:hover,
   .bk-date-input::-webkit-calendar-picker-indicator:hover { transform: none; }
 }
+
+/* ==========================================================================
+   Post-service refund section (BookingDetails.jsx) — reuses bd-card shell
+   with an amber attention edge; status variants stay text-first (never
+   color-only).
+   ========================================================================== */
+.bd-refund-card { border-left: 4px solid #f59e0b; }
+.bd-refund-card.is-done { border-left-color: var(--accent-emerald, #047857); }
+.bd-refund-card .bd-card-head svg { color: #d97706; }
+.bd-refund-card.is-done .bd-card-head svg { color: var(--accent-emerald, #047857); }

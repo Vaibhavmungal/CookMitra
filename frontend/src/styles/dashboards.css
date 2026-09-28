@@ -726,8 +726,8 @@
 /* ---- My Bookings responsive: 1 col phones → 2 col tablet/laptop ---- */
 @media (min-width: 768px) and (max-width: 1023px) {
   /* Tablet: 2 compact cards per row so they fill the width without squeezing */
-  .my-bookings-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
-  .my-booking-card { padding: 0.9rem 0.9rem; border-radius: 18px; }
+  .my-bookings-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; align-items: stretch; }
+  .my-booking-card { padding: 0.9rem 0.9rem; border-radius: 18px; height: 100%; }
   .my-booking-main { gap: 0.65rem; }
   .my-booking-avatar { width: 46px; height: 46px; border-radius: 15px; font-size: 1.05rem; }
   .my-booking-cook { font-size: 0.93rem; }
@@ -741,9 +741,13 @@
   .my-booking-go { width: 36px; height: 36px; }
 }
 @media (min-width: 1024px) {
-  /* Laptop: roomy 2-col grid that fills the container */
-  .my-bookings-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-  .my-booking-card { padding: 1.1rem 1.15rem; }
+  /* Laptop: roomy 2-col grid that fills the container. Cards in a row share
+     one height (stretch + full-height flex column) with the action footer
+     pinned to the bottom, so extra info or buttons never stagger the row.
+     Variable blocks are clamped so one verbose card can't inflate its row. */
+  .my-bookings-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+  .my-booking-card { padding: 1.1rem 1.15rem; height: 100%; }
+  .my-booking-chips { max-height: 3.9rem; overflow: hidden; align-content: flex-start; }
 }
 @media (min-width: 1280px) {
   .my-bookings-list { gap: 1.1rem; max-width: 1160px; margin-inline: auto; }
@@ -2151,6 +2155,15 @@
   margin: 0 0 0.7rem;
 }
 .my-section-title svg { color: var(--primary, #e8590c); flex-shrink: 0; }
+/* Action Required: subtle amber warning treatment — text-first (icon +
+   copy), never color-only. */
+.my-section-title.my-section-warn { color: #92400e; }
+.my-section-title.my-section-warn svg { color: #d97706; }
+.my-section-title.my-section-warn .my-section-count {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
 
 .my-active-section { margin-bottom: 1.35rem; }
 .my-active-list { gap: 0.8rem; }

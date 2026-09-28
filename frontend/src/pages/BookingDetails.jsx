@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import API from "../api/axios";
 import { useSelector } from "react-redux";
 import { useShowToast } from "../store/hooks";
@@ -7,6 +7,8 @@ import ReviewForm, { ReviewStars } from "../components/ReviewForm";
 import ComplaintForm from "../components/ComplaintForm";
 import CookAvatar from "../components/CookAvatar";
 import ConfirmDialog from "../components/ConfirmDialog";
+import RescheduleModal from "../components/RescheduleModal";
+import RefundRequestModal from "../components/RefundRequestModal";
 import {
   formatCurrency,
   formatDate,
@@ -19,6 +21,8 @@ import {
   formatRemaining,
   isReviewable,
   isCancelLocked,
+  canRescheduleBooking,
+  isRescheduleLocked,
   timeAgo,
   formatTime12,
   formatTimeRange12,
@@ -37,6 +41,7 @@ import {
   Phone,
   MessageCircle,
   XCircle,
+  CalendarClock,
   Sparkles,
   BellRing,
   Receipt,
@@ -54,6 +59,8 @@ const BookingDetails = () => {
   // even if this page stays open past 12 AM.
   const today = useLocalDay();
   const showToast = useShowToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,6 +71,22 @@ const BookingDetails = () => {
   const [otpInput, setOtpInput] = useState("");
   const [startingService, setStartingService] = useState(false);
   const [otpError, setOtpError] = useState("");
+  // Reschedule picker (customer/admin only — see canReschedule below).
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  // Post-service refund request (customer only — the backend decides
+  // eligibility; this state only mirrors its answer).
+  const [refundInfo, setRefundInfo] = useState(null);
+  const [refundOpen, setRefundOpen] = useState(false);
+  // Deep link from the dashboard's Action Required card (?action=refund):
+  // auto-open the request modal once eligibility confirms it, then drop the
+  // query so a refetch can't reopen it.
+  const refundAction = new URLSearchParams(location.search).get("action");
+  useEffect(() => {
+    if (refundAction === "refund" && refundInfo?.eligible && !refundOpen) {
+      setRefundOpen(true);
+      navigate(`/bookings/${bookingId}`, { replace: true });
+    }
+  }, [refundAction, refundInfo, refundOpen, bookingId, navigate]);
 
   const fetchDetails = useCallback(async () => {
     setLoading(true);
@@ -81,6 +104,31 @@ const BookingDetails = () => {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  // Refund eligibility is server-computed (scheduled end + 1h, not completed,
+  // paid, no existing request). Fetched only for paid, non-terminal bookings
+  // on the customer's own page — cancelled bookings keep the legacy refund
+  // line above, cooks never see refund UI.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setRefundInfo(null);
+      if (!booking?._id) return;
+      if (user?.role !== "customer") return;
+      if (booking?.payment?.status !== "paid") return;
+      if (["cancelled", "completed", "rejected", "expired"].includes(booking.status)) return;
+      try {
+        const res = await API.get(`/bookings/${booking._id}/refund-eligibility`);
+        if (!cancelled) setRefundInfo(res.data);
+      } catch {
+        if (!cancelled) setRefundInfo(null);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [booking?._id, booking?.status, booking?.payment?.status, user?.role]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
@@ -228,6 +276,18 @@ const BookingDetails = () => {
   const sessionLive = ["accepted", "confirmed", "in_progress"].includes(booking.status);
   const showOtpForm =
     user?.role === "cook" && sessionLive && !booking.serviceStartedAt;
+  // Reschedule (v1: customer own-booking + admin any-booking, instant move).
+  // canRescheduleBooking mirrors the backend (status, lock, cap, started
+  // flags); the locked-note below explains a doomed action instead of
+  // offering it — same pattern as the cancel lock note.
+  const canReschedule = canRescheduleBooking(booking, user, now);
+  const reschedulableStatus =
+    ["requested", "accepted", "confirmed"].includes(booking.status) &&
+    !serviceStarted &&
+    !booking.cookArrived &&
+    !booking.hoursCompleted;
+  const showRescheduleLockedNote =
+    reschedulableStatus && user?.role === "customer" && !canReschedule;
   const startedAtLabel = booking.serviceStartedAt
     ? new Date(booking.serviceStartedAt).toLocaleString("en-IN", {
         day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
@@ -693,12 +753,148 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {/* Actions — cancel only. Rendered only when it applies, so
+      {/* Reschedule history — every move with its reason + cook change.
+          Customer-safe: only slot/cook/reason/by display, never internals. */}
+      {Array.isArray(booking.reschedules) && booking.reschedules.length > 0 && (
+        <div className="bd-card bd-venue-card">
+          <h3 className="bd-card-head">
+            <CalendarClock size={18} /> Reschedule History
+          </h3>
+          <div className="bd-tl-list">
+            {booking.reschedules.map((r, i) => {
+              const cookChanged =
+                r.fromCook && r.toCook && String(r.fromCook) !== String(r.toCook);
+              return (
+                <div key={i} className="bd-tl-row">
+                  <span className="badge badge-blue">
+                    {r.at ? new Date(r.at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Moved"}
+                  </span>
+                  <span className="bd-tl-meta">
+                    Previous: {r.fromDate ? formatDate(r.fromDate) : "—"}
+                    {r.fromStartTime ? ` • ${formatTime12(r.fromStartTime)}${r.fromEndTime ? ` – ${formatTime12(r.fromEndTime)}` : ""}` : ""}
+                    {r.fromCookName ? ` • Cook: ${r.fromCookName}` : ""}
+                    <br />
+                    Changed to: {r.toDate ? formatDate(r.toDate) : "—"}
+                    {r.toStartTime ? ` • ${formatTime12(r.toStartTime)}${r.toEndTime ? ` – ${formatTime12(r.toEndTime)}` : ""}` : ""}
+                    {r.toCookName ? ` • Cook: ${r.toCookName}` : cookChanged ? " • Cook reassigned" : ""}
+                    {r.reason ? (
+                      <>
+                        <br />
+                        Reason: {r.reason}
+                      </>
+                    ) : null}
+                    {r.by ? (
+                      <>
+                        <br />
+                        Changed by: {String(r.by).charAt(0).toUpperCase() + String(r.by).slice(1)}
+                      </>
+                    ) : null}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Post-service refund (customer only). The button appears only when
+          the backend reports the booking eligible (end + 1h, not completed,
+          paid, no existing request); every other state shows status copy. */}
+      {user?.role === "customer" && refundInfo && (() => {
+        const rs = refundInfo.refundStatus || booking?.payment?.refundStatus || "none";
+        const amt = refundInfo.refundAmount || refundInfo.paidAmount || booking?.payment?.paidAmount || booking?.amount;
+        if (refundInfo.eligible) {
+          return (
+            <div className="bd-card bd-refund-card" role="region" aria-label="Refund available">
+              <h3 className="bd-card-head">
+                <AlertCircle size={18} /> Service not completed
+              </h3>
+              <p className="bd-note-hint">
+                {refundInfo.scheduledEnd
+                  ? `Scheduled end: ${new Date(refundInfo.scheduledEnd).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}. `
+                  : ""}
+                Refund request available because the service was not marked completed.
+              </p>
+              <div className="bd-row-actions">
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setRefundOpen(true)}>
+                  <Receipt size={16} /> Request refund
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (rs === "pending" || rs === "processing") {
+          return (
+            <div className="bd-card bd-refund-card" role="status">
+              <h3 className="bd-card-head">
+                <Clock size={18} /> Refund request under review
+              </h3>
+              <p className="bd-note-hint">
+                Requested{amt ? `: ${formatCurrency(amt)}` : ""}
+                {refundInfo.refundRequestedAt
+                  ? ` · Submitted ${new Date(refundInfo.refundRequestedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`
+                  : ""}. Our admin team will review it shortly.
+              </p>
+            </div>
+          );
+        }
+        if (rs === "failed" || rs === "manual") {
+          return (
+            <div className="bd-card bd-refund-card" role="status">
+              <h3 className="bd-card-head">
+                <Clock size={18} /> Refund processing
+              </h3>
+              <p className="bd-note-hint">
+                {amt ? `${formatCurrency(amt)} · ` : ""}Our team is completing your refund — we will notify you.
+              </p>
+            </div>
+          );
+        }
+        if (rs === "processed") {
+          return (
+            <div className="bd-card bd-refund-card is-done" role="status">
+              <h3 className="bd-card-head">
+                <CheckCircle2 size={18} /> Refund completed
+              </h3>
+              <p className="bd-note-hint">
+                Refunded{amt ? `: ${formatCurrency(amt)}` : ""} — it reaches your account in 5–7 business days.
+              </p>
+            </div>
+          );
+        }
+        if (rs === "rejected") {
+          return (
+            <div className="bd-card bd-refund-card" role="status">
+              <h3 className="bd-card-head">
+                <XCircle size={18} /> Refund request rejected
+              </h3>
+              <p className="bd-note-hint">
+                Reason: {refundInfo.refundAdminNote || "Reviewed by our team — please contact support if you need help."}
+              </p>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {/* Actions — reschedule + cancel. Rendered only when it applies, so
           completed/cancelled/expired bookings never show an empty bar.
-          Inside 30 minutes of the start it locks — a note says so instead
-          of offering a doomed button. */}
-      {(canCancel || (isActive && !serviceStarted && user?.role !== "admin" && cancelLocked)) && (
+          Inside 30 minutes of the start (or past the 2-move cap) the move
+          locks — a note says so instead of offering a doomed button. */}
+      {(canCancel ||
+        canReschedule ||
+        showRescheduleLockedNote ||
+        (isActive && !serviceStarted && user?.role !== "admin" && cancelLocked)) && (
         <div className="bd-actionbar">
+          {canReschedule && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setRescheduleOpen(true)}
+            >
+              <CalendarClock size={16} /> Reschedule
+            </button>
+          )}
           {canCancel && (
             <button className="btn btn-danger-outline btn-sm" onClick={() => setConfirmCancel(true)} disabled={cancelling}>
               <XCircle size={16} />{" "}
@@ -713,6 +909,13 @@ const BookingDetails = () => {
             <p className="bd-mini-note" style={{ margin: 0 }}>
               Cancellation closes 30 minutes before the start time — please contact
               support for help with this booking.
+            </p>
+          )}
+          {showRescheduleLockedNote && !canReschedule && (
+            <p className="bd-mini-note" style={{ margin: 0 }}>
+              {isRescheduleLocked(booking, now)
+                ? "Rescheduling closes 30 minutes before the start time — please contact support for help with this booking."
+                : "This booking has already been rescheduled twice — please contact support if you need another change."}
             </p>
           )}
         </div>
@@ -796,6 +999,36 @@ const BookingDetails = () => {
         onCancel={() => setConfirmCancel(false)}
         onConfirm={handleCancel}
       />
+      {rescheduleOpen && (
+        <RescheduleModal
+          booking={booking}
+          onClose={() => setRescheduleOpen(false)}
+          onRescheduled={(updated) => {
+            // The move keeps the cook, duration and price — merge the fresh
+            // slot/count/history over local state; the modal already toasts.
+            if (updated && typeof updated === "object") {
+              setBooking((prev) => ({ ...prev, ...updated }));
+            } else {
+              fetchDetails();
+            }
+          }}
+        />
+      )}
+      {refundOpen && (
+        <RefundRequestModal
+          booking={booking}
+          eligibility={refundInfo}
+          onClose={() => setRefundOpen(false)}
+          onRequested={() => {
+            // The request only queues for admin review — refresh both the
+            // booking (payment.refundStatus) and the eligibility card.
+            fetchDetails();
+            API.get(`/bookings/${booking._id}/refund-eligibility`)
+              .then((res) => setRefundInfo(res.data))
+              .catch(() => setRefundInfo(null));
+          }}
+        />
+      )}
     </div>
   );
 };

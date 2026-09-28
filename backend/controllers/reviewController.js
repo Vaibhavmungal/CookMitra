@@ -158,6 +158,20 @@ exports.createReview = async (req, res, next) => {
     // server-side, so two reviews landing together cannot clobber each other.
     await syncCookRating(booking.cook, cleanRating);
 
+    // Tell the cook they got a new review (best-effort — the review itself
+    // already succeeded).
+    try {
+      const Notification = require("../models/Notification");
+      await Notification.create({
+        user: booking.cook,
+        type: "review_received",
+        booking: booking._id,
+        message: `You received a new ${cleanRating}-star review — open your reviews to see it.`,
+      });
+    } catch {
+      // non-fatal
+    }
+
     res.status(201).json(review);
   } catch (error) {
     next(error);

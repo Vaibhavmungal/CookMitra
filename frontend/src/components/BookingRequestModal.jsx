@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import API from "../api/axios";
 import { useShowToast } from "../store/hooks";
 import { formatCurrency, formatDate, formatTimeRange12 } from "../utils/constants";
@@ -133,7 +134,10 @@ const BookingRequestModal = ({ open, booking, onClose, onAction, onBehalf }) => 
 
   const busy = !!acting || expired;
 
-  return (
+  // Portaled to document.body: the dialog must escape .main-content's
+  // pageIn animation stacking context, otherwise the sticky navbar paints
+  // over it (backdrop and card visibly starting below the navbar).
+  return createPortal(
     <div className="login-modal-overlay" onClick={() => !busy && onClose()}>
       <div
         className="brm-card"
@@ -242,7 +246,8 @@ const BookingRequestModal = ({ open, booking, onClose, onAction, onBehalf }) => 
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

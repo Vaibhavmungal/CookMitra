@@ -80,6 +80,7 @@ export const AnalyticsEvents = {
   SLOT_SELECTED: "slot_selected",
   BOOKING_REQUESTED: "booking_requested",
   PAYMENT_SUCCESS: "payment_success",
+  BOOKING_RESCHEDULED: "booking_rescheduled",
   COOK_SIGNUP_START: "cook_signup_start",
   COOK_SIGNUP_COMPLETE: "cook_signup_complete",
   COUPON_APPLIED: "coupon_applied",

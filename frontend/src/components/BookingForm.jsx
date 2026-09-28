@@ -12,10 +12,10 @@ import CustomCalendar from "./CustomCalendar";
 import CookAvatar from "./CookAvatar";
 import {
   Calendar, CalendarDays, Clock, AlertCircle, Navigation,
-  History, Copy, Check, ChefHat, Users, BookOpen, Scissors,
+  History, Copy, Check, ChefHat,
   MapPin, StickyNote, ArrowRight, ChevronLeft,
   BadgePercent, ShieldCheck, Sparkles, Minus, Plus,
-  Pencil, MapPinned, Wallet, Timer, PartyPopper, Sun,
+  Pencil, MapPinned, Wallet, Timer, Sun,
   Sunset, MoonStar
 } from "lucide-react";
 import LoginPromptModal from "./LoginPromptModal";
@@ -89,12 +89,11 @@ const nextNDays = (n) => {
 };
 
 /* ── Config ──────────────────────────────────────────────────────────── */
-const SERVICE_OPTIONS = [
-  { value: "cook_for_me", label: "Cook for me", icon: ChefHat, desc: "Full meal, you relax", tag: "Most booked" },
-  { value: "cook_with_me", label: "Cook with me", icon: Users, desc: "Cook together", tag: null },
-  { value: "teach_me", label: "Teach me", icon: BookOpen, desc: "1-on-1 masterclass", tag: null },
-  { value: "preparation_help", label: "Prep help", icon: Scissors, desc: "Chop, clean & fry", tag: "Quick" },
-];
+// Direct cook booking: the customer books THIS cook for a home-cooking
+// session. No service picker — every cook offers home cooking at the same
+// flat launch price. Kept as a constant default for the API payload
+// (backend `serviceType` is still required).
+const DEFAULT_SERVICE_TYPE = "cook_for_me";
 
 const DURATION_OPTIONS = [1, 2, 3, 4];
 const DURATION_MIN = 1;
@@ -108,7 +107,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(() => ({
-    serviceType: "cook_for_me",
+    serviceType: DEFAULT_SERVICE_TYPE,
     date: localTodayStr(),
     startTime: defaultStartTime(),
     durationHours: "",
@@ -221,8 +220,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
   const endsAfterServiceDay = derivedEndTime && hmToMinutes(derivedEndTime) > SERVICE_END_MIN;
   const startInPast = isToday(formData.date) && formData.startTime && hmToMinutes(formData.startTime) < hmToMinutes(nowHM);
 
-  const serviceLabel =
-    (SERVICE_OPTIONS.find((o) => o.value === formData.serviceType) || {}).label || "Service";
+  const serviceLabel = cookName ? `Booking ${String(cookName).split(" ")[0]}` : "Home cooking session";
   const scheduleSummary = [
     formData.date ? fmtDateShort(formData.date) : null,
     hoursValid ? `${formData.durationHours} hr${Number(formData.durationHours) === 1 ? "" : "s"}` : null,
@@ -230,14 +228,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
   ].filter(Boolean).join(" · ");
 
   const goNext = () => {
-    if (step === 0 && !formData.serviceType) { setError("Select a service type"); scrollToError(); return; }
     if (step === 0) {
-      track(AnalyticsEvents.BOOKING_START, {
-        service_type: formData.serviceType,
-        ...(cookId ? { cook_id: String(cookId) } : {}),
-      });
-    }
-    if (step === 1) {
       if (!formData.date) { setError("Please choose a date"); scrollToError(); return; }
       if (formData.date < minDateStr) { setError("That date already passed — please pick today or a future date"); scrollToError(); return; }
       if (!hoursValid) { setError("Please choose 1, 2, 3 or 4 hours"); scrollToError(); return; }
@@ -256,10 +247,10 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
   // another customer may have booked this cook for the same hours since the
   // page loaded. Re-verify the exact [startTime, endTime] is still free before
   // enabling "Send Request", so a busy cook can never be booked from a stale
-  // card. Runs only on step 1 where the slot is picked.
+  // card. Runs only on step 0 where the slot is picked.
   useEffect(() => {
     setSlotBusyError("");
-    if (step !== 1 || !hoursValid || !formData.startTime || !derivedEndTime || !formData.date) return;
+    if (step !== 0 || !hoursValid || !formData.startTime || !derivedEndTime || !formData.date) return;
     const target = resolvedCookUserId || cookUserId || null;
     if (!target) return;
     let cancelled = false;
@@ -473,7 +464,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
     autoFilled.current = true;
     setFormData((prev) => ({ ...prev, ...d.form }));
     if (d.coords?.lat != null) setCoords(d.coords);
-    setStep(2);
+    setStep(1);
     showToast("Welcome back — your booking details were restored. Just tap Send Request.", "success");
     clearBookingDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -502,8 +493,8 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
     if (!formData.startTime || !derivedEndTime) { fail("Pick a start time"); return; }
     if (endsAfterServiceDay) { fail("Must end by 8 PM"); return; }
     if (startInPast) { fail("Time passed — pick later"); return; }
-    // Block submit on a re-verified busy slot (the check runs on step 1, but
-    // the slot can fill while the customer types the address on step 2).
+    // Block submit on a re-verified busy slot (the check runs on step 0, but
+    // the slot can fill while the customer types the address on step 1).
     if (slotBusyError) { fail(slotBusyError); return; }
     if (checkingSlot) { fail("Checking live availability — one moment…"); return; }
     // Final guard at submit: re-verify the exact window is still free so a
@@ -536,7 +527,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
       const selectedItems = formData.notes.split(/[,;]+/).map((d) => d.trim()).filter(Boolean);
       const payload = {
         cook: resolvedCookUserId,
-        serviceType: formData.serviceType,
+        serviceType: DEFAULT_SERVICE_TYPE,
         date: formData.date,
         startTime: formData.startTime,
         endTime: derivedEndTime,
@@ -559,7 +550,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
       clearBookingDraft();
       track(AnalyticsEvents.BOOKING_REQUESTED, {
         booking_id: String(res.data?._id || ""),
-        service_type: formData.serviceType,
+        service_type: DEFAULT_SERVICE_TYPE,
         duration_hours: serviceHours,
         amount: Number(finalAmount) || 0,
         ...(coupon?.code ? { coupon_code: coupon.code } : {}),
@@ -581,8 +572,8 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
 
   /* ── Date carousel ── */
   const dateDays = nextNDays(7);
-  const STEP_TITLES = ["Service", "Schedule", "Confirm"];
-  const STEP_DESCS = ["What do you need?", "When should we come?", "Where & review"];
+  const STEP_TITLES = ["Schedule", "Confirm"];
+  const STEP_DESCS = ["When should we come?", "Where & review"];
 
   /* ════════════════════════════════════════════════════════════════════ */
   const cookFirst = cookName ? String(cookName).split(" ")[0] : null;
@@ -705,7 +696,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
     {/* Live recap once anything is picked */}
     {(step > 0 && (scheduleSummary || serviceLabel)) && (
       <div className="bk-livebar" aria-live="polite">
-        <span className="bk-livechip"><PartyPopper size={12} /> {serviceLabel}</span>
+        <span className="bk-livechip"><ChefHat size={12} /> {serviceLabel}</span>
         {scheduleSummary && <span className="bk-livechip bk-livechip-strong"><Timer size={12} /> {scheduleSummary}</span>}
         {slab != null && hoursValid && <span className="bk-livechip bk-livechip-price"><Wallet size={12} /> {formatCurrency(finalAmount)}</span>}
       </div>
@@ -713,61 +704,17 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
 
     <form onSubmit={handleSubmit} aria-busy={submitting}>
       <div className="bk-step" key={step}>
-      {/* ── Step 0: Service Type ── */}
       {step === 0 && (
-        <div className="bk-card">
-          <div className="bk-card-head-row">
-            <div className="bk-card-label">
-              <span className="bk-label-icon"><ChefHat size={15} /></span>
-              <span>Which service do you need?</span>
-            </div>
-            <span className="bk-card-count">Step 1 of 3</span>
-          </div>
-          <p className="bk-card-hint">Same flat launch price for every service — pick what fits today. You can change this later.</p>
-          <div className="bk-service-grid" role="radiogroup" aria-label="Choose a service">
-            {SERVICE_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const active = formData.serviceType === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  className={`bk-service-card ${active ? "active" : ""}`}
-                  onClick={() => setFormData((p) => ({ ...p, serviceType: opt.value }))}
-                >
-                  {opt.tag && <span className="bk-service-tag">{opt.tag}</span>}
-                  <span className="bk-service-icon"><Icon size={18} /></span>
-                  <span className="bk-service-body">
-                    <span className="bk-service-label">{opt.label}</span>
-                    <span className="bk-service-desc">{opt.desc}</span>
-                  </span>
-                  <span className="bk-service-check" aria-hidden="true"><Check size={13} /></span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="bk-assure-row">
-            <span><ShieldCheck size={13} /> Verified cook</span>
-            <span><Clock size={13} /> 8 am – 8 pm</span>
-            <span><BadgePercent size={13} /> No hidden fees</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Step 1: Date, Duration & Start Hour ── */}
-      {step === 1 && (
-        <>
-          {/* Date */}
-          <div className="bk-card">
-            <div className="bk-card-head-row">
-              <div className="bk-card-label">
-                <span className="bk-label-icon bk-tint-blue"><CalendarDays size={15} /></span>
-                <span>Which date?</span>
+          <>
+            {/* Date */}
+            <div className="bk-card">
+              <div className="bk-card-head-row">
+                <div className="bk-card-label">
+                  <span className="bk-label-icon bk-tint-blue"><CalendarDays size={15} /></span>
+                  <span>Which date?</span>
+                </div>
+                <span className="bk-card-count">Step 1 of 2</span>
               </div>
-              <span className="bk-card-count">Step 2 of 3</span>
-            </div>
             <div className="bk-date-grid" role="group" aria-label="Pick a date">
               {dateDays.map((d) => {
                 const active = formData.date === d;
@@ -903,8 +850,8 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
         </>
       )}
 
-      {/* ── Step 2: Address, Details & Pay summary ── */}
-      {step === 2 && (
+      {/* ── Step 1: Address, Details & Pay summary ── */}
+      {step === 1 && (
         <>
           {/* Recap */}
           <div className="bk-card bk-recap">
@@ -913,7 +860,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
                 <span className="bk-label-icon bk-tint-green"><Check size={15} /></span>
                 <span>Your booking</span>
               </div>
-              <span className="bk-card-count">Step 3 of 3 · almost done</span>
+              <span className="bk-card-count">Step 2 of 2 · almost done</span>
             </div>
             <div className="bk-recap-rows">
               <div className="bk-recap-row">
@@ -928,7 +875,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
                   {slab != null && hoursValid ? ` · ${formatCurrency(slab)}` : ""}
                   {formData.startTime ? ` · ${fmtHour12(formData.startTime)}${derivedEndTime ? ` → ${fmtHour12(derivedEndTime)}` : ""}` : ""}
                 </span>
-                <button type="button" className="bk-recap-edit" onClick={() => setStep(1)}><Pencil size={12} /> Edit</button>
+                <button type="button" className="bk-recap-edit" onClick={() => setStep(0)}><Pencil size={12} /> Edit</button>
               </div>
             </div>
           </div>
@@ -1128,7 +1075,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
             {slab != null && (
               <CouponApply
                 amount={slab}
-                serviceType={formData.serviceType}
+                serviceType={DEFAULT_SERVICE_TYPE}
                 onApplied={setCoupon}
               />
             )}
@@ -1152,7 +1099,7 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
       <div className="bk-stickybar">
         <div className="bk-sticky-summary" aria-live="polite">
           <span className="bk-sticky-text">
-            {step === 0 ? serviceLabel : step === 1 ? (scheduleSummary || "Pick date, length & time") : `Pay ${slab != null ? formatCurrency(finalAmount) : "—"} after acceptance`}
+            {step === 0 ? (scheduleSummary || "Pick date, length & time") : `Pay ${slab != null ? formatCurrency(finalAmount) : "—"} after acceptance`}
           </span>
           <strong className="bk-sticky-price">{slab != null && hoursValid ? formatCurrency(finalAmount) : slab != null ? formatCurrency(slab) : "₹—"}</strong>
         </div>
@@ -1162,23 +1109,23 @@ const BookingForm = ({ cookId, cookUserId, cookName, cookPhotoUrl, onSubmit }) =
               <ChevronLeft size={16} /> Back
             </button>
           )}
-          {step < 2 && (
+          {step === 0 && (
             <button
               type="button"
               className="bk-next-btn"
               onClick={goNext}
-              disabled={submitting || checkingSlot || Boolean(slotBusyError && step === 1)}
+              disabled={submitting || checkingSlot || Boolean(slotBusyError)}
             >
-              {step === 0 ? `Continue with ${serviceLabel}` : "Continue"} <ArrowRight size={16} />
+              Continue <ArrowRight size={16} />
             </button>
           )}
-          {step === 2 && (
+          {step === 1 && (
             <button type="submit" className="bk-next-btn bk-send-btn" disabled={submitting || checkingSlot || Boolean(slotBusyError)}>
               {submitting ? "Sending…" : (<>Send Request <ArrowRight size={16} /></>)}
             </button>
           )}
         </div>
-        {step === 1 && derivedEndTime && (
+        {step === 0 && derivedEndTime && (
           <p className="bk-sticky-sub">{formData.date ? fmtDateShort(formData.date) : ""}{formData.date ? " · " : ""}{formData.startTime ? fmtHour12(formData.startTime) : ""}{derivedEndTime ? ` → ${fmtHour12(derivedEndTime)}` : ""} · {formData.durationHours || "?"} hr{Number(formData.durationHours) === 1 ? "" : "s"}</p>
         )}
       </div>

@@ -122,7 +122,13 @@ const AdminDashboard = () => {  const [activeTab, setActiveTab] = useState("book
           className={`tab-btn ${activeTab === "payouts" ? "active" : ""}`}
           onClick={() => setActiveTab("payouts")}
         >
-          <Wallet size={17} /> Payouts
+          <Banknote size={17} /> Cook Payouts
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "refunds" ? "active" : ""}`}
+          onClick={() => setActiveTab("refunds")}
+        >
+          <Wallet size={17} /> Refunds
         </button>
         <button
           className={`tab-btn ${activeTab === "analytics" ? "active" : ""}`}
@@ -138,7 +144,8 @@ const AdminDashboard = () => {  const [activeTab, setActiveTab] = useState("book
       {activeTab === "admins" && <AdminManagement />}
       {activeTab === "leads" && <LeadManagement />}
       {activeTab === "coupons" && <CouponManagement />}
-      {activeTab === "payouts" && <AdminPayoutsPanel />}
+      {activeTab === "payouts" && <AdminPayoutsPanel view="payouts" />}
+      {activeTab === "refunds" && <AdminPayoutsPanel view="refunds" />}
       {activeTab === "visits" && <VisitStats />}
       {activeTab === "analytics" && <AnalyticsPanel />}
     </div>

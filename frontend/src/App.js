@@ -137,7 +137,7 @@ function App() {
               <Route
                 path="/dashboard/notifications"
                 element={
-                  <ProtectedRoute roles={["customer", "cook"]}>
+                  <ProtectedRoute roles={["customer", "cook", "admin"]}>
                     <Notifications />
                   </ProtectedRoute>
                 }

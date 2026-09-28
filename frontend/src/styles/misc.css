@@ -123,6 +123,10 @@ td, th { padding: 0.7rem 0.5rem; }
   position: relative;
   width: 100%;
   max-width: 400px;
+  /* margin:auto (not just flex centering) so a card taller than the viewport
+     can still scroll from the very top — otherwise the head/close button
+     gets clipped out of reach on short laptop/tablet viewports. */
+  margin: auto;
   background: #fff;
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
@@ -228,6 +232,8 @@ td, th { padding: 0.7rem 0.5rem; }
   width: 100%;
   max-width: 480px;
   max-height: 90vh;
+  max-height: 90dvh;
+  margin: auto;
   overflow-y: auto;
   background: #fff;
   border-radius: var(--radius-xl);
@@ -257,6 +263,7 @@ td, th { padding: 0.7rem 0.5rem; }
   max-width: 480px;
   max-height: calc(100vh - 2.5rem);
   max-height: calc(100dvh - 2.5rem);
+  margin: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: #fff;
@@ -360,16 +367,42 @@ td, th { padding: 0.7rem 0.5rem; }
 }
 .brm-actions .btn { flex: 1 1 0; min-height: 48px; justify-content: center; }
 .brm-expired-note { margin: 0; width: 100%; text-align: center; font-size: 0.86rem; font-weight: 700; color: var(--slate-500); }
+.brm-details > * { min-width: 0; }
+.brm-row span { min-width: 0; overflow-wrap: anywhere; }
+/* Long unbroken tokens (flat numbers, venue lines without spaces) must wrap
+   instead of pushing the card wider than the viewport. */
+.brm-details { overflow-wrap: break-word; word-break: break-word; }
 @media (max-width: 560px) {
   .brm-card { padding: 1.25rem 1rem 1rem; border-radius: 20px; }
-  .brm-head { padding-right: 2rem; }
+  .brm-head { padding-right: 2rem; gap: 0.6rem; }
   .brm-icon { width: 44px; height: 44px; border-radius: 13px; }
   .brm-head-text h3 { font-size: 1.08rem; }
+  .brm-head-text p { font-size: 0.83rem; }
+  .brm-details { padding: 0.7rem 0.75rem; }
   .brm-actions { flex-direction: column; }
   .brm-actions .btn { width: 100%; }
 }
 @media (max-width: 400px) {
   .brm-card { padding: 1.1rem 0.9rem 0.9rem; border-radius: 18px; }
+  .brm-icon { width: 40px; height: 40px; border-radius: 12px; }
+  .brm-head-text h3 { font-size: 1rem; }
+  .brm-row { font-size: 0.82rem; }
+  .brm-timer { font-size: 0.78rem; }
+}
+/* Tablet + small laptop: roomier card than phones, still comfortably
+   centered — never stretched to full width. */
+@media (min-width: 561px) and (max-width: 1024px) {
+  .brm-card { max-width: 520px; padding: 1.6rem 1.6rem 1.35rem; }
+}
+/* Short viewports (landscape phones/tablets, small laptop windows): shrink
+   chrome so the details + Accept/Decline stay reachable without hunting. */
+@media (max-height: 620px) {
+  .login-modal-overlay { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+  .brm-card { padding-top: 1rem; padding-bottom: 0.9rem; }
+  .brm-icon { width: 40px; height: 40px; border-radius: 12px; }
+  .brm-head { margin-bottom: 0.6rem; }
+  .brm-timer-row { margin-bottom: 0.6rem; }
+  .brm-actions { margin-top: 0.6rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .brm-timer.is-urgent { animation: none; }

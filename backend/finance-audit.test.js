@@ -243,6 +243,8 @@ const eligibleBooking = (over = {}) => ({
       check("concurrent approves: one wins, one 400", wins === 1 && conflicts === 1, `${r1.statusCode}/${r2.statusCode}`);
       check("refund ends manual (gateway unconfigured) or processed", ["manual", "processed", "failed"].includes(doc.payment.refundStatus), doc.payment.refundStatus);
       check("approve ledger row recorded", ledgerRows.some((l) => l.type === "refund.approved"), `${ledgerRows.length} rows`);
+      const cookNotices = notifLog.filter((n) => String(n.user) === "cook1" && n.type === "refund_processed");
+      check("assigned cook hears the approval too", cookNotices.length === 1 && /cook payout for this booking will not proceed/i.test(cookNotices[0].message), cookNotices.map((n) => n.message).join("|"));
       // Settled payout without clawback → blocked and lock handed back.
       const doc2 = qdoc();
       doc2.payout = { status: "settled" };

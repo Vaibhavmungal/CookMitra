@@ -92,6 +92,18 @@ exports.createComplaint = async (req, res, next) => {
     } catch {
       // non-fatal
     }
+    // Receipt for the filer (best-effort) — otherwise filing feels like a
+    // black hole until an admin resolves it.
+    try {
+      await Notification.create({
+        user: req.user.id,
+        type: "general",
+        booking: booking ? booking._id : null,
+        message: "Your complaint has been received — our team will review it shortly.",
+      });
+    } catch {
+      // non-fatal
+    }
 
     res.status(201).json(complaint);
   } catch (error) {

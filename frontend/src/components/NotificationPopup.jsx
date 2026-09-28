@@ -24,7 +24,7 @@ const normalizeList = (data) => {
 };
 
 // Global poller: whenever a NEW unread notification arrives for the signed-in
-// customer/cook, show it as a popup card (bottom-right) with a tap-through.
+// customer/cook/admin, show it as a popup card (bottom-right) with a tap-through.
 // First fetch after mount only seeds the baseline so old unreads don't all
 // pop at once — only arrivals after that pop up.
 const NotificationPopup = () => {
@@ -81,7 +81,7 @@ const NotificationPopup = () => {
   }, [user?._id, user?.id]);
 
   useEffect(() => {
-    if (!user || !["customer", "cook"].includes(user.role)) return;
+    if (!user || !["customer", "cook", "admin"].includes(user.role)) return;
     let cancelled = false;
 
     const poll = async (isFirst = false) => {

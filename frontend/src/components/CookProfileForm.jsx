@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
 import API from "../api/axios";
 import { useShowToast } from "../store/hooks";
-import { SERVICE_DETAILS } from "../utils/constants";
 import CookDocUploads from "./CookDocUploads";
-import { ChefHat, Check, AlertCircle } from "lucide-react";
+import { ChefHat, AlertCircle } from "lucide-react";
 
-const SERVICE_OPTIONS = ["cook_for_me", "cook_with_me", "teach_me", "preparation_help"];
+// Direct booking: every cook offers home cooking at the same flat launch
+// price, so there is no service picker. The backend still stores
+// `serviceTypes` — new/updated profiles save the default value below.
+const DEFAULT_SERVICE_TYPES = ["cook_for_me"];
 
 // Single source of truth for the cook profile form, shared by the Cook Setup
 // page and the cook dashboard's profile tab (they previously duplicated each
@@ -26,7 +28,6 @@ const CookProfileForm = ({
     skills: "",
     experienceYears: 0,
     specialties: "",
-    serviceTypes: [],
     serviceArea: "",
     address: "",
     documents: [],
@@ -49,7 +50,6 @@ const CookProfileForm = ({
           skills: res.data.skills || res.data.bio || "",
           experienceYears: res.data.experienceYears ?? 0,
           specialties: (res.data.specialties || []).join(", "),
-          serviceTypes: res.data.serviceTypes || [],
           serviceArea: res.data.serviceArea || "",
           address: res.data.address || "",
           documents: res.data.documents || [],
@@ -72,15 +72,6 @@ const CookProfileForm = ({
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const toggleServiceType = (type) => {
-    setFormData((prev) => ({
-      ...prev,
-      serviceTypes: prev.serviceTypes.includes(type)
-        ? prev.serviceTypes.filter((t) => t !== type)
-        : [...prev.serviceTypes, type],
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.aadharCardUrl) {
@@ -91,12 +82,6 @@ const CookProfileForm = ({
     }
     if (!formData.panCardUrl) {
       const msg = "Please upload your PAN card";
-      setError(msg);
-      showToast(msg, "error");
-      return;
-    }
-    if (formData.serviceTypes.length === 0) {
-      const msg = "Please select at least one service you can offer";
       setError(msg);
       showToast(msg, "error");
       return;
@@ -114,7 +99,7 @@ const CookProfileForm = ({
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean),
-      serviceTypes: formData.serviceTypes,
+      serviceTypes: DEFAULT_SERVICE_TYPES,
       serviceArea: formData.serviceArea,
       address: formData.address,
       aadharCardUrl: formData.aadharCardUrl,
@@ -298,40 +283,18 @@ const CookProfileForm = ({
               </button>
             </div>
           ))}
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() =>
-              setFormData((prev) => ({
-                ...prev,
-                documents: [...(prev.documents || []), { label: "", url: "" }],
-              }))
-            }
-          >
-            + Add Document
-          </button>
-        </div>
-
-        <div className="cook-field">
-          <label>Services You Can Offer</label>
-          <div className="cook-svc-grid">
-            {SERVICE_OPTIONS.map((type) => {
-              const isSelected = formData.serviceTypes.includes(type);
-              const info = SERVICE_DETAILS[type] || { label: type.replace(/_/g, " ") };
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleServiceType(type)}
-                  className={`cook-svc${isSelected ? " selected" : ""}`}
-                  aria-pressed={isSelected}
-                >
-                  <span>{info.label}</span>
-                  {isSelected && <Check size={16} />}
-                </button>
-              );
-            })}
-          </div>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() =>
+            setFormData((prev) => ({
+              ...prev,
+              documents: [...(prev.documents || []), { label: "", url: "" }],
+            }))
+          }
+        >
+          + Add Document
+        </button>
         </div>
 
         <button

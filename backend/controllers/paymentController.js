@@ -486,9 +486,9 @@ exports.handleWebhook = async (req, res) => {
     try {
       await Notification.create({
         user: booking.customer,
-        type: "booking_cancelled",
+        type: "refund_pending",
         booking: booking._id,
-        message: `We received your payment (${paymentId}) but booking ${booking._id} is ${booking.status}. Please contact support with this payment ID for a refund.`,
+        message: `We received your payment (${paymentId}) but booking ${booking._id} is ${booking.status}. A refund has been queued for admin approval — please keep this payment ID for support.`,
       });
     } catch {
       // non-fatal

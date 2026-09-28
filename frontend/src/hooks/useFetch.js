@@ -3,10 +3,18 @@ import API from "../api/axios";
 
 export const useFetch = (url) => {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(url));
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
+    // A null url means "do not fetch" — used by tabbed consoles that only
+    // load the list for the visible tab. Returns empty state, never an error.
+    if (!url) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     try {
       setLoading(true);
       const response = await API.get(url);

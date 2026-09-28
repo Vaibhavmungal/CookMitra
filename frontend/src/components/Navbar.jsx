@@ -80,9 +80,9 @@ const Navbar = () => {
     };
   }, [user]);
 
-  // Unread badge for cook + customer inboxes.
+  // Unread badge for customer + cook + admin inboxes.
   useEffect(() => {
-    if (!user || !["customer", "cook"].includes(user.role)) {
+    if (!user || !["customer", "cook", "admin"].includes(user.role)) {
       setUnreadCount(0);
       return;
     }
@@ -238,7 +238,7 @@ const Navbar = () => {
                 </NavLink>
               )}
 
-              {(user.role === "customer" || user.role === "cook") && (
+              {(user.role === "customer" || user.role === "cook" || user.role === "admin") && (
                 <NavLink
                   to="/dashboard/notifications"
                   title="Notifications"
@@ -306,7 +306,7 @@ const Navbar = () => {
               <NavAvatar name={user.name} photo={cookPhoto} />
             </Link>
           )}
-          {user && (user.role === "customer" || user.role === "cook") && (
+          {user && (user.role === "customer" || user.role === "cook" || user.role === "admin") && (
             <NavLink
               to="/dashboard/notifications"
               title="Notifications"
@@ -407,7 +407,7 @@ const Navbar = () => {
                 </NavLink>
               )}
 
-              {(user.role === "customer" || user.role === "cook") && (
+              {(user.role === "customer" || user.role === "cook" || user.role === "admin") && (
                 <NavLink
                   to="/dashboard/notifications"
                   className={({ isActive }) =>

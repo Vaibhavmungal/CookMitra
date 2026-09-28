@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useFetch } from "../hooks/useFetch";
-import { formatDate, formatTimeRange12, formatCurrency } from "../utils/constants";
+import API from "../api/axios";
+import { formatDate, formatTimeRange12, formatCurrency, canRescheduleBooking, getBookingDisplayState } from "../utils/constants";
 import { buildRetryState } from "../utils/bookingRetry";
 import CookAvatar from "../components/CookAvatar";
 import {
+  AlertTriangle,
   Calendar,
   CalendarCheck,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -52,6 +55,27 @@ const CustomerDashboard = () => {
   const { data: bookings, loading, error, refetch } = useFetch("/bookings/my");
   const navigate = useNavigate();
 
+  // Local clock for time-aware display states (upcoming → in progress →
+  // action-required) without polling the backend: re-categorization is pure
+  // and instant; fresh server data arrives via refetch below.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        setNow(Date.now());
+        refetch();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [refetch]);
+
   // Only completed meals live in the main list — newer bookings first.
   const byNewest = (a, b) =>
     new Date(b?.createdAt).getTime() - new Date(a?.createdAt).getTime() ||
@@ -62,7 +86,47 @@ const CustomerDashboard = () => {
   const bySoonest = (a, b) =>
     new Date(a?.date).getTime() - new Date(b?.date).getTime() ||
     String(a.startTime || "").localeCompare(String(b.startTime || ""));
-  const activeBookings = (bookings?.filter((b) => ACTIVE_STATUSES.includes(b.status)) || []).sort(bySoonest);
+  const activeBookings = (bookings?.filter((b) => ACTIVE_STATUSES.includes(b.status)) || [])
+    // Time-aware: a live booking whose scheduled end has passed is OVERDUE —
+    // it must never sit in Active & Upcoming. Its backend status is untouched
+    // (display categorization only — no auto-complete, no mutation).
+    .filter((b) => getBookingDisplayState(b, now) !== "OVERDUE")
+    .sort(bySoonest);
+  // Action Required: live bookings past their scheduled end, still not
+  // completed. Dedicated home so overdue work can't hide as "upcoming".
+  const overdueBookings = (bookings?.filter((b) => ACTIVE_STATUSES.includes(b.status)) || [])
+    .filter((b) => getBookingDisplayState(b, now) === "OVERDUE")
+    .sort(bySoonest);
+  // Refund buttons on overdue cards mirror the backend eligibility answer
+  // (fetched per card — overdue lists are short — never derived locally).
+  const [refundEligibleIds, setRefundEligibleIds] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    const ids = (bookings?.filter((b) => ACTIVE_STATUSES.includes(b.status)) || []).filter((b) => getBookingDisplayState(b, now) === "OVERDUE")
+      .filter((b) => b?.payment?.status === "paid" && (b?.payment?.refundStatus || "none") === "none")
+      .map((b) => b._id);
+    if (ids.length === 0) {
+      setRefundEligibleIds({});
+      return undefined;
+    }
+    Promise.all(
+      ids.map((id) =>
+        API.get(`/bookings/${id}/refund-eligibility`)
+          .then((res) => ({ id, eligible: res.data?.eligible === true }))
+          .catch(() => ({ id, eligible: false }))
+      )
+    ).then((rows) => {
+      if (cancelled) return;
+      const map = {};
+      rows.forEach((r) => {
+        if (r.eligible) map[r.id] = true;
+      });
+      setRefundEligibleIds(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bookings, now]);
   // Requests that expired within the last 10 minutes (cook didn't respond) —
   // kept visible so the customer can find another cook on the same slot
   // instead of losing the flow. The server drops them once the grace passes.
@@ -369,6 +433,12 @@ const CustomerDashboard = () => {
               // No entry (e.g. confirmed) => no action line at all.
               const action = ACTION_FOR[booking.status] || {};
               const needsPayment = booking.status === "accepted";
+              // Phase-2 hook (optional): deep-link movable bookings to the
+              // details page where the Reschedule picker lives. Gated on the
+              // same client mirror the details page uses — never a doomed chip.
+              const showReschedule =
+                !needsPayment &&
+                canRescheduleBooking(booking, { role: "customer" });
               return renderActiveCard(booking, {
                 actionIcon: needsPayment ? Wallet : booking.status === "requested" ? Clock3 : Calendar,
                 actionTitle: needsPayment ? "Complete your payment" : action.label,
@@ -381,9 +451,57 @@ const CustomerDashboard = () => {
                   >
                     <Wallet size={14} /> Pay now
                   </Link>
+                ) : showReschedule ? (
+                  <Link
+                    to={`/bookings/${booking._id}`}
+                    className="btn btn-outline btn-sm my-active-cta"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Reschedule booking with ${booking.cook?.name || "cook"}`}
+                  >
+                    <CalendarClock size={14} /> Reschedule
+                  </Link>
                 ) : null,
               });
             })}
+          </div>
+        </section>
+      )}
+
+      {overdueBookings.length > 0 && (
+        <section className="my-active-section" aria-label="Action required — service follow-up">
+          <h2 className="my-section-title my-section-warn">
+            <AlertTriangle size={17} /> Action required
+            <span className="my-section-count">{overdueBookings.length}</span>
+          </h2>
+          <div className="bookings-list-modern my-bookings-list my-active-list">
+            {overdueBookings.map((booking) => (
+              renderActiveCard(booking, {
+                actionIcon: AlertTriangle,
+                actionTitle: "Service not completed",
+                footHint: "Scheduled end time has passed. Service is awaiting completion.",
+                cta: (
+                  <>
+                    <Link
+                      to={`/bookings/${booking._id}`}
+                      className="btn btn-outline btn-sm my-active-cta"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      View booking
+                    </Link>
+                    {refundEligibleIds[booking._id] ? (
+                      <Link
+                        to={`/bookings/${booking._id}?action=refund`}
+                        className="btn btn-primary btn-sm my-active-cta"
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label="Request a refund for this booking"
+                      >
+                        Request refund
+                      </Link>
+                    ) : null}
+                  </>
+                ),
+              })
+            ))}
           </div>
         </section>
       )}
